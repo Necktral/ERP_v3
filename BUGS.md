@@ -47,6 +47,20 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs cerrados
 
+### BUG-003 — El `qa/` de raíz de v2 no se copió a v3 (copiado incompleto)
+
+- **Módulo / paso del ROADMAP:** tooling de QA (no bloquea ningún paso del demo)
+- **Fecha:** 2026-07-01
+- **Severidad:** baja
+- **Estado:** CERRADO
+- **Pasos para reproducir:**
+  1. Correr la suite backend completa (`DJANGO_SETTINGS_MODULE=config.settings.test pytest`).
+  2. Observar 6 FAILED en `src/tests/test_u5_migration_safety_guard.py` y `src/tests/test_qa_security_findings_guard.py`.
+- **Esperado:** los tests de los guards de QA encuentran los scripts en `qa/` de la raíz del repo (como en v2, que tiene `qa/` en raíz **y** `backend/qa`).
+- **Actual:** el copiado inicial de v3 solo trajo `backend/qa` (con `reports/`); faltaba el `qa/` de raíz con `migration_safety_guard.py`, `contracts/`, `k6/`, `manifests/`, etc. Los tests fallaban con "can't open file '/app/qa/migration_safety_guard.py'".
+- **Impacto:** no afecta el ERP en runtime; deja sin red de seguridad de QA (guards de migraciones, arquitectura, seguridad) y 6 tests rojos. Mismo patrón que el `requirements/` que ya se había repuesto.
+- **Causa raíz / fix:** copiado incompleto de v2 → se repuso la carpeta `qa/` completa en la raíz de v3 (72 items). Re-verificado: los 6 tests ahora pasan; la suite backend queda completamente en verde.
+
 ### BUG-001 — Al terminar el wizard, el admin rebota a /login en vez de entrar al sistema
 
 - **Módulo / paso del ROADMAP:** 1 (estructura organizacional) / wizard de bootstrap
