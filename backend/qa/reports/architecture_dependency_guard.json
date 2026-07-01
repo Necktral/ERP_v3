@@ -1,0 +1,13 @@
+{
+  "status": "failed",
+  "generated_at": "2026-06-16T04:39:24.696090+00:00",
+  "baseline_file": "qa/contracts/architecture_dependency_baseline.json",
+  "cross_dependency_edges_total": 0,
+  "hard_violations": [],
+  "new_edges": [],
+  "removed_edges": [],
+  "issues": [
+    "baseline missing: /app/backend/qa/contracts/architecture_dependency_baseline.json"
+  ],
+  "sample_cross_references": []
+}

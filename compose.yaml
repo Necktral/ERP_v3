@@ -1,0 +1,185 @@
+name: erp_crm
+
+services:
+  db:
+    image: postgres:16.2-alpine
+    container_name: erpcrm_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Opcional (más seguro/estricto al inicializar):
+      # POSTGRES_INITDB_ARGS: "--data-checksums"
+    # Evita colisiones con Postgres locales en host; backend accede por red interna (db:5432).
+    expose:
+      - "5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile.dev
+    container_name: erpcrm_backend
+    restart: unless-stopped
+    working_dir: /app/backend
+    env_file:
+      - ./.env
+    environment:
+      # Dentro de Docker, el host de Postgres NO es 127.0.0.1.
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+
+      # Compat (settings/legacy): algunas partes aún usan DB_*.
+      DB_HOST: db
+      DB_PORT: "5432"
+
+      # (redundante pero explícito; manage.py ya setea dev)
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+
+      # Para imports consistentes (el código backend vive en /app/backend/src)
+      PYTHONPATH: /app/backend/src
+
+      # QA / Load: habilita Gunicorn para mejor concurrencia
+      USE_GUNICORN: ${USE_GUNICORN:-0}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-4}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-2}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-60}
+      GUNICORN_LOG_LEVEL: ${GUNICORN_LOG_LEVEL:-info}
+      GUNICORN_KEEPALIVE: ${GUNICORN_KEEPALIVE:-5}
+      GUNICORN_GRACEFUL_TIMEOUT: ${GUNICORN_GRACEFUL_TIMEOUT:-30}
+      GUNICORN_BACKLOG: ${GUNICORN_BACKLOG:-2048}
+
+      # QA / Load profiles (security/performance)
+      DRF_THROTTLE_AUTH_LOGIN: ${DRF_THROTTLE_AUTH_LOGIN:-20/min}
+      DRF_THROTTLE_USER: ${DRF_THROTTLE_USER:-600/min}
+      DRF_THROTTLE_ME_READ: ${DRF_THROTTLE_ME_READ:-60/min}
+      DRF_THROTTLE_ME_ACL_READ: ${DRF_THROTTLE_ME_ACL_READ:-30/min}
+      AXES_FAILURE_LIMIT: ${AXES_FAILURE_LIMIT:-15}
+      AXES_COOLOFF_SECONDS: ${AXES_COOLOFF_SECONDS:-300}
+      AUTH_ALLOW_TRANSPORT_OVERRIDE: ${AUTH_ALLOW_TRANSPORT_OVERRIDE:-1}
+
+      # Edge handshake (QA/local). Base64 de "edge-secret" por defecto.
+      POS_EDGE_CONNECTOR_SHARED_SECRET: ${POS_EDGE_CONNECTOR_SHARED_SECRET:-ZWRnZS1zZWNyZXQ=}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:8000/api/auth/bootstrap/status/ >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    # command/entrypoint quedan definidos en la imagen (docker/entrypoint.sh)
+
+  dash_analytics:
+    build:
+      context: .
+      dockerfile: docker/dash.Dockerfile
+    container_name: erpcrm_dash_analytics
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      DASH_BACKEND_BASE_URL: http://backend:8000/api
+      DASH_URL_PREFIX: /analytics
+      DASH_SESSION_SECRET: ${DASH_SESSION_SECRET:-dash-dev-secret-change-me}
+      DASH_INTERNAL_PORT: "8050"
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./:/app
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8050/analytics/health', timeout=2)\" || exit 1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  frontend:
+    image: node:22-bullseye-slim
+    container_name: erpcrm_frontend
+    restart: unless-stopped
+    # Arranca como root SOLO para corregir el ownership del volumen node_modules
+    # (los volúmenes nuevos nacen root y rompen npm con EACCES); el command baja a
+    # HOST_UID/HOST_GID con setpriv antes de ejecutar npm/Vite.
+    working_dir: /app/frontend
+    environment:
+      # API por defecto same-origin vía proxy devServer (/api). Override opcional por .env.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+      # HOME/caché npm escribibles: tras bajar de root con setpriv, el env conserva
+      # HOME=/root (no escribible por uid 1000) y npm falla con EACCES. Mismo patrón /tmp que frontend_ci.
+      HOME: /tmp/erpcrm_frontend_home
+      NPM_CONFIG_CACHE: /tmp/erpcrm_frontend_home/.npm
+    depends_on:
+      backend:
+        condition: service_healthy
+      dash_analytics:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    command: >
+      bash -lc "
+        chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app/frontend/node_modules &&
+        exec setpriv --reuid=${HOST_UID:-1000} --regid=${HOST_GID:-1000} --clear-groups bash -c 'mkdir -p /tmp/erpcrm_frontend_home/.npm && npm install && npm run dev -- --host 0.0.0.0 --port 3000'
+      "
+
+  # Runner CI para frontend (lint + typecheck). No expone puertos.
+  frontend_ci:
+    image: node:22-bullseye-slim
+    container_name: erpcrm_frontend_ci
+    profiles: ["qa"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    working_dir: /app/frontend
+    environment:
+      HOME: "${FRONTEND_CI_HOME:-/tmp/erpcrm_frontend_ci_home}"
+      NPM_CONFIG_CACHE: "${NPM_CONFIG_CACHE:-/tmp/erpcrm_frontend_ci_home/.npm}"
+    volumes:
+      - ./frontend:/app/frontend
+    command: >
+      bash -lc "
+        mkdir -p \"$$HOME\" \"$$NPM_CONFIG_CACHE\" &&
+        npm ci &&
+        npm run lint &&
+        npm run typecheck &&
+        npm run test &&
+        npm run build
+      "
+
+  # Herramienta opcional para inspeccionar DB por navegador:
+  adminer:
+    image: adminer:4.8.1
+    container_name: erpcrm_adminer
+    restart: unless-stopped
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

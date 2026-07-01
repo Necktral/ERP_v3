@@ -1,0 +1,20 @@
+ -r base.txt
+
+pytest==9.0.3
+pytest-django==4.11.1
+coverage==7.13.0
+
+factory-boy==3.3.3
+freezegun==1.5.5
+Faker==39.0.0
+
+ruff==0.15.16
+bandit==1.9.4
+
+# Server (para load/QA en dev)
+gunicorn==26.0.0
+
+# Type-checking (Gate 2)
+mypy
+django-stubs
+djangorestframework-stubs

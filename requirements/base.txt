@@ -1,0 +1,65 @@
+# Seguridad y firmas
+cryptography==48.0.0
+defusedxml==0.7.1
+# Framework + API
+Django==6.0.6
+djangorestframework==3.17.1
+
+# Auth JWT (login para PWA)
+djangorestframework-simplejwt==5.5.1
+
+# CORS (PWA en dominio/puerto distinto)
+django-cors-headers==4.9.0
+
+# API schema / docs (útil para front y validación)
+drf-spectacular==0.29.0
+drf-spectacular-sidecar==2026.6.1
+
+# Filtros para endpoints (roles/permisos y listados reales)
+django-filter==25.2
+
+# Variables de entorno (.env) y settings limpios
+django-environ==0.12.0
+
+# Seguridad anti-fuerza bruta para login
+django-axes==8.1.0
+
+# Cabeceras CSP (endurecimiento de seguridad, especialmente si sirves algo web)
+django-csp==4.0
+
+# TOTP (2FA)
+pyotp==2.9.0
+
+# Observabilidad (errores)
+sentry-sdk==2.61.1
+
+# Cliente HTTP del proveedor LLM de diagnóstico (OpenAI-compat, B-5). Import a nivel
+# de módulo en diagnostics/providers.py: si falta, el backend NO arranca — debe estar pineado.
+requests==2.34.2
+
+# Static files (admin, y despliegue simple sin nginx al inicio)
+whitenoise==6.12.0
+
+
+# Hashing fuerte de passwords (recomendado en vez del default PBKDF2)
+argon2-cffi==25.1.0
+
+# Driver PostgreSQL
+psycopg[binary]==3.3.2
+
+# PDF de la planilla legal (HTML→PDF). Requiere libs de sistema cairo/pango en la
+# imagen (ver docker/backend.Dockerfile.*). El import es lazy en planilla_pdf.py.
+# pydyf se PINEA: weasyprint 62.3 rompe con pydyf>=0.11 ('super' object has no
+# attribute 'transform'); 0.10.0 es el par compatible verificado.
+weasyprint==62.3
+pydyf==0.10.0
+
+# IDP (Intelligent Document Processing) — etapa OCR. Tesseract es open-source; el
+# binario `tesseract-ocr` (+ idioma `spa`) se instala en la imagen (ver
+# docker/backend.Dockerfile.*). Los imports de pytesseract/Pillow son lazy en
+# apps/modulos/documents/ocr.py (no rompen si el binario falta: degradan a FAILED).
+pytesseract==0.3.13
+Pillow==11.3.0
+# PDF escaneado (canal PC): pypdfium2 renderiza páginas PDF a imagen para el OCR.
+# Wheel autocontenida (sin binarios de sistema); import lazy en ocr.py (degrada a FAILED).
+pypdfium2==5.9.0

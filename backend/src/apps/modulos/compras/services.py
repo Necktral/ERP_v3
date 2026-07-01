@@ -1,0 +1,355 @@
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from decimal import Decimal
+
+from django.db import transaction
+from django.utils import timezone
+
+from apps.modulos.audit.service_audit import emit_service_event
+from apps.modulos.iam.models import OrgUnit
+from apps.modulos.integration.services import publish_outbox_event
+from apps.modulos.parties.models import Party, PartyRole
+from apps.modulos.parties.services import assign_party_role
+
+from .models import PurchaseDocument, PurchaseDocStatus, PurchaseDocType, PurchaseSequence
+
+logger = logging.getLogger(__name__)
+
+
+class ProcurementError(Exception):
+    pass
+
+
+class ProcurementNotFoundError(ProcurementError):
+    pass
+
+
+# doc_type válidos para PurchaseDocument: PURCHASE_ORDER/PO_RECEIPT existen en el
+# TextChoices SOLO para PurchaseSequence (la OC y la recepción tienen modelo propio).
+_DOCUMENT_TYPES = frozenset(
+    {
+        PurchaseDocType.GOODS_RECEIPT,
+        PurchaseDocType.SUPPLIER_INVOICE,
+        PurchaseDocType.SUPPLIER_CREDIT_NOTE,
+        PurchaseDocType.SUPPLIER_PAYMENT,
+        PurchaseDocType.ADJUSTMENT,
+    }
+)
+
+
+@dataclass(frozen=True)
+class PurchaseCreateResult:
+    doc_id: int
+
+
+def allocate_sequence_number(*, company, branch, doc_type: str, series: str) -> int:
+    """Número secuencial por (company, branch, doc_type, series); requiere transacción."""
+    seq, _ = PurchaseSequence.objects.select_for_update().get_or_create(
+        company=company,
+        branch=branch,
+        doc_type=doc_type,
+        series=series,
+        defaults={"next_number": 1, "updated_at": timezone.now()},
+    )
+    number = int(seq.next_number)
+    seq.next_number = number + 1
+    seq.updated_at = timezone.now()
+    seq.save(update_fields=["next_number", "updated_at"])
+    return number
+
+
+def _allocate_number(*, doc: PurchaseDocument) -> None:
+    doc.number = allocate_sequence_number(
+        company=doc.company, branch=doc.branch, doc_type=doc.doc_type, series=doc.series
+    )
+
+
+def _load_supplier_party(*, supplier_party_id: int | None, company: OrgUnit) -> Party | None:
+    if supplier_party_id is None:
+        return None
+    try:
+        supplier_party_pk = int(supplier_party_id)
+    except (TypeError, ValueError) as exc:
+        raise ProcurementError("supplier_party_id inválido") from exc
+
+    supplier_party = Party.objects.filter(id=supplier_party_pk, company=company).first()
+    if supplier_party is None:
+        raise ProcurementError("supplier_party no existe en esta company")
+    return supplier_party
+
+
+def _ensure_supplier_party_role(*, party: Party, request, actor) -> None:
+    party = Party.objects.select_for_update().get(pk=party.pk)
+    active_exists = (
+        PartyRole.objects.select_for_update()
+        .filter(party=party, role=PartyRole.Role.SUPPLIER, is_active=True)
+        .exists()
+    )
+    if not active_exists:
+        assign_party_role(party=party, role=PartyRole.Role.SUPPLIER, request=request, actor=actor)
+
+
+def _supplier_payload(*, doc: PurchaseDocument) -> dict:
+    """Contraparte (proveedor) para el payload de eventos: link fuerte + snapshot textual.
+
+    El snapshot (display_name/tax_id) NO es verdad foránea; habilita trazar al proveedor en
+    CxP/accounting aguas abajo aunque el Party se renombre luego.
+    """
+    return {
+        "supplier_party_id": int(doc.supplier_party_id) if doc.supplier_party_id else None,
+        "supplier_display_name": str(doc.supplier_name or ""),
+        "supplier_tax_id": str(doc.supplier_ref or ""),
+    }
+
+
+def create_purchase_draft(
+    *,
+    request,
+    actor,
+    doc_type: str,
+    series: str,
+    currency: str,
+    supplier_name: str,
+    supplier_ref: str,
+    external_ref: str,
+    subtotal: Decimal,
+    tax_total: Decimal,
+    total: Decimal,
+    supplier_party_id: int | None = None,
+    notes: str = "",
+    metadata_json: dict | None = None,
+    idempotency_key: str = "",
+    purchase_order_id: int | None = None,
+) -> PurchaseCreateResult:
+    company: OrgUnit = request.company
+    branch: OrgUnit = request.branch
+
+    if doc_type not in _DOCUMENT_TYPES:
+        raise ProcurementError("invalid doc_type")
+
+    supplier_party = _load_supplier_party(supplier_party_id=supplier_party_id, company=company)
+
+    purchase_order = None
+    if purchase_order_id is not None:
+        from .models import PurchaseOrder
+
+        purchase_order = PurchaseOrder.objects.filter(
+            id=int(purchase_order_id), company=company, branch=branch
+        ).first()
+        if purchase_order is None:
+            raise ProcurementNotFoundError("orden de compra no encontrada")
+
+    with transaction.atomic():
+        if idempotency_key:
+            existing = PurchaseDocument.objects.filter(company=company, idempotency_key=idempotency_key).first()
+            if existing is not None:
+                return PurchaseCreateResult(doc_id=int(existing.id))
+
+        doc = PurchaseDocument.objects.create(
+            company=company,
+            branch=branch,
+            doc_type=doc_type,
+            status=PurchaseDocStatus.DRAFT,
+            series=(series or "P").strip().upper(),
+            number=0,
+            currency=(currency or "NIO").strip().upper(),
+            supplier_name=supplier_name or "",
+            supplier_ref=supplier_ref or "",
+            external_ref=external_ref or "",
+            supplier_party=supplier_party,
+            subtotal=Decimal(str(subtotal)),
+            tax_total=Decimal(str(tax_total)),
+            total=Decimal(str(total)),
+            notes=notes or "",
+            metadata_json=dict(metadata_json or {}),
+            idempotency_key=idempotency_key or "",
+            purchase_order=purchase_order,
+            created_by=actor,
+        )
+        if supplier_party is not None:
+            _ensure_supplier_party_role(party=supplier_party, request=request, actor=actor)
+
+        publish_outbox_event(
+            request=request,
+            source_module="PROCUREMENT",
+            event_type="ProcurementDocumentDrafted",
+            payload={
+                "doc_id": int(doc.id),
+                "doc_type": doc.doc_type,
+                "status": doc.status,
+                "series": doc.series,
+                "currency": doc.currency,
+                "subtotal": str(doc.subtotal),
+                "tax_total": str(doc.tax_total),
+                "total": str(doc.total),
+                "supplier_ref": doc.supplier_ref,
+                **_supplier_payload(doc=doc),
+                "external_ref": doc.external_ref,
+                "idempotency_key": doc.idempotency_key,
+                "purchase_order_id": int(doc.purchase_order_id) if doc.purchase_order_id else None,
+            },
+            actor_user=actor,
+            company=company,
+            branch=branch,
+        )
+        emit_service_event(
+            company=company,
+            branch=branch,
+            request=request,
+            module="PROCUREMENT",
+            event_type="PROCUREMENT_DOC_DRAFTED",
+            reason_code="PROCUREMENT_OK",
+            actor_user=actor,
+            subject_type="PROCUREMENT_DOC",
+            subject_id=str(doc.id),
+            after_snapshot={"status": doc.status, "doc_type": doc.doc_type, "total": str(doc.total)},
+            metadata={"series": doc.series, "currency": doc.currency, "supplier_ref": doc.supplier_ref},
+        )
+        return PurchaseCreateResult(doc_id=int(doc.id))
+
+
+def post_purchase_document(*, request, actor, doc_id: int) -> dict:
+    company: OrgUnit = request.company
+    branch: OrgUnit = request.branch
+
+    with transaction.atomic():
+        try:
+            doc = PurchaseDocument.objects.select_for_update().get(id=int(doc_id), company=company, branch=branch)
+        except PurchaseDocument.DoesNotExist as exc:
+            raise ProcurementNotFoundError("documento de compra no encontrado") from exc
+
+        if doc.status == PurchaseDocStatus.VOIDED:
+            raise ProcurementError("cannot post a voided purchase document")
+        if doc.status == PurchaseDocStatus.POSTED:
+            return {"ok": True, "already_posted": True, "doc_id": int(doc.id), "number": int(doc.number)}
+
+        _allocate_number(doc=doc)
+        doc.status = PurchaseDocStatus.POSTED
+        doc.posted_at = timezone.now()
+        doc.save(update_fields=["number", "status", "posted_at"])
+
+        posted_outbox = publish_outbox_event(
+            request=request,
+            source_module="PROCUREMENT",
+            event_type="ProcurementDocumentPosted",
+            payload={
+                "doc_id": int(doc.id),
+                "doc_type": doc.doc_type,
+                "status": doc.status,
+                "series": doc.series,
+                "number": int(doc.number),
+                "currency": doc.currency,
+                "subtotal": str(doc.subtotal),
+                "tax_total": str(doc.tax_total),
+                "total": str(doc.total),
+                "supplier_ref": doc.supplier_ref,
+                **_supplier_payload(doc=doc),
+                "external_ref": doc.external_ref,
+                "purchase_order_id": int(doc.purchase_order_id) if doc.purchase_order_id else None,
+            },
+            actor_user=actor,
+            company=company,
+            branch=branch,
+        )
+
+        # CxP (portfolio): un documento de compra con proveedor fuerte (Party) genera una cuenta
+        # por pagar. Best-effort: la cartera no debe romper el posteo (portfolio posee el saldo).
+        try:
+            from apps.kernels.portfolio.services import link_procurement_document_to_payable
+
+            link_procurement_document_to_payable(outbox_event=posted_outbox, actor_user=actor)
+        except Exception as exc:  # noqa: BLE001 - aislar el efecto de cartera del posteo
+            logger.exception(
+                "procurement_payable_link_post_failed",
+                extra={
+                    "company_id": company.id,
+                    "branch_id": branch.id,
+                    "doc_id": int(doc.id),
+                    "event_id": str(getattr(posted_outbox, "event_id", "")),
+                    "error": str(exc),
+                },
+            )
+
+        emit_service_event(
+            company=company,
+            branch=branch,
+            request=request,
+            module="PROCUREMENT",
+            event_type="PROCUREMENT_DOC_POSTED",
+            reason_code="PROCUREMENT_OK",
+            actor_user=actor,
+            subject_type="PROCUREMENT_DOC",
+            subject_id=str(doc.id),
+            before_snapshot={"status": PurchaseDocStatus.DRAFT},
+            after_snapshot={"status": doc.status, "number": int(doc.number), "total": str(doc.total)},
+            metadata={"series": doc.series, "currency": doc.currency},
+        )
+        return {
+            "ok": True,
+            "doc_id": int(doc.id),
+            "status": doc.status,
+            "number": int(doc.number),
+        }
+
+
+def void_purchase_document(*, request, actor, doc_id: int, reason: str = "VOID") -> dict:
+    company: OrgUnit = request.company
+    branch: OrgUnit = request.branch
+
+    with transaction.atomic():
+        try:
+            doc = PurchaseDocument.objects.select_for_update().get(id=int(doc_id), company=company, branch=branch)
+        except PurchaseDocument.DoesNotExist as exc:
+            raise ProcurementNotFoundError("documento de compra no encontrado") from exc
+
+        if doc.status == PurchaseDocStatus.VOIDED:
+            return {"ok": True, "already_voided": True, "doc_id": int(doc.id)}
+        if doc.status == PurchaseDocStatus.DRAFT:
+            raise ProcurementError("cannot void a draft purchase document")
+
+        doc.status = PurchaseDocStatus.VOIDED
+        doc.voided_at = timezone.now()
+        doc.void_reason = (reason or "VOID")[:255]
+        doc.save(update_fields=["status", "voided_at", "void_reason"])
+
+        publish_outbox_event(
+            request=request,
+            source_module="PROCUREMENT",
+            event_type="ProcurementDocumentVoided",
+            payload={
+                "doc_id": int(doc.id),
+                "doc_type": doc.doc_type,
+                "status": doc.status,
+                "series": doc.series,
+                "number": int(doc.number),
+                "currency": doc.currency,
+                "subtotal": str(doc.subtotal),
+                "tax_total": str(doc.tax_total),
+                "total": str(doc.total),
+                "reason": doc.void_reason,
+                "supplier_ref": doc.supplier_ref,
+                **_supplier_payload(doc=doc),
+                "external_ref": doc.external_ref,
+            },
+            actor_user=actor,
+            company=company,
+            branch=branch,
+        )
+        emit_service_event(
+            company=company,
+            branch=branch,
+            request=request,
+            module="PROCUREMENT",
+            event_type="PROCUREMENT_DOC_VOIDED",
+            reason_code="PROCUREMENT_OK",
+            actor_user=actor,
+            subject_type="PROCUREMENT_DOC",
+            subject_id=str(doc.id),
+            before_snapshot={"status": PurchaseDocStatus.POSTED},
+            after_snapshot={"status": doc.status, "reason": doc.void_reason},
+            metadata={"series": doc.series, "number": int(doc.number)},
+        )
+
+        return {"ok": True, "doc_id": int(doc.id), "status": doc.status}

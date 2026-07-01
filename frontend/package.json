@@ -1,0 +1,71 @@
+{
+  "name": "necktral-frontend",
+  "version": "0.0.1",
+  "description": "CO-PA (Cobrador-Pagador): app de sala de pago de nómina — auth JWT, contexto multi-empresa, offline-first (SQLite) y cobro de deudas internas al pagar.",
+  "productName": "CO-PA",
+  "author": "Wiston Gutierrez <wguti3306@gmail.com>",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "lint": "eslint -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "quasar dev",
+    "build": "quasar build",
+    "postinstall": "quasar prepare"
+  },
+  "dependencies": {
+    "@capacitor-community/sqlite": "^7.0.3",
+    "@capacitor-mlkit/barcode-scanning": "^7.5.0",
+    "@capacitor/android": "^7.6.6",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/core": "^7.6.6",
+    "@capacitor/filesystem": "^7.1.8",
+    "@capacitor/network": "^7.0.4",
+    "@capacitor/share": "^7.0.4",
+    "@quasar/extras": "^2.0.0",
+    "axios": "^1.16.0",
+    "jeep-sqlite": "^2.8.0",
+    "pinia": "^3.0.1",
+    "qrcode": "^1.5.4",
+    "quasar": "^2.19.3",
+    "tweetnacl": "^1.0.3",
+    "vue": "^3.5.22",
+    "vue-router": "^4.0.12"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.6",
+    "@eslint/js": "^10.0.0",
+    "@quasar/app-vite": "^2.5.4",
+    "@types/node": "^20.5.9",
+    "@types/qrcode": "^1.5.6",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "@vue/eslint-config-typescript": "^14.8.0",
+    "@vue/test-utils": "^2.4.11",
+    "autoprefixer": "^10.5.0",
+    "chokidar": "^5.0.0",
+    "eslint": "^10.0.0",
+    "eslint-plugin-vue": "^10.9.2",
+    "globals": "^16.4.0",
+    "jsdom": "^24.0.0",
+    "prettier": "^3.8.3",
+    "readdirp": "^5.0.0",
+    "sass": "^1.100.0",
+    "typescript": "^6.0.3",
+    "vite-plugin-checker": "^0.11.0",
+    "vitest": "^4.1.8",
+    "vue-eslint-parser": "^10.4.1",
+    "vue-tsc": "^3.3.4"
+  },
+  "overrides": {
+    "flatted": "^3.4.2",
+    "js-cookie": "3.0.7"
+  },
+  "engines": {
+    "node": "^30 || ^28 || ^26 || ^24 || ^22",
+    "npm": ">= 6.13.4",
+    "yarn": ">= 1.21.1"
+  }
+}

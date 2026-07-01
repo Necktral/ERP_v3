@@ -1,0 +1,441 @@
+from __future__ import annotations
+
+from decimal import Decimal
+
+from rest_framework import serializers
+
+from .models import (
+    EmployeeInssEnrollment,
+    FieldAttendanceConsolidation,
+    FieldWorkDay,
+    InssRegime,
+    IRBracket,
+    NominaConfig,
+    PayrollEntry,
+    PayrollInssElection,
+    PayrollPeriod,
+    PayrollSheet,
+    PeriodType,
+)
+
+
+# ---------------------------------------------------------------------------
+# NominaConfig
+# ---------------------------------------------------------------------------
+
+class IRBracketOut(serializers.ModelSerializer):
+    class Meta:
+        model = IRBracket
+        fields = ["id", "order", "min_income", "max_income", "base_tax", "rate"]
+
+
+class NominaConfigOut(serializers.ModelSerializer):
+    ir_brackets = IRBracketOut(many=True, read_only=True)
+
+    class Meta:
+        model = NominaConfig
+        fields = [
+            "id", "fiscal_year", "effective_from", "is_active",
+            "inss_laboral_rate",
+            "inss_patronal_rate_small", "inss_patronal_rate_large", "inss_size_threshold",
+            "inatec_rate",
+            "vacation_rate", "thirteenth_month_rate",
+            "overtime_rate", "sunday_bonus_rate", "seventh_day_rate",
+            "subsidy_employer_days", "subsidy_inss_rate",
+            "min_wage_agro", "min_wage_general",
+            "payment_deadline_days", "late_payment_surcharge",
+            "notes", "created_at", "updated_at",
+            "ir_brackets",
+        ]
+
+
+class NominaConfigUpdateIn(serializers.Serializer):
+    inss_laboral_rate = serializers.DecimalField(max_digits=6, decimal_places=5, required=False)
+    inss_patronal_rate_small = serializers.DecimalField(max_digits=6, decimal_places=5, required=False)
+    inss_patronal_rate_large = serializers.DecimalField(max_digits=6, decimal_places=5, required=False)
+    inss_size_threshold = serializers.IntegerField(min_value=1, required=False)
+    inatec_rate = serializers.DecimalField(max_digits=6, decimal_places=5, required=False)
+    vacation_rate = serializers.DecimalField(max_digits=8, decimal_places=6, required=False)
+    thirteenth_month_rate = serializers.DecimalField(max_digits=8, decimal_places=6, required=False)
+    overtime_rate = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    sunday_bonus_rate = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    seventh_day_rate = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    subsidy_employer_days = serializers.IntegerField(min_value=0, required=False)
+    subsidy_inss_rate = serializers.DecimalField(max_digits=5, decimal_places=4, required=False)
+    min_wage_agro = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    min_wage_general = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    payment_deadline_days = serializers.IntegerField(min_value=1, required=False)
+    late_payment_surcharge = serializers.DecimalField(max_digits=5, decimal_places=4, required=False)
+    is_active = serializers.BooleanField(required=False)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class IRBracketIn(serializers.Serializer):
+    order = serializers.IntegerField(min_value=1)
+    min_income = serializers.DecimalField(max_digits=14, decimal_places=2)
+    max_income = serializers.DecimalField(max_digits=14, decimal_places=2, required=False, allow_null=True)
+    base_tax = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
+    rate = serializers.DecimalField(max_digits=6, decimal_places=5)
+
+
+# ---------------------------------------------------------------------------
+# PayrollPeriod
+# ---------------------------------------------------------------------------
+
+class PayrollPeriodOut(serializers.ModelSerializer):
+    class Meta:
+        model = PayrollPeriod
+        fields = [
+            "id", "year", "month", "period_type",
+            "start_date", "end_date", "working_days",
+            "exchange_rate_usd", "status",
+            "total_gross", "total_deductions", "total_net",
+            "total_patronal", "total_payroll_cost",
+            "notes", "created_at", "updated_at",
+        ]
+
+
+class PayrollPeriodCreateIn(serializers.Serializer):
+    year = serializers.IntegerField(min_value=2020, max_value=2099)
+    month = serializers.IntegerField(min_value=1, max_value=12)
+    period_type = serializers.ChoiceField(choices=PeriodType.values)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    working_days = serializers.IntegerField(min_value=1, max_value=31, required=False, default=15)
+    exchange_rate_usd = serializers.DecimalField(max_digits=10, decimal_places=4, required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+# ---------------------------------------------------------------------------
+# PayrollSheet
+# ---------------------------------------------------------------------------
+
+class PayrollSheetOut(serializers.ModelSerializer):
+    entry_count = serializers.IntegerField(source="entries.count", read_only=True)
+
+    class Meta:
+        model = PayrollSheet
+        fields = [
+            "id", "sheet_name", "has_inss", "status",
+            "entry_count", "notes",
+            "submitted_by", "submitted_at",
+            "approved_by", "approved_at",
+            "created_at", "updated_at",
+        ]
+
+
+class PayrollSheetCreateIn(serializers.Serializer):
+    sheet_name = serializers.CharField(max_length=160)
+    has_inss = serializers.BooleanField(default=True)
+    branch_id = serializers.IntegerField(required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+# ---------------------------------------------------------------------------
+# PayrollEntry
+# ---------------------------------------------------------------------------
+
+class PayrollEntryOut(serializers.ModelSerializer):
+    class Meta:
+        model = PayrollEntry
+        fields = [
+            "id", "full_name", "inss_number", "cedula", "gender", "cargo",
+            "has_inss", "salary_type", "payment_frequency",
+            "base_salary_usd", "base_salary_nio", "exchange_rate", "daily_rate_nio",
+            "days_in_period", "days_worked", "days_subsidy",
+            "overtime_hours", "sunday_worked_days", "seventh_day_days", "holiday_worked_days",
+            "daily_attendance",
+            # Ingresos
+            "quincenal_salary", "subsidy_amount", "overtime_amount", "sunday_bonus_amount",
+            "seventh_day_amount", "holiday_amount",
+            "vacation_provision", "thirteenth_month_provision", "other_income",
+            "alimentacion_amount", "total_income",
+            # Retenciones
+            "inss_laboral", "ir_amount", "loan_payment",
+            "food_deduction", "advance_deduction", "store_credit_deduction",
+            "other_deductions", "total_deductions",
+            # Neto
+            "total_devengado", "net_to_pay",
+            # Patronal
+            "inss_patronal", "inatec",
+            "vacation_cost", "thirteenth_month_cost",
+            "total_employer_cost", "total_payroll_cost",
+            "notes",
+        ]
+
+
+class PayrollEntryCreateIn(serializers.Serializer):
+    # Identificación. Con employee_id el resto se autollena del expediente HR
+    # (la vista copia cédula/INSS/género/cargo/salario); full_name solo es
+    # obligatorio para entradas manuales sin expediente.
+    employee_id = serializers.IntegerField(required=False, allow_null=True)
+    inss_number = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
+    cedula = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
+    worker_code = serializers.CharField(max_length=32, required=False, allow_blank=True, default="")
+    full_name = serializers.CharField(max_length=160, required=False, allow_blank=True, default="")
+    gender = serializers.ChoiceField(choices=["M", "F"], required=False, allow_blank=True, default="")
+    cargo = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+
+    # Tipo de nómina
+    has_inss = serializers.BooleanField(default=True)
+    salary_type = serializers.ChoiceField(choices=["MONTHLY", "DAILY", "HOURLY"], default="MONTHLY")
+    payment_frequency = serializers.ChoiceField(
+        choices=["FIRST_HALF", "SECOND_HALF", "CATORCENA", "MONTHLY"], default="FIRST_HALF"
+    )
+
+    # Salario
+    base_salary_usd = serializers.DecimalField(max_digits=10, decimal_places=4, required=False, allow_null=True)
+    base_salary_nio = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, default=Decimal("0.00"))
+    # Jornaleros (DAILY): el cliente puede mandar el jornal directo; se convierte a la
+    # base mensual del kernel (mes de 30 días, el mismo convenio de compute_all).
+    daily_rate_nio = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, allow_null=True)
+
+    # Asistencia
+    days_in_period = serializers.IntegerField(min_value=1, max_value=31, default=15)
+    days_worked = serializers.DecimalField(max_digits=5, decimal_places=2, default=Decimal("15.00"))
+    days_subsidy = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=Decimal("0.00"))
+    overtime_hours = serializers.DecimalField(max_digits=6, decimal_places=2, required=False, default=Decimal("0.00"))
+    sunday_worked_days = serializers.IntegerField(min_value=0, required=False, default=0)
+    seventh_day_days = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=Decimal("0.00"))
+    holiday_worked_days = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=Decimal("0.00"))
+
+    # Descuentos adicionales manuales. PROHIBIDO cobrar por la nómina: comisariato
+    # (store_credit_deduction) y préstamo personal (loan_payment) ya NO se aceptan como entrada
+    # ni reducen el neto — el trabajador recibe su neto legal completo.
+    food_deduction = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, default=Decimal("0.00"))
+    advance_deduction = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, default=Decimal("0.00"))
+    other_deductions = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, default=Decimal("0.00"))
+    other_income = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, default=Decimal("0.00"))
+    # ALIMENTOS: alimentación que da la empresa (INGRESO, suma al neto).
+    alimentacion_amount = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, default=Decimal("0.00"))
+    ir_amount = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, default=Decimal("0.00"))
+
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        if not attrs.get("full_name") and not attrs.get("employee_id"):
+            raise serializers.ValidationError(
+                {"full_name": "Obligatorio si no se da employee_id (entrada manual)."}
+            )
+        daily_rate = attrs.pop("daily_rate_nio", None)
+        if daily_rate is not None:
+            if attrs.get("salary_type") != "DAILY":
+                raise serializers.ValidationError(
+                    {"daily_rate_nio": "Solo aplica a salario por día (DAILY)."}
+                )
+            if attrs.get("base_salary_nio"):
+                raise serializers.ValidationError(
+                    {"daily_rate_nio": "Enviar jornal diario O salario mensual, no ambos."}
+                )
+            attrs["base_salary_nio"] = (daily_rate * Decimal("30")).quantize(Decimal("0.01"))
+        return attrs
+
+
+class PayrollEntryUpdateIn(serializers.Serializer):
+    """Edición de una línea EXISTENTE (planilla en borrador).
+
+    Solo se corrige asistencia + extras (horas extra, domingos/séptimo/feriados),
+    otros ingresos y deducciones manuales + notas. NO toca identidad ni salario
+    base (eso se corrige en el expediente HR). PROHIBIDO cobrar por la nómina:
+    `store_credit_deduction` (comisariato) y `loan_payment` (préstamo personal) NO se
+    aceptan y quedan en 0. Todos opcionales: se aplican solo los campos presentes en
+    el body y luego se recalcula.
+    """
+
+    days_in_period = serializers.IntegerField(min_value=1, max_value=31, required=False)
+    days_worked = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    days_subsidy = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    overtime_hours = serializers.DecimalField(max_digits=6, decimal_places=2, required=False)
+    sunday_worked_days = serializers.IntegerField(min_value=0, required=False)
+    seventh_day_days = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    holiday_worked_days = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    other_income = serializers.DecimalField(max_digits=18, decimal_places=2, required=False)
+    alimentacion_amount = serializers.DecimalField(max_digits=18, decimal_places=2, required=False)
+    food_deduction = serializers.DecimalField(max_digits=18, decimal_places=2, required=False)
+    advance_deduction = serializers.DecimalField(max_digits=18, decimal_places=2, required=False)
+    other_deductions = serializers.DecimalField(max_digits=18, decimal_places=2, required=False)
+    ir_amount = serializers.DecimalField(max_digits=18, decimal_places=2, required=False)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class DailyAttendanceIn(serializers.Serializer):
+    """Captura de asistencia DÍA-POR-DÍA de una línea: {marks: {"YYYY-MM-DD": código}}.
+
+    Los códigos válidos: P (presente), M (medio día), D (domingo laborado), S (subsidio),
+    V (vacación), F (feriado), A (falta injustificada). De la captura se derivan los totales
+    legales (días/séptimo/domingos) y se recalcula la línea.
+    """
+
+    marks = serializers.DictField(child=serializers.CharField(allow_blank=True), required=True)
+
+    def validate_marks(self, value):
+        from datetime import date
+
+        from .services import DAILY_MARK_CHOICES
+
+        cleaned: dict[str, str] = {}
+        for iso, code in value.items():
+            try:
+                date.fromisoformat(str(iso))
+            except (ValueError, TypeError):
+                raise serializers.ValidationError(f"Fecha inválida: {iso!r} (usar YYYY-MM-DD).")
+            mark = str(code or "").strip().upper()
+            if mark == "":
+                continue  # día sin marca: se omite
+            if mark not in DAILY_MARK_CHOICES:
+                raise serializers.ValidationError(
+                    f"Código inválido {mark!r} para {iso}: usar {', '.join(DAILY_MARK_CHOICES)}."
+                )
+            cleaned[str(iso)] = mark
+        return cleaned
+
+
+# ---------------------------------------------------------------------------
+# Field Attendance — asistencia de campo (HTTP)
+# ---------------------------------------------------------------------------
+
+class FieldWorkDayOut(serializers.ModelSerializer):
+    class Meta:
+        model = FieldWorkDay
+        fields = [
+            "id", "company_id", "branch_id", "payroll_period_id", "work_date",
+            "status", "opened_by_id", "opened_at", "approved_by_id", "approved_at",
+            "locked_at", "notes",
+        ]
+
+
+class FieldWorkDayCreateIn(serializers.Serializer):
+    work_date = serializers.DateField()
+    branch_id = serializers.IntegerField(required=False, allow_null=True)
+    payroll_period_id = serializers.IntegerField(required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class FieldRollCallLineIn(serializers.Serializer):
+    employee_id = serializers.IntegerField()
+    status = serializers.CharField(required=False, allow_blank=True, default="")
+    absence_reason = serializers.CharField(required=False, allow_blank=True, default="")
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class FieldRollCallIn(serializers.Serializer):
+    lines = FieldRollCallLineIn(many=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class FieldCrewCreateIn(serializers.Serializer):
+    name = serializers.CharField()
+    supervisor_employee_id = serializers.IntegerField()
+
+
+class FieldCrewReportLineIn(serializers.Serializer):
+    employee_id = serializers.IntegerField()
+    event_type = serializers.CharField(required=False, allow_blank=True, default="")
+    day_value = serializers.DecimalField(max_digits=4, decimal_places=2, required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class FieldCrewReportIn(serializers.Serializer):
+    lines = FieldCrewReportLineIn(many=True)
+    labor_code = serializers.CharField(required=False, allow_blank=True, default="")
+    labor_name = serializers.CharField(required=False, allow_blank=True, default="")
+    zone_label = serializers.CharField(required=False, allow_blank=True, default="")
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class FieldWorkerEventIn(serializers.Serializer):
+    employee_id = serializers.IntegerField()
+    event_type = serializers.CharField()
+    details = serializers.CharField(required=False, allow_blank=True, default="")
+    crew_report_id = serializers.IntegerField(required=False, allow_null=True)
+    occurred_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class FieldTransferIn(serializers.Serializer):
+    employee_id = serializers.IntegerField()
+    from_crew_id = serializers.IntegerField()
+    to_crew_id = serializers.IntegerField()
+    reason = serializers.CharField()
+
+
+class FieldConsolidateIn(serializers.Serializer):
+    payroll_period_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class FieldAttendanceConsolidationOut(serializers.ModelSerializer):
+    work_date = serializers.DateField(source="work_day.work_date", read_only=True)
+
+    class Meta:
+        model = FieldAttendanceConsolidation
+        fields = [
+            "id", "employee_id", "work_day_id", "work_date", "payroll_period_id",
+            "status", "day_value", "primary_event_type", "conflict_codes",
+            "has_inss_snapshot", "approved_at", "locked_at",
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Régimen INSS — afiliación + elección por período (HTTP)
+# ---------------------------------------------------------------------------
+
+class InssEnrollmentOut(serializers.ModelSerializer):
+    class Meta:
+        model = EmployeeInssEnrollment
+        fields = [
+            "id", "company_id", "employee_id", "regime",
+            "effective_from", "effective_to", "reason", "created_at",
+        ]
+
+
+class InssEnrollmentCreateIn(serializers.Serializer):
+    regime = serializers.ChoiceField(choices=InssRegime.values)
+    effective_from = serializers.DateField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class InssElectionOut(serializers.ModelSerializer):
+    class Meta:
+        model = PayrollInssElection
+        fields = [
+            "id", "period_id", "employee_id", "cedula",
+            "elected_has_inss", "source", "reason", "created_at", "updated_at",
+        ]
+
+
+class InssElectionSetIn(serializers.Serializer):
+    employee_id = serializers.IntegerField(required=False, allow_null=True)
+    cedula = serializers.CharField(required=False, allow_blank=True, default="")
+    elected_has_inss = serializers.BooleanField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        if not attrs.get("employee_id") and not (attrs.get("cedula") or "").strip():
+            raise serializers.ValidationError("Se requiere employee_id o cedula.")
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# Pago del neto (app del pagador / sala de pago)
+# ---------------------------------------------------------------------------
+
+class PayrollPaymentIn(serializers.Serializer):
+    payment_method = serializers.ChoiceField(
+        choices=["CASH", "BANK_TRANSFER", "CHECK"], default="CASH"
+    )
+    amount = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    payment_date = serializers.DateField(required=False, allow_null=True)
+    reference = serializers.CharField(required=False, allow_blank=True, default="", max_length=96)
+    notes = serializers.CharField(required=False, allow_blank=True, default="", max_length=255)
+    # Clave de idempotencia del cliente (cola offline): viaja en PayrollPayment.reference.
+    idempotency_key = serializers.CharField(required=False, allow_blank=True, default="", max_length=96)
+
+
+class PayrollPaymentOut(serializers.Serializer):
+    id = serializers.IntegerField()
+    entry_id = serializers.IntegerField()
+    payment_method = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=18, decimal_places=2)
+    payment_date = serializers.DateField()
+    reference = serializers.CharField()
+    notes = serializers.CharField()
+    created_at = serializers.DateTimeField()

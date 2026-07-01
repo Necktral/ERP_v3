@@ -1,0 +1,1246 @@
+"""
+Financial Portfolio Kernel Services
+
+Servicios de negocio para CxC, CxP y Créditos.
+Diseñado con lógica híbrida: auto/manual según configuración.
+"""
+from decimal import Decimal, InvalidOperation
+from typing import Optional, List, Dict, Any
+from datetime import date, timedelta
+
+from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
+from django.db.models import F, Sum
+from django.utils import timezone
+
+from apps.modulos.audit.writer import write_event
+from apps.modulos.integration.services import publish_outbox_event
+from apps.modulos.parties.models import Party
+
+from .models import (
+    Obligation,
+    Receivable,
+    Payable,
+    Credit,
+    PaymentAllocation,
+    InterestAccrual,
+    PortfolioSettings,
+    ObligationStatus,
+    AllocationStatus,
+    CreditStatus,
+    AccountingStatus,
+)
+
+
+class PortfolioDomainError(Exception):
+    """Errores de negocio del Portfolio"""
+    def __init__(self, code: str, message: str, details: Optional[Dict] = None):
+        self.code = code
+        self.message = message
+        self.details = details or {}
+        super().__init__(f"[{code}] {message}")
+
+
+def _coerce_decimal(value, *, code: str, field: str) -> Decimal:
+    """Coacciona un valor (str del JSON / número) a Decimal o lanza error de dominio 4xx.
+
+    Cierra los 500 de `adjust`/`disburse` (BUG-2/3): el monto siempre llega como str del
+    body y `Decimal + str` reventaba con TypeError no atrapado.
+    """
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise PortfolioDomainError(code, f"{field} inválido: {value!r}")
+
+
+def _coerce_date(value, *, code: str, field: str) -> date:
+    """Coacciona un valor a `date` (acepta ya-date o ISO 'YYYY-MM-DD') o lanza error 4xx."""
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        raise PortfolioDomainError(code, f"{field} inválido (use YYYY-MM-DD): {value!r}")
+
+
+class _PortfolioAuditRequest:
+    """Request sintético para encadenar auditoría por company sin HTTP (kernel sin request)."""
+
+    def __init__(self, *, company, branch=None) -> None:
+        self.company = company
+        self.branch = branch
+        self.META: Dict[str, Any] = {}
+        self.path = ""
+        self.method = ""
+        self.request_id = ""
+
+
+def _write_portfolio_audit_event(
+    *,
+    actor_user,
+    company,
+    branch,
+    event_type: str,
+    subject_type: str,
+    subject_id: str,
+    after_snapshot: Optional[Dict] = None,
+    metadata: Optional[Dict] = None,
+) -> None:
+    """Auditoría de servicio del kernel portfolio (cierra el hueco `audit=0`, invariante #4)."""
+    meta: Dict[str, Any] = {"company_id": str(getattr(company, "id", "") or "")}
+    if branch is not None:
+        meta["branch_id"] = str(getattr(branch, "id", "") or "")
+    if metadata:
+        meta.update(metadata)
+    write_event(
+        request=_PortfolioAuditRequest(company=company, branch=branch),
+        module="PORTFOLIO",
+        event_type=event_type,
+        reason_code="PORTFOLIO_OK",
+        actor_user=actor_user,
+        subject_type=subject_type,
+        subject_id=str(subject_id),
+        after_snapshot=after_snapshot,
+        metadata=meta,
+    )
+
+
+# ============================================================================
+# RECEIVABLE SERVICES
+# ============================================================================
+
+def create_receivable(
+    company,
+    party,
+    reference_type: str,
+    reference_id: int,
+    principal_amount: Decimal,
+    currency: str,
+    issue_date: date,
+    due_date: date,
+    branch=None,
+    invoice_number: str = "",
+    invoice_date: Optional[date] = None,
+    credit_limit: Optional[Decimal] = None,
+    credit_days: Optional[int] = None,
+    created_by=None,
+    metadata: Optional[Dict] = None,
+) -> Receivable:
+    """
+    Crea una CxC (Cuenta por Cobrar)
+
+    Diseñado para ser llamado desde Billing kernel cuando se emite factura a crédito.
+    """
+    if principal_amount <= 0:
+        raise PortfolioDomainError(
+            "INVALID_AMOUNT",
+            f"Principal amount must be positive: {principal_amount}"
+        )
+
+    receivable = Receivable(
+        company=company,
+        branch=branch,
+        party=party,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        currency=currency,
+        principal_amount=principal_amount,
+        issue_date=issue_date,
+        due_date=due_date,
+        invoice_number=invoice_number,
+        invoice_date=invoice_date or issue_date,
+        credit_limit=credit_limit,
+        credit_days=credit_days,
+        created_by=created_by,
+        metadata_json=metadata or {},
+        accounting_status=AccountingStatus.PENDING_RULESET,
+    )
+
+    receivable.full_clean()
+    receivable.save()
+
+    # Publicar evento para Shadow Ledger
+    _publish_receivable_created_event(receivable)
+
+    _write_portfolio_audit_event(
+        actor_user=created_by,
+        company=receivable.company,
+        branch=receivable.branch,
+        event_type="PORTFOLIO_RECEIVABLE_CREATED",
+        subject_type="RECEIVABLE",
+        subject_id=str(receivable.obligation_id),
+        after_snapshot={
+            "status": receivable.status,
+            "principal_amount": str(receivable.principal_amount),
+            "currency": receivable.currency,
+            "due_date": receivable.due_date.isoformat(),
+        },
+        metadata={
+            "party_id": receivable.party_id,
+            "reference_type": receivable.reference_type,
+            "reference_id": receivable.reference_id,
+        },
+    )
+
+    return receivable
+
+
+def _publish_receivable_created_event(receivable: Receivable):
+    """Publica evento PORTFOLIO.ReceivableCreated"""
+    publish_outbox_event(
+        source_module="PORTFOLIO",
+        event_type="ReceivableCreated",
+        company=receivable.company,
+        branch=receivable.branch,
+        payload={
+            "receivable_id": str(receivable.obligation_id),
+            "party_id": receivable.party_id,
+            "principal_amount": str(receivable.principal_amount),
+            "currency": receivable.currency,
+            "issue_date": receivable.issue_date.isoformat(),
+            "due_date": receivable.due_date.isoformat(),
+            "reference_type": receivable.reference_type,
+            "reference_id": receivable.reference_id,
+            "invoice_number": receivable.invoice_number,
+        }
+    )
+
+
+def link_billing_document_to_receivable(*, outbox_event, actor_user=None) -> Dict[str, Any]:
+    """Crea una CxC desde un evento BILLING.DocumentIssued de venta a crédito.
+
+    - No-op para contado / consumidor final (``credit_status`` NONE/vacío).
+    - Idempotente por (reference_type="BILLING_DOC", reference_id=doc_id): si ya existe la
+      CxC del documento, la retorna sin duplicar.
+    - Reusa ``create_receivable`` (que audita PORTFOLIO_RECEIVABLE_CREATED + publica
+      ReceivableCreated). Respeta ownership: Billing emite, portfolio posee el saldo.
+    """
+    payload = outbox_event.payload if isinstance(outbox_event.payload, dict) else {}
+    data = payload.get("data", {}) if isinstance(payload.get("data"), dict) else {}
+
+    credit_status = str(data.get("credit_status") or "").strip().upper()
+    if not credit_status or credit_status == "NONE":
+        return {"status": "SKIPPED_NOT_CREDIT"}
+
+    doc_id = data.get("doc_id")
+    if doc_id is None:
+        return {"status": "SKIPPED_NO_DOC"}
+    doc_id = int(doc_id)
+    company = outbox_event.company
+
+    with transaction.atomic():
+        existing = Receivable.objects.filter(
+            company=company, reference_type="BILLING_DOC", reference_id=doc_id
+        ).first()
+        if existing is not None:
+            return {"status": "EXISTS", "receivable_id": str(existing.obligation_id)}
+
+        party_id = data.get("customer_party_id")
+        if not party_id:
+            return {"status": "SKIPPED_NO_PARTY"}
+        party = Party.objects.filter(id=int(party_id), company=company).first()
+        if party is None:
+            return {"status": "SKIPPED_PARTY_NOT_FOUND"}
+
+        principal = Decimal(str(data.get("total") or "0"))
+        if principal <= 0:
+            return {"status": "SKIPPED_NON_POSITIVE_AMOUNT"}
+
+        issue_date = timezone.localtime(outbox_event.occurred_at).date()
+        credit_days = _credit_days_for_party(company=company, party=party)
+        receivable = create_receivable(
+            company=company,
+            branch=outbox_event.branch,
+            party=party,
+            reference_type="BILLING_DOC",
+            reference_id=doc_id,
+            principal_amount=principal,
+            currency=str(data.get("currency") or "NIO"),
+            issue_date=issue_date,
+            due_date=issue_date + timedelta(days=credit_days),
+            credit_days=credit_days,
+            invoice_number=str(data.get("number") or ""),
+            created_by=actor_user,
+            metadata={
+                "source_module": "BILLING",
+                "source_event_id": str(getattr(outbox_event, "event_id", "")),
+                "customer_display_name": str(data.get("customer_display_name") or ""),
+            },
+        )
+    return {"status": "CREATED", "receivable_id": str(receivable.obligation_id)}
+
+
+def _credit_days_for_party(*, company, party) -> int:
+    """Días de crédito de la cuenta del cliente (vencimiento real de la CxC).
+
+    Lookup perezoso a la cuenta de crédito (módulo comisariato) para no acoplar el
+    kernel a un módulo en import-time. Sin cuenta → 0 días (vence al emitirse,
+    comportamiento previo).
+    """
+    from django.apps import apps as django_apps
+
+    try:
+        account_model = django_apps.get_model("comisariato", "CustomerCreditAccount")
+    except LookupError:
+        return 0
+    account = account_model.objects.filter(company=company, party=party, is_active=True).first()
+    return int(account.credit_days) if account else 0
+
+
+def adjust_receivable(
+    receivable: Receivable,
+    adjustment_amount: Decimal,
+    reason: str,
+    adjusted_by,
+) -> Receivable:
+    """
+    Ajusta el monto de una CxC
+
+    Puede ser por descuento, recargo, corrección, etc.
+    """
+    adjustment_amount = _coerce_decimal(
+        adjustment_amount, code="INVALID_ADJUSTMENT", field="adjustment_amount"
+    )
+    old_amount = receivable.principal_amount
+    new_amount = old_amount + adjustment_amount
+
+    if new_amount < 0:
+        raise PortfolioDomainError(
+            "INVALID_ADJUSTMENT",
+            f"Adjustment would result in negative amount: {new_amount}"
+        )
+
+    receivable.principal_amount = new_amount
+    receivable.metadata_json.setdefault("adjustments", []).append({
+        "date": timezone.now().isoformat(),
+        "old_amount": str(old_amount),
+        "adjustment": str(adjustment_amount),
+        "new_amount": str(new_amount),
+        "reason": reason,
+        "adjusted_by_id": adjusted_by.id if adjusted_by else None,
+    })
+    receivable.save()
+
+    # Publicar evento
+    publish_outbox_event(
+        source_module="PORTFOLIO",
+        event_type="ReceivableAdjusted",
+        company=receivable.company,
+        branch=receivable.branch,
+        payload={
+            "receivable_id": str(receivable.obligation_id),
+            "old_amount": str(old_amount),
+            "adjustment_amount": str(adjustment_amount),
+            "new_amount": str(new_amount),
+            "reason": reason,
+        }
+    )
+
+    # P-05: auditoría de servicio (invariante #4), igual que create/allocate.
+    _write_portfolio_audit_event(
+        actor_user=adjusted_by,
+        company=receivable.company,
+        branch=receivable.branch,
+        event_type="PORTFOLIO_RECEIVABLE_ADJUSTED",
+        subject_type="RECEIVABLE",
+        subject_id=str(receivable.obligation_id),
+        after_snapshot={"principal_amount": str(new_amount), "status": receivable.status},
+        metadata={"adjustment_amount": str(adjustment_amount), "reason": reason or ""},
+    )
+
+    return receivable
+
+
+def write_off_receivable(
+    receivable: Receivable,
+    reason: str,
+    approved_by,
+) -> Receivable:
+    """
+    Castiga una CxC (write-off)
+
+    Marca como incobrable.
+    """
+    if receivable.status == ObligationStatus.WRITTEN_OFF:
+        raise PortfolioDomainError(
+            "ALREADY_WRITTEN_OFF",
+            f"Receivable {receivable.obligation_id} already written off"
+        )
+
+    if receivable.status == ObligationStatus.PAID:
+        raise PortfolioDomainError(
+            "CANNOT_WRITEOFF_PAID",
+            f"Cannot write off paid receivable {receivable.obligation_id}"
+        )
+
+    receivable.status = ObligationStatus.WRITTEN_OFF
+    receivable.written_off_date = timezone.localdate()
+    receivable.metadata_json["writeoff"] = {
+        "date": timezone.now().isoformat(),
+        "reason": reason,
+        "approved_by_id": approved_by.id if approved_by else None,
+        "outstanding_amount": str(receivable.outstanding_amount),
+    }
+    receivable.save()
+
+    # Publicar evento
+    publish_outbox_event(
+        source_module="PORTFOLIO",
+        event_type="ReceivableWrittenOff",
+        company=receivable.company,
+        branch=receivable.branch,
+        payload={
+            "receivable_id": str(receivable.obligation_id),
+            "written_off_amount": str(receivable.outstanding_amount),
+            "reason": reason,
+        }
+    )
+
+    # P-05: el castigo (incobrable) es sensible → auditoría de servicio explícita.
+    _write_portfolio_audit_event(
+        actor_user=approved_by,
+        company=receivable.company,
+        branch=receivable.branch,
+        event_type="PORTFOLIO_RECEIVABLE_WRITTEN_OFF",
+        subject_type="RECEIVABLE",
+        subject_id=str(receivable.obligation_id),
+        after_snapshot={"status": receivable.status, "written_off_amount": str(receivable.outstanding_amount)},
+        metadata={"reason": reason or ""},
+    )
+
+    return receivable
+
+
+# ============================================================================
+# PAYABLE SERVICES
+# ============================================================================
+
+def create_payable(
+    company,
+    party,
+    reference_type: str,
+    reference_id: int,
+    principal_amount: Decimal,
+    currency: str,
+    issue_date: date,
+    due_date: date,
+    branch=None,
+    supplier_invoice_number: str = "",
+    supplier_invoice_date: Optional[date] = None,
+    early_payment_discount_rate: Decimal = Decimal("0.00"),
+    early_payment_discount_days: int = 0,
+    withholding_tax_rate: Decimal = Decimal("0.00"),
+    created_by=None,
+    metadata: Optional[Dict] = None,
+) -> Payable:
+    """
+    Crea una CxP (Cuenta por Pagar)
+
+    Diseñado para ser llamado desde Compras cuando se recibe factura de proveedor.
+    """
+    if principal_amount <= 0:
+        raise PortfolioDomainError(
+            "INVALID_AMOUNT",
+            f"Principal amount must be positive: {principal_amount}"
+        )
+
+    # Calcular withholding si aplica
+    withholding_amount = Decimal("0.00")
+    if withholding_tax_rate > 0:
+        withholding_amount = (principal_amount * withholding_tax_rate / Decimal("100.00")).quantize(Decimal("0.01"))
+
+    # Calcular fecha límite para descuento
+    early_payment_date = None
+    if early_payment_discount_days > 0:
+        early_payment_date = issue_date + timedelta(days=early_payment_discount_days)
+
+    payable = Payable(
+        company=company,
+        branch=branch,
+        party=party,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        currency=currency,
+        principal_amount=principal_amount,
+        issue_date=issue_date,
+        due_date=due_date,
+        supplier_invoice_number=supplier_invoice_number,
+        supplier_invoice_date=supplier_invoice_date or issue_date,
+        early_payment_discount_rate=early_payment_discount_rate,
+        early_payment_discount_days=early_payment_discount_days,
+        early_payment_discount_date=early_payment_date,
+        withholding_tax_rate=withholding_tax_rate,
+        withholding_tax_amount=withholding_amount,
+        created_by=created_by,
+        metadata_json=metadata or {},
+        accounting_status=AccountingStatus.PENDING_RULESET,
+    )
+
+    payable.full_clean()
+    payable.save()
+
+    # Publicar evento
+    _publish_payable_created_event(payable)
+
+    _write_portfolio_audit_event(
+        actor_user=created_by,
+        company=payable.company,
+        branch=payable.branch,
+        event_type="PORTFOLIO_PAYABLE_CREATED",
+        subject_type="PAYABLE",
+        subject_id=str(payable.obligation_id),
+        after_snapshot={
+            "status": payable.status,
+            "principal_amount": str(payable.principal_amount),
+            "currency": payable.currency,
+            "due_date": payable.due_date.isoformat(),
+        },
+        metadata={
+            "party_id": payable.party_id,
+            "reference_type": payable.reference_type,
+            "reference_id": payable.reference_id,
+        },
+    )
+
+    return payable
+
+
+def _publish_payable_created_event(payable: Payable):
+    """Publica evento PORTFOLIO.PayableCreated"""
+    publish_outbox_event(
+        source_module="PORTFOLIO",
+        event_type="PayableCreated",
+        company=payable.company,
+        branch=payable.branch,
+        payload={
+            "payable_id": str(payable.obligation_id),
+            "party_id": payable.party_id,
+            "principal_amount": str(payable.principal_amount),
+            "currency": payable.currency,
+            "issue_date": payable.issue_date.isoformat(),
+            "due_date": payable.due_date.isoformat(),
+            "reference_type": payable.reference_type,
+            "reference_id": payable.reference_id,
+            "supplier_invoice_number": payable.supplier_invoice_number,
+            "withholding_tax_amount": str(payable.withholding_tax_amount),
+        }
+    )
+
+
+def link_procurement_document_to_payable(*, outbox_event, actor_user=None) -> Dict[str, Any]:
+    """Crea una CxP desde un evento PROCUREMENT.ProcurementDocumentPosted con proveedor fuerte.
+
+    - Gate: requiere ``supplier_party`` (sin Party fuerte no hay dueño del saldo → no-op para
+      el modo legacy de proveedor textual).
+    - Idempotente por (reference_type="PROCUREMENT_DOC", reference_id=doc_id).
+    - Reusa ``create_payable`` (que audita PORTFOLIO_PAYABLE_CREATED + publica PayableCreated).
+      Ownership: Compras genera el documento; portfolio posee el saldo.
+    """
+    payload = outbox_event.payload if isinstance(outbox_event.payload, dict) else {}
+    data = payload.get("data", {}) if isinstance(payload.get("data"), dict) else {}
+
+    party_id = data.get("supplier_party_id")
+    if not party_id:
+        return {"status": "SKIPPED_NO_PARTY"}
+
+    doc_id = data.get("doc_id")
+    if doc_id is None:
+        return {"status": "SKIPPED_NO_DOC"}
+    doc_id = int(doc_id)
+    company = outbox_event.company
+
+    with transaction.atomic():
+        existing = Payable.objects.filter(
+            company=company, reference_type="PROCUREMENT_DOC", reference_id=doc_id
+        ).first()
+        if existing is not None:
+            return {"status": "EXISTS", "payable_id": str(existing.obligation_id)}
+
+        party = Party.objects.filter(id=int(party_id), company=company).first()
+        if party is None:
+            return {"status": "SKIPPED_PARTY_NOT_FOUND"}
+
+        principal = Decimal(str(data.get("total") or "0"))
+        if principal <= 0:
+            return {"status": "SKIPPED_NON_POSITIVE_AMOUNT"}
+
+        issue_date = timezone.localtime(outbox_event.occurred_at).date()
+        payable = create_payable(
+            company=company,
+            branch=outbox_event.branch,
+            party=party,
+            reference_type="PROCUREMENT_DOC",
+            reference_id=doc_id,
+            principal_amount=principal,
+            currency=str(data.get("currency") or "NIO"),
+            issue_date=issue_date,
+            due_date=issue_date,
+            supplier_invoice_number=str(data.get("supplier_ref") or ""),
+            created_by=actor_user,
+            metadata={
+                "source_module": "PROCUREMENT",
+                "source_event_id": str(getattr(outbox_event, "event_id", "")),
+                "supplier_display_name": str(data.get("supplier_display_name") or ""),
+            },
+        )
+    return {"status": "CREATED", "payable_id": str(payable.obligation_id)}
+
+
+# ============================================================================
+# CREDIT SERVICES
+# ============================================================================
+
+def create_credit(
+    company,
+    credit_type: str,
+    lender_party,
+    borrower_party,
+    approved_amount: Decimal,
+    currency: str,
+    interest_rate: Decimal,
+    term_months: int,
+    maturity_date: date,
+    branch=None,
+    guarantor_party=None,
+    interest_calculation_method: str = "SIMPLE",
+    payment_frequency: str = "MONTHLY",
+    grace_period_months: int = 0,
+    collateral_type: str = "",
+    collateral_value: Optional[Decimal] = None,
+    contract_number: str = "",
+    created_by=None,
+    metadata: Optional[Dict] = None,
+) -> Credit:
+    """
+    Crea un Crédito
+
+    Puede ser crédito otorgado o recibido.
+    """
+    if approved_amount <= 0:
+        raise PortfolioDomainError(
+            "INVALID_AMOUNT",
+            f"Approved amount must be positive: {approved_amount}"
+        )
+
+    if interest_rate < 0:
+        raise PortfolioDomainError(
+            "INVALID_RATE",
+            f"Interest rate cannot be negative: {interest_rate}"
+        )
+
+    if lender_party.id == borrower_party.id:
+        raise PortfolioDomainError(
+            "INVALID_PARTIES",
+            "Lender and borrower cannot be the same party"
+        )
+
+    # Fecha de aprobación es hoy
+    approval_date = timezone.localdate()
+
+    credit = Credit(
+        company=company,
+        branch=branch,
+        party=borrower_party,  # Para queries, party es el borrower
+        reference_type="CREDIT_CONTRACT",
+        reference_id=0,  # Se actualizará cuando haya contrato
+        currency=currency,
+        principal_amount=approved_amount,  # Principal es el approved_amount
+        issue_date=approval_date,
+        due_date=maturity_date,
+        # Credit-specific
+        credit_type=credit_type,
+        credit_status=CreditStatus.APPROVED,
+        lender_party=lender_party,
+        borrower_party=borrower_party,
+        guarantor_party=guarantor_party,
+        approved_amount=approved_amount,
+        disbursed_amount=Decimal("0.00"),
+        interest_rate=interest_rate,
+        interest_calculation_method=interest_calculation_method,
+        payment_frequency=payment_frequency,
+        term_months=term_months,
+        grace_period_months=grace_period_months,
+        approval_date=approval_date,
+        maturity_date=maturity_date,
+        collateral_type=collateral_type,
+        collateral_value=collateral_value,
+        contract_number=contract_number,
+        created_by=created_by,
+        metadata_json=metadata or {},
+        accounting_status=AccountingStatus.PENDING_RULESET,
+    )
+
+    credit.full_clean()
+    credit.save()
+
+    # Publicar evento
+    publish_outbox_event(
+        source_module="PORTFOLIO",
+        event_type="CreditApproved",
+        company=credit.company,
+        branch=credit.branch,
+        payload={
+            "credit_id": str(credit.obligation_id),
+            "credit_type": credit_type,
+            "lender_party_id": lender_party.id,
+            "borrower_party_id": borrower_party.id,
+            "approved_amount": str(approved_amount),
+            "currency": currency,
+            "interest_rate": str(interest_rate),
+            "term_months": term_months,
+        }
+    )
+
+    return credit
+
+
+def disburse_credit(
+    credit: Credit,
+    disbursed_amount: Decimal,
+    disbursement_date: date,
+    disbursed_by,
+) -> Credit:
+    """
+    Desembolsa un crédito
+
+    Registra el desembolso y actualiza estado.
+    """
+    disbursed_amount = _coerce_decimal(
+        disbursed_amount, code="INVALID_AMOUNT", field="disbursed_amount"
+    )
+    disbursement_date = (
+        timezone.localdate()
+        if disbursement_date in (None, "")
+        else _coerce_date(disbursement_date, code="INVALID_DATE", field="disbursement_date")
+    )
+
+    if credit.credit_status not in (CreditStatus.APPROVED, CreditStatus.DISBURSED, CreditStatus.ACTIVE):
+        raise PortfolioDomainError(
+            "INVALID_STATUS",
+            f"Cannot disburse credit in status {credit.credit_status}"
+        )
+
+    if disbursed_amount <= 0:
+        raise PortfolioDomainError(
+            "INVALID_AMOUNT",
+            f"Disbursement amount must be positive: {disbursed_amount}"
+        )
+
+    new_total = credit.disbursed_amount + disbursed_amount
+    if new_total > credit.approved_amount:
+        raise PortfolioDomainError(
+            "EXCEEDS_APPROVED",
+            f"Total disbursed ({new_total}) would exceed approved ({credit.approved_amount})"
+        )
+
+    credit.disbursed_amount = new_total
+    credit.credit_status = CreditStatus.DISBURSED if new_total == credit.approved_amount else CreditStatus.ACTIVE
+
+    if not credit.disbursement_date:
+        credit.disbursement_date = disbursement_date
+
+    credit.metadata_json.setdefault("disbursements", []).append({
+        "date": disbursement_date.isoformat(),
+        "amount": str(disbursed_amount),
+        "disbursed_by_id": disbursed_by.id if disbursed_by else None,
+    })
+
+    credit.save()
+
+    # Publicar evento
+    publish_outbox_event(
+        source_module="PORTFOLIO",
+        event_type="CreditDisbursed",
+        company=credit.company,
+        branch=credit.branch,
+        payload={
+            "credit_id": str(credit.obligation_id),
+            "disbursed_amount": str(disbursed_amount),
+            "total_disbursed": str(credit.disbursed_amount),
+            "disbursement_date": disbursement_date.isoformat(),
+            "borrower_party_id": credit.borrower_party_id,
+            "lender_party_id": credit.lender_party_id,
+        }
+    )
+
+    return credit
+
+
+# ============================================================================
+# PAYMENT ALLOCATION SERVICES
+# ============================================================================
+
+def allocate_payment_to_obligation(
+    payment_intent,
+    obligation: Obligation,
+    allocated_amount: Decimal,
+    allocation_date: date,
+    created_by,
+    allocation_breakdown: Optional[Dict[str, Decimal]] = None,
+    exchange_rate: Optional[Decimal] = None,
+) -> PaymentAllocation:
+    """
+    Aplica un pago a una obligación
+
+    Lógica híbrida: puede ser llamada manualmente o por proceso automático.
+
+    Args:
+        payment_intent: PaymentIntent capturado
+        obligation: Receivable, Payable o Credit
+        allocated_amount: Monto a aplicar
+        allocation_date: Fecha de aplicación
+        created_by: Usuario que aplica (o sistema)
+        allocation_breakdown: Opcional, dict con 'principal', 'interest', 'fee', 'penalty'
+        exchange_rate: Opcional, tasa de cambio si monedas difieren
+    """
+    # Validar payment_intent
+    if payment_intent.status != "CAPTURED":
+        raise PortfolioDomainError(
+            "PAYMENT_NOT_CAPTURED",
+            f"Payment {payment_intent.payment_id} must be CAPTURED to allocate"
+        )
+
+    # Validar monto
+    if allocated_amount <= 0:
+        raise PortfolioDomainError(
+            "INVALID_AMOUNT",
+            f"Allocated amount must be positive: {allocated_amount}"
+        )
+
+    if allocated_amount > payment_intent.amount:
+        raise PortfolioDomainError(
+            "EXCEEDS_PAYMENT",
+            f"Allocated amount ({allocated_amount}) exceeds payment amount ({payment_intent.amount})"
+        )
+
+    if allocated_amount > obligation.outstanding_amount:
+        raise PortfolioDomainError(
+            "EXCEEDS_OUTSTANDING",
+            f"Allocated amount ({allocated_amount}) exceeds outstanding ({obligation.outstanding_amount})"
+        )
+
+    # Validar moneda
+    if payment_intent.currency != obligation.currency and not exchange_rate:
+        raise PortfolioDomainError(
+            "CURRENCY_MISMATCH",
+            f"Payment currency ({payment_intent.currency}) differs from obligation ({obligation.currency}), exchange_rate required"
+        )
+
+    # Desglose del allocation
+    if allocation_breakdown:
+        principal_applied = allocation_breakdown.get("principal", Decimal("0.00"))
+        interest_applied = allocation_breakdown.get("interest", Decimal("0.00"))
+        fee_applied = allocation_breakdown.get("fee", Decimal("0.00"))
+        penalty_applied = allocation_breakdown.get("penalty", Decimal("0.00"))
+    else:
+        # P-04: orden de cascada contable estándar — penalty → interés → fees → principal
+        # (el principal se salda al final). El comentario anterior decía "principal primero",
+        # contradiciendo el código; el código es el correcto.
+        remaining = allocated_amount
+        # Component-level applied balances are not persisted yet; cap by configured penalty amount.
+        penalty_applied = min(remaining, obligation.penalty_amount - Decimal("0.00"))
+        remaining -= penalty_applied
+        interest_applied = min(remaining, obligation.interest_amount)
+        remaining -= interest_applied
+        fee_applied = min(remaining, obligation.fee_amount)
+        remaining -= fee_applied
+        principal_applied = remaining
+
+    # Crear allocation
+    content_type = ContentType.objects.get_for_model(obligation)
+
+    allocation = PaymentAllocation(
+        company=payment_intent.company,
+        payment_intent=payment_intent,
+        obligation_content_type=content_type,
+        obligation_object_id=obligation.pk,
+        status=AllocationStatus.APPLIED,
+        allocated_amount=allocated_amount,
+        currency=payment_intent.currency,
+        principal_applied=principal_applied,
+        interest_applied=interest_applied,
+        fee_applied=fee_applied,
+        penalty_applied=penalty_applied,
+        exchange_rate=exchange_rate,
+        allocation_date=allocation_date,
+        applied_at=timezone.now(),
+        created_by=created_by,
+    )
+
+    allocation.full_clean()
+
+    with transaction.atomic():
+        allocation.save()
+
+        # P-01: bloquear la obligación antes de mutar el saldo (evita lost-update /
+        # over-allocation cuando la aplicación automática y la manual concurren).
+        obligation = type(obligation)._default_manager.select_for_update().get(pk=obligation.pk)
+
+        # Actualizar obligation
+        obligation.allocated_amount += allocated_amount
+        obligation.last_payment_date = allocation_date
+
+        # Actualizar status
+        if obligation.allocated_amount >= obligation.total_amount:
+            obligation.status = ObligationStatus.PAID
+            obligation.paid_date = allocation_date
+        elif obligation.allocated_amount > 0:
+            obligation.status = ObligationStatus.PARTIAL
+
+        obligation.save()
+
+    # Publicar evento según tipo
+    event_type = _get_allocation_event_type(obligation)
+    publish_outbox_event(
+        source_module="PORTFOLIO",
+        event_type=event_type,
+        company=payment_intent.company,
+        branch=payment_intent.branch,
+        payload={
+            "allocation_id": str(allocation.allocation_id),
+            "payment_id": str(payment_intent.payment_id),
+            "obligation_id": str(obligation.obligation_id),
+            "obligation_type": obligation.obligation_type,
+            "allocated_amount": str(allocated_amount),
+            "principal_applied": str(principal_applied),
+            "interest_applied": str(interest_applied),
+            "party_id": obligation.party_id,
+        }
+    )
+
+    _write_portfolio_audit_event(
+        actor_user=created_by,
+        company=payment_intent.company,
+        branch=payment_intent.branch,
+        event_type="PORTFOLIO_PAYMENT_ALLOCATED",
+        subject_type="PAYMENT_ALLOCATION",
+        subject_id=str(allocation.allocation_id),
+        after_snapshot={
+            "status": allocation.status,
+            "allocated_amount": str(allocated_amount),
+            "currency": allocation.currency,
+            "obligation_status": obligation.status,
+        },
+        metadata={
+            "payment_id": str(payment_intent.payment_id),
+            "obligation_id": str(obligation.obligation_id),
+            "obligation_type": obligation.obligation_type,
+            "party_id": obligation.party_id,
+        },
+    )
+
+    return allocation
+
+
+def apply_payroll_abono(*, obligation, amount, abono_date=None, created_by=None, reference: str = "") -> Decimal:
+    """Aplica un abono de descuento de planilla a una obligación (Credit/Receivable), sin payment intent.
+
+    Un descuento de nómina no es un pago de caja (PaymentIntent), sino un offset del salario.
+    Reduce el saldo subiendo `allocated_amount` y actualizando el estado (PARTIAL/PAID), con
+    auditoría propia. Devuelve el monto efectivamente aplicado (topado al saldo pendiente).
+    """
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        raise PortfolioDomainError("INVALID_AMOUNT", f"El abono debe ser positivo: {amount}")
+    if obligation.status in (ObligationStatus.PAID, ObligationStatus.WRITTEN_OFF, ObligationStatus.CANCELLED):
+        raise PortfolioDomainError("OBLIGATION_NOT_OPEN", f"Obligación no abierta para abono: {obligation.status}")
+
+    abono_date = abono_date or timezone.localdate()
+
+    with transaction.atomic():
+        # P-01: lock antes de leer el saldo y mutar (evita over-allocation concurrente).
+        obligation = type(obligation)._default_manager.select_for_update().get(pk=obligation.pk)
+        applied = min(amount, obligation.outstanding_amount)
+        if applied <= 0:
+            return Decimal("0.00")
+        obligation.allocated_amount += applied
+        obligation.last_payment_date = abono_date
+        if obligation.allocated_amount >= obligation.total_amount:
+            obligation.status = ObligationStatus.PAID
+            obligation.paid_date = abono_date
+        elif obligation.allocated_amount > 0:
+            obligation.status = ObligationStatus.PARTIAL
+        obligation.save()
+
+        _write_portfolio_audit_event(
+            actor_user=created_by,
+            company=obligation.company,
+            branch=obligation.branch,
+            event_type="PORTFOLIO_PAYROLL_ABONO_APPLIED",
+            subject_type=obligation.obligation_type,
+            subject_id=str(obligation.obligation_id),
+            after_snapshot={
+                "allocated_amount": str(obligation.allocated_amount),
+                "status": obligation.status,
+                "abono_applied": str(applied),
+            },
+            metadata={"reference": reference or "", "party_id": obligation.party_id, "source": "PAYROLL_DEDUCTION"},
+        )
+    return applied
+
+
+def reverse_payroll_abono(
+    *, obligation, amount, reverse_date=None, created_by=None, reference: str = ""
+) -> Decimal:
+    """Reversa (des-abona) un abono de planilla en CUALQUIER portafolio. Inversa de `apply_payroll_abono`.
+
+    Capacidad GLOBAL del kernel: como opera sobre `Obligation` (base de `Credit`/`Receivable`/`Payable`),
+    todos los portafolios quedan con reversa. La usa la rectificación del CO-PA cuando el pagador se
+    equivoca de monto: hay que devolver el saldo de la deuda antes de re-cobrar el monto correcto.
+
+    Reduce `allocated_amount` (sube el saldo pendiente) y reabre el estado: una obligación PAID vuelve a
+    PARTIAL/PENDING. Es segura ante doble reversa (topa al `allocated_amount` disponible → clamp a 0).
+    Devuelve el monto efectivamente reversado.
+    """
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        raise PortfolioDomainError("INVALID_AMOUNT", f"La reversa debe ser positiva: {amount}")
+
+    reverse_date = reverse_date or timezone.localdate()
+
+    with transaction.atomic():
+        # Mismo lock que el abono: leer y mutar el saldo bajo cerrojo (evita carreras).
+        obligation = type(obligation)._default_manager.select_for_update().get(pk=obligation.pk)
+        reversed_amount = min(amount, obligation.allocated_amount)
+        if reversed_amount <= 0:
+            return Decimal("0.00")
+        obligation.allocated_amount -= reversed_amount
+
+        # Reabrir el estado según el saldo resultante (la reversa puede des-cancelar un PAID).
+        if obligation.allocated_amount <= 0:
+            obligation.allocated_amount = Decimal("0.00")
+            obligation.status = ObligationStatus.PENDING
+            obligation.paid_date = None
+            # BUG-8: reversa TOTAL = inversa exacta del abono → sin pagos vigentes,
+            # `last_payment_date` debe volver a None (antes quedaba huérfano apuntando
+            # a un abono ya revertido y mentía en antigüedad/dunning).
+            obligation.last_payment_date = None
+        elif obligation.allocated_amount >= obligation.total_amount:
+            obligation.status = ObligationStatus.PAID
+        else:
+            obligation.status = ObligationStatus.PARTIAL
+            obligation.paid_date = None
+        obligation.save()
+
+        _write_portfolio_audit_event(
+            actor_user=created_by,
+            company=obligation.company,
+            branch=obligation.branch,
+            event_type="PORTFOLIO_PAYROLL_ABONO_REVERSED",
+            subject_type=obligation.obligation_type,
+            subject_id=str(obligation.obligation_id),
+            after_snapshot={
+                "allocated_amount": str(obligation.allocated_amount),
+                "status": obligation.status,
+                "abono_reversed": str(reversed_amount),
+            },
+            metadata={
+                "reference": reference or "",
+                "party_id": obligation.party_id,
+                "source": "PAYROLL_RECTIFICATION",
+            },
+        )
+    return reversed_amount
+
+
+def _get_allocation_event_type(obligation: Obligation) -> str:
+    """Retorna evento según tipo de obligación"""
+    if isinstance(obligation, Receivable):
+        return "ReceivableAllocated"
+    elif isinstance(obligation, Payable):
+        return "PayableAllocated"
+    elif isinstance(obligation, Credit):
+        return "CreditRepaymentReceived"
+    return "ObligationAllocated"
+
+
+def auto_allocate_payment(
+    payment_intent,
+    party,
+    created_by=None,
+) -> List[PaymentAllocation]:
+    """
+    Aplica un pago automáticamente a obligaciones pendientes
+
+    Usa estrategia FIFO por defecto (configurable vía PortfolioSettings).
+    """
+    settings = PortfolioSettings.get_or_create_for_company(payment_intent.company)
+
+    if not settings.auto_allocate_payments:
+        raise PortfolioDomainError(
+            "AUTO_ALLOCATION_DISABLED",
+            f"Auto allocation is disabled for company {payment_intent.company}"
+        )
+
+    # Buscar obligaciones pendientes del party
+    # La ruta automática actual aplica cobros contra Receivables; Payables requieren flujo explícito.
+    pending_obligations = Receivable.objects.filter(
+        company=payment_intent.company,
+        party=party,
+        status__in=[ObligationStatus.PENDING, ObligationStatus.PARTIAL, ObligationStatus.OVERDUE],
+        currency=payment_intent.currency,
+    ).order_by("due_date", "issue_date")  # FIFO
+
+    allocations = []
+    remaining_amount = payment_intent.amount
+    allocation_date = timezone.localdate()
+
+    for obligation in pending_obligations:
+        if remaining_amount <= 0:
+            break
+
+        outstanding = obligation.outstanding_amount
+        to_allocate = min(remaining_amount, outstanding)
+
+        allocation = allocate_payment_to_obligation(
+            payment_intent=payment_intent,
+            obligation=obligation,
+            allocated_amount=to_allocate,
+            allocation_date=allocation_date,
+            created_by=created_by,
+        )
+
+        allocations.append(allocation)
+        remaining_amount -= to_allocate
+
+    return allocations
+
+
+# ============================================================================
+# INTEREST ACCRUAL SERVICES
+# ============================================================================
+
+def accrue_interest_for_credit(
+    credit: Credit,
+    accrual_date: date,
+    period_start: date,
+    period_end: date,
+) -> Optional[InterestAccrual]:
+    """
+    Calcula y registra devengo de interés para un crédito
+
+    Diseñado para ser llamado por comando periódico.
+    """
+    if credit.credit_status not in (CreditStatus.DISBURSED, CreditStatus.ACTIVE):
+        return None
+
+    # Verificar que no exista ya
+    existing = InterestAccrual.objects.filter(
+        credit=credit,
+        accrual_date=accrual_date
+    ).first()
+
+    if existing:
+        return existing
+
+    # P-03: la base del interés es el PRINCIPAL pendiente. `allocated_amount` incluye
+    # lo aplicado a interés/fees/penalty, así que `disbursed − allocated` lo subestimaba.
+    # Se re-suma la porción NO-principal aplicada en allocations (los abonos de planilla
+    # son 100% principal, así que no se re-suman → quedan correctos).
+    non_principal_paid = (
+        PaymentAllocation.objects.filter(
+            obligation_content_type=ContentType.objects.get_for_model(credit),
+            obligation_object_id=credit.pk,
+            status=AllocationStatus.APPLIED,
+        ).aggregate(s=Sum(F("interest_applied") + F("fee_applied") + F("penalty_applied")))["s"]
+        or Decimal("0.00")
+    )
+    principal_balance = credit.disbursed_amount - credit.allocated_amount + non_principal_paid
+    if principal_balance <= 0:
+        return None
+
+    days_in_period = (period_end - period_start).days + 1
+    annual_rate = credit.interest_rate / Decimal("100.00")
+
+    if credit.interest_calculation_method == "SIMPLE":
+        # Interés simple: P * r * t
+        daily_rate = annual_rate / Decimal("365.00")
+        accrued = (principal_balance * daily_rate * Decimal(str(days_in_period))).quantize(Decimal("0.01"))
+    elif credit.interest_calculation_method == "COMPOUND":
+        # P-02: interés compuesto REAL P * ((1 + r_diario)^t − 1) (antes calculaba simple).
+        daily_rate = annual_rate / Decimal("365.00")
+        factor = (Decimal("1") + daily_rate) ** int(days_in_period) - Decimal("1")
+        accrued = (principal_balance * factor).quantize(Decimal("0.01"))
+    else:
+        # Flat rate
+        accrued = (principal_balance * annual_rate / Decimal("12.00")).quantize(Decimal("0.01"))
+
+    accrual = InterestAccrual(
+        credit=credit,
+        accrual_date=accrual_date,
+        period_start=period_start,
+        period_end=period_end,
+        days_in_period=days_in_period,
+        principal_balance=principal_balance,
+        interest_rate_applied=credit.interest_rate,
+        accrued_interest=accrued,
+        calculation_method=credit.interest_calculation_method,
+        metadata_json={
+            "calculation_details": {
+                "principal": str(principal_balance),
+                "rate": str(credit.interest_rate),
+                "days": days_in_period,
+                "method": credit.interest_calculation_method,
+            }
+        }
+    )
+
+    accrual.save()
+
+    # Actualizar interest_amount en el crédito
+    credit.interest_amount += accrued
+    credit.save()
+
+    # Publicar evento
+    publish_outbox_event(
+        source_module="PORTFOLIO",
+        event_type="InterestAccrued",
+        company=credit.company,
+        branch=credit.branch,
+        payload={
+            "credit_id": str(credit.obligation_id),
+            "accrual_id": str(accrual.accrual_id),
+            "accrued_interest": str(accrued),
+            "principal_balance": str(principal_balance),
+            "accrual_date": accrual_date.isoformat(),
+            "borrower_party_id": credit.borrower_party_id,
+        }
+    )
+
+    return accrual
+
+
+def update_aging_for_obligations(company, as_of_date: Optional[date] = None):
+    """
+    Actualiza aging de todas las obligaciones de una company
+
+    Diseñado para ser llamado por comando diario.
+    """
+    if not as_of_date:
+        as_of_date = timezone.localdate()
+
+    # Actualizar Receivables
+    for receivable in Receivable.objects.filter(company=company, status__in=[
+        ObligationStatus.PENDING,
+        ObligationStatus.PARTIAL,
+        ObligationStatus.OVERDUE,
+    ]):
+        receivable.update_aging()
+        receivable.save(update_fields=["days_overdue", "aging_bucket", "status", "updated_at"])
+
+    # Actualizar Payables
+    for payable in Payable.objects.filter(company=company, status__in=[
+        ObligationStatus.PENDING,
+        ObligationStatus.PARTIAL,
+        ObligationStatus.OVERDUE,
+    ]):
+        payable.update_aging()
+        payable.save(update_fields=["days_overdue", "aging_bucket", "status", "updated_at"])
+
+    # Actualizar Credits
+    for credit in Credit.objects.filter(company=company, credit_status__in=[
+        CreditStatus.DISBURSED,
+        CreditStatus.ACTIVE,
+    ]):
+        credit.update_aging()
+        credit.save(update_fields=["days_overdue", "aging_bucket", "status", "days_past_due", "updated_at"])

@@ -1,0 +1,13 @@
+{
+  "appId": "io.necktral.erp",
+  "appName": "CO-PA",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

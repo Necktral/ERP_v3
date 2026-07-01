@@ -1,0 +1,114 @@
+{
+  "status": "passed",
+  "generated_at": "2026-06-23T21:30:20.898993+00:00",
+  "summary": {
+    "write_views_total": 303,
+    "gated_by_rbac": 289,
+    "ungated_total": 14,
+    "allowlisted": 14,
+    "unbaselined": 0,
+    "stale_baseline_entries": 0
+  },
+  "unbaselined": [],
+  "stale_baseline": [],
+  "ungated_all": [
+    {
+      "id": "backend/src/apps/kernels/nomina/biometric/views_biometric.py::BiometricPushView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": false
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::BootstrapInitView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::BootstrapOrgView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::LoginView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::LogoutView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::PasswordChangeView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::RefreshView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::TwoFactorConfirmView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::TwoFactorDisableView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::TwoFactorSetupView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/accounts/views.py::TwoFactorVerifyView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/dashboard/views.py::EmbedTokenRedeemView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/sync_engine/views.py::DeviceEnrollView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    },
+    {
+      "id": "backend/src/apps/modulos/sync_engine/views.py::SyncBatchView",
+      "methods": [
+        "post"
+      ],
+      "sets_other_permission": true
+    }
+  ]
+}

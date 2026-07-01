@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "generated_at": "2026-06-23T00:00:00+00:00",
+  "allow": {
+    "backend/src/apps/kernels/nomina/biometric/views_biometric.py::BiometricPushView": {
+      "reason": "Ingesta biométrica: autentica por header X-Device-Token contra BiometricDevice.api_token (401 si falta/inválido) + throttle admin_writes. El aparato no es un usuario con permisos RBAC.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::BootstrapInitView": {
+      "reason": "Bootstrap inicial del sistema (AllowAny): corre antes de que existan usuarios/permisos.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::BootstrapOrgView": {
+      "reason": "Bootstrap de la organización (AllowAny): parte del arranque previo al RBAC.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::LoginView": {
+      "reason": "Login público (AllowAny): es la superficie de autenticación misma; no puede exigir un permiso de negocio.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::LogoutView": {
+      "reason": "Logout de la sesión propia: no requiere permiso de negocio.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::PasswordChangeView": {
+      "reason": "Cambio de contraseña propia (usuario autenticado): acción sobre la cuenta del propio actor, no requiere permiso de negocio.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::RefreshView": {
+      "reason": "Refresh de token: la credencial es el propio refresh token, no un permiso RBAC.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::TwoFactorSetupView": {
+      "reason": "Configuración de 2FA de la cuenta propia: acción sobre el propio actor.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::TwoFactorConfirmView": {
+      "reason": "Confirmación de 2FA de la cuenta propia: acción sobre el propio actor.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::TwoFactorVerifyView": {
+      "reason": "Verificación de 2FA durante el login: parte del flujo de autenticación.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/accounts/views.py::TwoFactorDisableView": {
+      "reason": "Desactivación de 2FA de la cuenta propia: acción sobre el propio actor.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/dashboard/views.py::EmbedTokenRedeemView": {
+      "reason": "Canje de token de embed de BI: la credencial es el token de embed firmado, no un permiso RBAC.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/sync_engine/views.py::DeviceEnrollView": {
+      "reason": "Enrolamiento de dispositivo: se autoriza con el token/flujo de enrolamiento, no con permisos RBAC de usuario.",
+      "methods": ["post"]
+    },
+    "backend/src/apps/modulos/sync_engine/views.py::SyncBatchView": {
+      "reason": "Riel de sincronizacion firmado v2: la auth es la firma del dispositivo por request (exento del device-guard por diseño); no aplica RBAC de usuario.",
+      "methods": ["post"]
+    }
+  },
+  "notes": [
+    "Baseline-allowlist de vistas de ESCRITURA intencionalmente NO gateadas por rbac_permission.",
+    "Cada entrada exige una razón explícita. Una vista de escritura NUEVA sin rbac y sin entrada aquí FALLA el gate (qa/route_authz_guard.py).",
+    "Si agregás una entrada, justifica por qué NO usa rbac (auth por token/firma de dispositivo, superficie de login/2FA, bootstrap). Si es un endpoint de negocio, NO lo baselinees: agregale rbac_permission.",
+    "Bootstrap 2026-06-23: 303 vistas de escritura, 289 gateadas por rbac (95.4%), 14 excepciones intencionales aquí. 0 gaps reales."
+  ]
+}

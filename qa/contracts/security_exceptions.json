@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "generated_at": "2026-06-06T00:00:00Z",
+  "defaults": {
+    "max_expiry_days": 90
+  },
+  "exceptions": [
+    {
+      "id": "npm-quasar-app-vite-major-upgrade-pr112",
+      "source": "npm",
+      "package": "@quasar/app-vite",
+      "vuln_id": "@quasar/app-vite",
+      "severity": "high",
+      "reason": "La correccion disponible requiere subir a @quasar/app-vite 3.0.0-rc.3, un cambio mayor/RC fuera del alcance seguro de PR112.",
+      "ticket_ref": "PR-112",
+      "expires_on": "2026-09-14"
+    },
+    {
+      "id": "npm-esbuild-1120679-quasar-transitive-pr112",
+      "source": "npm",
+      "package": "esbuild",
+      "vuln_id": "1120679",
+      "severity": "high",
+      "reason": "esbuild llega transitivamente por @quasar/app-vite; la correccion disponible requiere upgrade mayor/RC de Quasar.",
+      "ticket_ref": "PR-112",
+      "expires_on": "2026-09-14"
+    },
+    {
+      "id": "npm-esbuild-1120680-quasar-transitive-pr112",
+      "source": "npm",
+      "package": "esbuild",
+      "vuln_id": "1120680",
+      "severity": "high",
+      "reason": "esbuild llega transitivamente por @quasar/app-vite; la correccion disponible requiere upgrade mayor/RC de Quasar.",
+      "ticket_ref": "PR-112",
+      "expires_on": "2026-09-14"
+    }
+  ]
+}

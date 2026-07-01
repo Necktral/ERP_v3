@@ -1,0 +1,1250 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
+import logging
+
+from django.db import transaction
+from django.utils import timezone
+
+from apps.modulos.audit.writer import write_event
+from apps.modulos.common.domain_errors import IntegrationError
+from apps.modulos.iam.models import OrgUnit
+from apps.modulos.integration.models import OutboxEvent
+from apps.modulos.integration.services import publish_outbox_event
+
+from .models import InventoryItem, ItemLot, LotBalance, MovementType, StockBalance, StockMovement, Warehouse
+
+
+QTY_Q = Decimal("0.0001")
+COST_Q = Decimal("0.000001")
+logger = logging.getLogger(__name__)
+
+
+class InventoryConflictError(ValueError):
+    pass
+
+
+class InsufficientStockError(InventoryConflictError):
+    """No hay existencias suficientes para la salida solicitada.
+
+    Subclase de ValueError (compat hacia atrás con `except ValueError`), pero tipada para
+    que los callers (p. ej. el POS) la traduzcan a un error de dominio 4xx con envelope
+    legible en vez de propagar un 500 (BUG-6).
+    """
+    pass
+
+
+def _q_qty(x: Decimal) -> Decimal:
+    return Decimal(x).quantize(QTY_Q, rounding=ROUND_HALF_UP)
+
+
+def _q_cost(x: Decimal) -> Decimal:
+    return Decimal(x).quantize(COST_Q, rounding=ROUND_HALF_UP)
+
+
+def _require_branch(request) -> OrgUnit:
+    branch = getattr(request, "branch", None)
+    if not branch:
+        raise ValueError("X-Branch-Id requerido")
+    return branch
+
+
+@dataclass(frozen=True)
+class PostResult:
+    movement_id: int
+    qty_on_hand: Decimal
+    avg_cost: Decimal
+    accounting_status: str = ""
+    accounting_error: str = ""
+    accounting_journal_draft_id: int | None = None
+    accounting_journal_entry_id: int | None = None
+
+
+def create_warehouse(
+    *,
+    request,
+    company: OrgUnit,
+    branch: OrgUnit,
+    actor_user,
+    name: str,
+    code: str = "",
+    warehouse_type: str = "GENERAL",
+    location_description: str = "",
+    is_default: bool = False,
+) -> Warehouse:
+    with transaction.atomic():
+        wh = Warehouse.objects.create(
+            company=company,
+            branch=branch,
+            name=name,
+            code=code,
+            warehouse_type=warehouse_type,
+            location_description=location_description,
+            is_default=is_default,
+        )
+        write_event(
+            request=request,
+            module="INVENTORY",
+            event_type="INVENTORY_WAREHOUSE_CREATED",
+            reason_code="INVENTORY_OK",
+            actor_user=actor_user,
+            subject_type="WAREHOUSE",
+            subject_id=str(wh.id),
+            metadata={"name": name, "code": code, "warehouse_type": warehouse_type},
+        )
+        return wh
+
+
+def create_lot(
+    *,
+    request,
+    company: OrgUnit,
+    actor_user,
+    item_id: int,
+    lot_number: str,
+    supplier_lot_ref: str = "",
+    production_date=None,
+    expiry_date=None,
+    notes: str = "",
+) -> ItemLot:
+    item = _get_item_or_error(company=company, item_id=item_id)
+    if not item.track_lots:
+        raise ValueError("El ítem no tiene habilitado el tracking de lotes.")
+    with transaction.atomic():
+        lot = ItemLot.objects.create(
+            company=company,
+            item=item,
+            lot_number=lot_number,
+            supplier_lot_ref=supplier_lot_ref,
+            production_date=production_date,
+            expiry_date=expiry_date,
+            notes=notes,
+            created_by=actor_user,
+        )
+        write_event(
+            request=request,
+            module="INVENTORY",
+            event_type="INVENTORY_LOT_CREATED",
+            reason_code="INVENTORY_OK",
+            actor_user=actor_user,
+            subject_type="INVENTORY_LOT",
+            subject_id=str(lot.id),
+            metadata={
+                "item_id": item_id,
+                "lot_number": lot_number,
+                "expiry_date": str(expiry_date) if expiry_date else "",
+            },
+        )
+        return lot
+
+
+def create_item(*, request, company: OrgUnit, actor_user, sku: str, name: str, uom: str = "UNIT", **kwargs) -> InventoryItem:
+    with transaction.atomic():
+        item = InventoryItem.objects.create(
+            company=company, sku=sku, name=name, uom=uom,
+            created_by=actor_user,
+            description=kwargs.get("description", ""),
+            category=kwargs.get("category", ""),
+            barcode=kwargs.get("barcode", ""),
+            purchase_uom=kwargs.get("purchase_uom", ""),
+            purchase_uom_factor=kwargs.get("purchase_uom_factor", "1.000000"),
+            sale_uom=kwargs.get("sale_uom", ""),
+            sale_uom_factor=kwargs.get("sale_uom_factor", "1.000000"),
+            sale_price=kwargs.get("sale_price"),
+            default_tax_rate=kwargs.get("default_tax_rate", "0.1500"),
+            wholesale_price=kwargs.get("wholesale_price"),
+            wholesale_min_qty=kwargs.get("wholesale_min_qty"),
+            reorder_point=kwargs.get("reorder_point", "0.0000"),
+            min_stock_qty=kwargs.get("min_stock_qty", "0.0000"),
+            max_stock_qty=kwargs.get("max_stock_qty"),
+            track_lots=bool(kwargs.get("track_lots", False)),
+            track_expiry=bool(kwargs.get("track_expiry", False)),
+            shelf_life_days=kwargs.get("shelf_life_days"),
+            storage_condition=kwargs.get("storage_condition", "AMBIENT"),
+            is_controlled=bool(kwargs.get("is_controlled", False)),
+            inventory_class=kwargs.get("inventory_class", ""),
+        )
+
+        write_event(
+            request=request,
+            module="INVENTORY",
+            event_type="INVENTORY_ITEM_CREATED",
+            reason_code="INVENTORY_OK",
+            actor_user=actor_user,
+            subject_type="INVENTORY_ITEM",
+            subject_id=str(item.id),
+            metadata={"sku": sku, "name": name, "uom": uom},
+        )
+        publish_outbox_event(
+            request=request,
+            source_module="INVENTORY",
+            event_type="InventoryItemCreated",
+            payload={
+                "item_id": item.id,
+                "sku": item.sku,
+                "name": item.name,
+                "uom": item.uom,
+            },
+            actor_user=actor_user,
+            company=company,
+        )
+        return item
+
+
+_ITEM_UPDATABLE_FIELDS = (
+    "name", "description", "category", "barcode",
+    "sale_price", "default_tax_rate",
+    "wholesale_price", "wholesale_min_qty",
+    "reorder_point", "min_stock_qty", "max_stock_qty",
+    "is_active",
+)
+
+
+def update_item(*, request, company: OrgUnit, actor_user, item_id: int, **changes) -> InventoryItem:
+    """Actualización parcial del artículo (solo campos presentes en `changes`)."""
+    with transaction.atomic():
+        item = InventoryItem.objects.select_for_update().get(id=item_id, company=company)
+
+        before: dict = {}
+        after: dict = {}
+        update_fields: list[str] = []
+        for field in _ITEM_UPDATABLE_FIELDS:
+            if field not in changes:
+                continue
+            new_value = changes[field]
+            old_value = getattr(item, field)
+            if old_value == new_value:
+                continue
+            before[field] = str(old_value) if old_value is not None else None
+            after[field] = str(new_value) if new_value is not None else None
+            setattr(item, field, new_value)
+            update_fields.append(field)
+
+        if not update_fields:
+            return item
+
+        item.full_clean()
+        item.save(update_fields=[*update_fields, "updated_at"])
+
+        write_event(
+            request=request,
+            module="INVENTORY",
+            event_type="INVENTORY_ITEM_UPDATED",
+            reason_code="INVENTORY_OK",
+            actor_user=actor_user,
+            subject_type="INVENTORY_ITEM",
+            subject_id=str(item.id),
+            before_snapshot=before,
+            after_snapshot=after,
+            metadata={"sku": item.sku, "fields": update_fields},
+        )
+        return item
+
+
+def _get_or_create_lot_balance_locked(
+    *, company: OrgUnit, branch: OrgUnit, warehouse: Warehouse, item: InventoryItem, lot: ItemLot
+) -> LotBalance:
+    bal = (
+        LotBalance.objects.select_for_update()
+        .filter(company=company, branch=branch, warehouse=warehouse, item=item, lot=lot)
+        .first()
+    )
+    if bal:
+        return bal
+    return LotBalance.objects.create(company=company, branch=branch, warehouse=warehouse, item=item, lot=lot)
+
+
+def _get_or_create_balance_locked(*, company: OrgUnit, branch: OrgUnit, warehouse: Warehouse, item: InventoryItem) -> StockBalance:
+    bal = (
+        StockBalance.objects.select_for_update()
+        .filter(company=company, branch=branch, warehouse=warehouse, item=item)
+        .first()
+    )
+    if bal:
+        return bal
+    return StockBalance.objects.create(company=company, branch=branch, warehouse=warehouse, item=item)
+
+
+def _get_warehouse_locked(*, company: OrgUnit, branch: OrgUnit, warehouse_id: int) -> Warehouse:
+    try:
+        return Warehouse.objects.select_for_update().get(id=warehouse_id, company=company, branch=branch)
+    except Warehouse.DoesNotExist:
+        raise ValueError("warehouse inválido")
+
+
+def _get_item_or_error(*, company: OrgUnit, item_id: int) -> InventoryItem:
+    try:
+        return InventoryItem.objects.get(id=item_id, company=company)
+    except InventoryItem.DoesNotExist:
+        raise ValueError("item inválido")
+
+
+def _idempotent_movement_existing(*, company: OrgUnit, idempotency_key: str) -> StockMovement | None:
+    if not idempotency_key:
+        return None
+    return StockMovement.objects.filter(company=company, idempotency_key=idempotency_key).first()
+
+
+def _idempotency_conflict() -> None:
+    raise InventoryConflictError("Idempotency key reutilizada con payload distinto.")
+
+
+def _event_data(event: OutboxEvent | None) -> dict:
+    payload = event.payload if event and isinstance(event.payload, dict) else {}
+    data = payload.get("data", {})
+    return data if isinstance(data, dict) else {}
+
+
+def _outbox_data_for_idempotency(*, company: OrgUnit, idempotency_key: str, event_type: str) -> dict:
+    event = (
+        OutboxEvent.objects.filter(
+            source_module="INVENTORY",
+            event_type=event_type,
+            company=company,
+            payload__data__idempotency_key=idempotency_key,
+        )
+        .order_by("-id")
+        .first()
+    )
+    data = _event_data(event)
+    if not data:
+        _idempotency_conflict()
+    return data
+
+
+def _assert_payload_values(data: dict, expected: dict[str, object]) -> None:
+    for field, expected_value in expected.items():
+        if str(data.get(field, "") if data.get(field, "") is not None else "") != str(expected_value):
+            _idempotency_conflict()
+
+
+def _assert_payload_bool(data: dict, field: str, expected: bool) -> None:
+    if bool(data.get(field, False)) is not bool(expected):
+        _idempotency_conflict()
+
+
+def _assert_existing_movement(
+    *,
+    movement: StockMovement,
+    branch: OrgUnit,
+    warehouse_id: int,
+    item_id: int,
+    movement_type: str,
+    note: str,
+    source_module: str = "",
+    source_type: str = "",
+    source_id: str = "",
+) -> None:
+    if (
+        movement.branch_id != branch.id
+        or movement.warehouse_id != int(warehouse_id)
+        or movement.item_id != int(item_id)
+        or movement.movement_type != movement_type
+        or movement.note != (note or "")
+        or movement.source_module != (source_module or "")
+        or movement.source_type != (source_type or "")
+        or movement.source_id != (source_id or "")
+    ):
+        _idempotency_conflict()
+
+
+def _assert_receive_idempotency_match(
+    *,
+    company: OrgUnit,
+    branch: OrgUnit,
+    existing: StockMovement,
+    warehouse_id: int,
+    item_id: int,
+    qty: Decimal,
+    unit_cost: Decimal,
+    idempotency_key: str,
+    note: str,
+    source_module: str,
+    source_type: str,
+    source_id: str,
+) -> None:
+    _assert_existing_movement(
+        movement=existing,
+        branch=branch,
+        warehouse_id=warehouse_id,
+        item_id=item_id,
+        movement_type=MovementType.RECEIVE,
+        note=note,
+        source_module=source_module,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    data = _outbox_data_for_idempotency(
+        company=company,
+        idempotency_key=idempotency_key,
+        event_type="InventoryMovementPosted",
+    )
+    _assert_payload_values(
+        data,
+        {
+            "movement_id": existing.id,
+            "movement_type": MovementType.RECEIVE,
+            "warehouse_id": warehouse_id,
+            "item_id": item_id,
+            "qty_delta": _q_qty(qty),
+            "unit_cost": _q_cost(unit_cost),
+            "total_cost": _q_cost(qty * unit_cost),
+            "source_module": source_module or "",
+            "source_type": source_type or "",
+            "source_id": source_id or "",
+        },
+    )
+
+
+def _assert_issue_idempotency_match(
+    *,
+    company: OrgUnit,
+    branch: OrgUnit,
+    existing: StockMovement,
+    warehouse_id: int,
+    item_id: int,
+    qty: Decimal,
+    allow_negative: bool,
+    idempotency_key: str,
+    note: str,
+    source_module: str,
+    source_type: str,
+    source_id: str,
+) -> None:
+    _assert_existing_movement(
+        movement=existing,
+        branch=branch,
+        warehouse_id=warehouse_id,
+        item_id=item_id,
+        movement_type=MovementType.ISSUE,
+        note=note,
+        source_module=source_module,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    data = _outbox_data_for_idempotency(
+        company=company,
+        idempotency_key=idempotency_key,
+        event_type="InventoryMovementPosted",
+    )
+    _assert_payload_values(
+        data,
+        {
+            "movement_id": existing.id,
+            "movement_type": MovementType.ISSUE,
+            "warehouse_id": warehouse_id,
+            "item_id": item_id,
+            "qty_delta": _q_qty(Decimal("0") - qty),
+            "source_module": source_module or "",
+            "source_type": source_type or "",
+            "source_id": source_id or "",
+        },
+    )
+    _assert_payload_bool(data, "allow_negative", allow_negative)
+
+
+def _assert_adjust_idempotency_match(
+    *,
+    company: OrgUnit,
+    branch: OrgUnit,
+    existing: StockMovement,
+    warehouse_id: int,
+    item_id: int,
+    new_qty_on_hand: Decimal,
+    idempotency_key: str,
+    note: str,
+    movement_type: str = MovementType.ADJUST,
+) -> None:
+    _assert_existing_movement(
+        movement=existing,
+        branch=branch,
+        warehouse_id=warehouse_id,
+        item_id=item_id,
+        movement_type=movement_type,
+        note=note,
+    )
+    data = _outbox_data_for_idempotency(
+        company=company,
+        idempotency_key=idempotency_key,
+        event_type="InventoryAdjusted",
+    )
+    _assert_payload_values(
+        data,
+        {
+            "movement_id": existing.id,
+            "movement_type": movement_type,
+            "warehouse_id": warehouse_id,
+            "item_id": item_id,
+            "new_qty_on_hand": _q_qty(new_qty_on_hand),
+        },
+    )
+
+
+def _assert_transfer_idempotency_match(
+    *,
+    company: OrgUnit,
+    branch: OrgUnit,
+    existing: StockMovement,
+    from_warehouse_id: int,
+    to_warehouse_id: int,
+    item_id: int,
+    qty: Decimal,
+    idempotency_key: str,
+    note: str,
+) -> None:
+    _assert_existing_movement(
+        movement=existing,
+        branch=branch,
+        warehouse_id=from_warehouse_id,
+        item_id=item_id,
+        movement_type=MovementType.TRANSFER_OUT,
+        note=note,
+        source_module="INVENTORY",
+        source_type="TRANSFER",
+        source_id=f"{from_warehouse_id}:{to_warehouse_id}:{item_id}",
+    )
+    data = _outbox_data_for_idempotency(
+        company=company,
+        idempotency_key=idempotency_key,
+        event_type="InventoryTransferCompleted",
+    )
+    _assert_payload_values(
+        data,
+        {
+            "out_movement_id": existing.id,
+            "from_warehouse_id": from_warehouse_id,
+            "to_warehouse_id": to_warehouse_id,
+            "item_id": item_id,
+            "qty": _q_qty(qty),
+        },
+    )
+
+
+def _post_result_from_movement(*, movement: StockMovement, qty_on_hand: Decimal, avg_cost: Decimal) -> PostResult:
+    return PostResult(
+        movement_id=int(movement.id),
+        qty_on_hand=qty_on_hand,
+        avg_cost=avg_cost,
+        accounting_status=str(movement.accounting_status or ""),
+        accounting_error=str(movement.accounting_error or ""),
+        accounting_journal_draft_id=movement.accounting_journal_draft_id,
+        accounting_journal_entry_id=movement.accounting_journal_entry_id,
+    )
+
+
+def _set_movement_accounting(
+    *,
+    movement: StockMovement,
+    status: str,
+    error: str = "",
+    economic_event_id=None,
+    journal_draft_id=None,
+    journal_entry_id=None,
+) -> None:
+    movement.accounting_status = str(status or "")[:24]
+    movement.accounting_error = str(error or "")[:255]
+    movement.accounting_economic_event_id = int(economic_event_id) if economic_event_id else None
+    movement.accounting_journal_draft_id = int(journal_draft_id) if journal_draft_id else None
+    movement.accounting_journal_entry_id = int(journal_entry_id) if journal_entry_id else None
+    movement.save(
+        update_fields=[
+            "accounting_status",
+            "accounting_error",
+            "accounting_economic_event",
+            "accounting_journal_draft",
+            "accounting_journal_entry",
+        ]
+    )
+
+
+def _link_accounting_for_movement(*, movement: StockMovement, outbox_event, actor=None) -> None:
+    try:
+        from apps.kernels.accounting.services import (
+            apply_accounting_link_to_outbox_event,
+            link_operational_event_to_accounting,
+        )
+
+        link = link_operational_event_to_accounting(outbox_event=outbox_event, actor_user=actor)
+        apply_accounting_link_to_outbox_event(outbox_event=outbox_event, link=link)
+        _set_movement_accounting(
+            movement=movement,
+            status=str(link.status or ""),
+            error=str(link.error or ""),
+            economic_event_id=link.economic_event_id,
+            journal_draft_id=link.journal_draft_id,
+            journal_entry_id=link.journal_entry_id,
+        )
+    except (ImportError, AttributeError, ValueError, RuntimeError, IntegrationError) as exc:
+        wrapped = IntegrationError(
+            "Inventory to accounting link failed.",
+            code="INVENTORY_ACCOUNTING_LINK_FAILED",
+            context={
+                "request_id": str(getattr(outbox_event, "correlation_id", "") or ""),
+                "company_id": movement.company_id,
+                "branch_id": movement.branch_id,
+                "event_id": str(getattr(outbox_event, "event_id", "")),
+                "command_id": str(getattr(outbox_event, "event_id", "")),
+                "movement_id": int(movement.id),
+            },
+        )
+        logger.exception(
+            "inventory_accounting_link_failed",
+            extra={
+                **wrapped.context,
+                "error_code": wrapped.code,
+            },
+        )
+        _set_movement_accounting(
+            movement=movement,
+            status=StockMovement.AccountingStatus.DRAFT_EXCEPTION,
+            error=f"{wrapped.code}:{exc}",
+        )
+
+
+def _cost_policy_version(company, branch) -> int:
+    """Versión de la política de costo vigente (invariante #8); 0 si no hay política."""
+    from .costing import resolve_active_cost_policy_version
+
+    return resolve_active_cost_policy_version(company=company, branch=branch)
+
+
+def post_receive(
+    *,
+    request,
+    actor,
+    warehouse_id: int,
+    item_id: int,
+    qty: Decimal,
+    unit_cost: Decimal,
+    lot_id: int | None = None,
+    lot_number: str = "",
+    expiry_date=None,
+    movement_uom: str = "",
+    movement_uom_factor: Decimal | str = Decimal("1.000000"),
+    idempotency_key: str = "",
+    note: str = "",
+    source_module: str = "",
+    source_type: str = "",
+    source_id: str = "",
+    correlation_id: str = "",
+    causation_id: str = "",
+) -> PostResult:
+    company: OrgUnit = request.company
+    branch = _require_branch(request)
+
+    qty = _q_qty(qty)
+    unit_cost = _q_cost(unit_cost)
+    if qty <= 0:
+        raise ValueError("qty debe ser > 0")
+    if unit_cost < 0:
+        raise ValueError("unit_cost debe ser >= 0")
+
+    with transaction.atomic():
+        existing = _idempotent_movement_existing(company=company, idempotency_key=idempotency_key)
+        if existing:
+            _assert_receive_idempotency_match(
+                company=company,
+                branch=branch,
+                existing=existing,
+                warehouse_id=warehouse_id,
+                item_id=item_id,
+                qty=qty,
+                unit_cost=unit_cost,
+                idempotency_key=idempotency_key,
+                note=note,
+                source_module=source_module,
+                source_type=source_type,
+                source_id=source_id,
+            )
+            bal = StockBalance.objects.filter(company=company, branch=branch, warehouse_id=warehouse_id, item_id=item_id).first()
+            if not bal:
+                return _post_result_from_movement(
+                    movement=existing,
+                    qty_on_hand=Decimal("0.0000"),
+                    avg_cost=Decimal("0.000000"),
+                )
+            return _post_result_from_movement(movement=existing, qty_on_hand=bal.qty_on_hand, avg_cost=bal.avg_cost)
+
+        warehouse = _get_warehouse_locked(company=company, branch=branch, warehouse_id=warehouse_id)
+        item = _get_item_or_error(company=company, item_id=item_id)
+        bal = _get_or_create_balance_locked(company=company, branch=branch, warehouse=warehouse, item=item)
+
+        # Resolve lot
+        lot: ItemLot | None = None
+        if item.track_lots:
+            if lot_id:
+                try:
+                    lot = ItemLot.objects.get(id=lot_id, company=company, item=item)
+                except ItemLot.DoesNotExist:
+                    raise ValueError("Lote inválido para este ítem.")
+            elif lot_number:
+                lot, _ = ItemLot.objects.get_or_create(
+                    company=company, item=item, lot_number=lot_number,
+                    defaults={"expiry_date": expiry_date, "created_by": actor},
+                )
+            else:
+                raise ValueError("El ítem requiere número de lote.")
+        elif lot_id or lot_number:
+            raise ValueError("El ítem no tiene habilitado tracking de lotes.")
+
+        # Apply UoM factor (convert movement qty to base uom)
+        factor = _q_cost(Decimal(str(movement_uom_factor))) if movement_uom_factor else Decimal("1.000000")
+        qty_base = _q_qty(qty * factor) if factor != Decimal("1.000000") else qty
+
+        total_cost = _q_cost(qty_base * unit_cost)
+        new_qty = _q_qty(bal.qty_on_hand + qty_base)
+        if new_qty == 0:
+            new_avg = Decimal("0.000000")
+        elif bal.qty_on_hand <= 0:
+            # INV-02: si el saldo previo venía en cero/negativo (stock negativo permitido),
+            # el promedio se reinicia al costo del ingreso en lugar de mezclar sobre una
+            # base negativa, que distorsiona el costo al volver a positivo.
+            new_avg = _q_cost(unit_cost)
+        else:
+            new_avg = _q_cost(((bal.qty_on_hand * bal.avg_cost) + total_cost) / new_qty)
+
+        mov = StockMovement.objects.create(
+            company=company,
+            branch=branch,
+            warehouse=warehouse,
+            item=item,
+            movement_type=MovementType.RECEIVE,
+            cost_policy_version=_cost_policy_version(company, branch),
+            qty_delta=qty_base,
+            unit_cost=unit_cost,
+            total_cost=total_cost,
+            lot=lot,
+            expiry_date=lot.expiry_date if lot else expiry_date,
+            movement_uom=movement_uom or "",
+            movement_uom_factor=factor,
+            source_module=source_module or "",
+            source_type=source_type or "",
+            source_id=source_id or "",
+            note=note or "",
+            idempotency_key=idempotency_key or "",
+            created_by=getattr(actor, "pk", None) and actor,
+        )
+
+        bal.qty_on_hand = new_qty
+        bal.avg_cost = new_avg
+        bal.save(update_fields=["qty_on_hand", "avg_cost"])
+
+        # Update lot balance if tracking
+        if lot:
+            lot_bal = _get_or_create_lot_balance_locked(company=company, branch=branch, warehouse=warehouse, item=item, lot=lot)
+            lot_bal.qty_on_hand = _q_qty(lot_bal.qty_on_hand + qty_base)
+            lot_bal.avg_cost = new_avg
+            lot_bal.save(update_fields=["qty_on_hand", "avg_cost"])
+
+        write_event(
+            request=request,
+            module="INVENTORY",
+            event_type="INVENTORY_MOVEMENT_POSTED",
+            reason_code="INVENTORY_OK",
+            actor_user=actor,
+            subject_type="INVENTORY_MOVEMENT",
+            subject_id=str(mov.id),
+            metadata={
+                "movement_type": mov.movement_type,
+                "warehouse_id": warehouse_id,
+                "item_id": item_id,
+                "qty": str(qty),
+                "unit_cost": str(unit_cost),
+                "total_cost": str(total_cost),
+                "idempotency_key": idempotency_key,
+                "source_module": mov.source_module,
+                "source_type": mov.source_type,
+                "source_id": mov.source_id,
+            },
+        )
+        outbox_event = publish_outbox_event(
+            request=request,
+            source_module="INVENTORY",
+            event_type="InventoryMovementPosted",
+            payload={
+                "movement_id": mov.id,
+                "movement_type": mov.movement_type,
+                "warehouse_id": warehouse_id,
+                "item_id": item_id,
+                "qty_delta": str(mov.qty_delta),
+                "unit_cost": str(mov.unit_cost),
+                "total_cost": str(mov.total_cost),
+                "qty_on_hand": str(bal.qty_on_hand),
+                "avg_cost": str(bal.avg_cost),
+                "source_module": mov.source_module,
+                "source_type": mov.source_type,
+                "source_id": mov.source_id,
+                "idempotency_key": idempotency_key,
+            },
+            actor_user=actor,
+            company=company,
+            branch=branch,
+            correlation_id=correlation_id or "",
+            causation_id=causation_id or "",
+        )
+        _link_accounting_for_movement(movement=mov, outbox_event=outbox_event, actor=actor)
+        return _post_result_from_movement(movement=mov, qty_on_hand=bal.qty_on_hand, avg_cost=bal.avg_cost)
+
+
+def post_issue(
+    *,
+    request,
+    actor,
+    warehouse_id: int,
+    item_id: int,
+    qty: Decimal,
+    lot_id: int | None = None,
+    movement_uom: str = "",
+    movement_uom_factor: Decimal | str = Decimal("1.000000"),
+    allow_negative: bool = False,
+    idempotency_key: str = "",
+    note: str = "",
+    source_module: str = "",
+    source_type: str = "",
+    source_id: str = "",
+    correlation_id: str = "",
+    causation_id: str = "",
+) -> PostResult:
+    company: OrgUnit = request.company
+    branch = _require_branch(request)
+
+    qty = _q_qty(qty)
+    if qty <= 0:
+        raise ValueError("qty debe ser > 0")
+
+    with transaction.atomic():
+        existing = _idempotent_movement_existing(company=company, idempotency_key=idempotency_key)
+        if existing:
+            _assert_issue_idempotency_match(
+                company=company,
+                branch=branch,
+                existing=existing,
+                warehouse_id=warehouse_id,
+                item_id=item_id,
+                qty=qty,
+                allow_negative=allow_negative,
+                idempotency_key=idempotency_key,
+                note=note,
+                source_module=source_module,
+                source_type=source_type,
+                source_id=source_id,
+            )
+            bal = StockBalance.objects.filter(company=company, branch=branch, warehouse_id=warehouse_id, item_id=item_id).first()
+            if not bal:
+                return _post_result_from_movement(
+                    movement=existing,
+                    qty_on_hand=Decimal("0.0000"),
+                    avg_cost=Decimal("0.000000"),
+                )
+            return _post_result_from_movement(movement=existing, qty_on_hand=bal.qty_on_hand, avg_cost=bal.avg_cost)
+
+        warehouse = _get_warehouse_locked(company=company, branch=branch, warehouse_id=warehouse_id)
+        item = _get_item_or_error(company=company, item_id=item_id)
+        bal = _get_or_create_balance_locked(company=company, branch=branch, warehouse=warehouse, item=item)
+
+        if not allow_negative and bal.qty_on_hand < qty:
+            raise InsufficientStockError("stock insuficiente")
+
+        # --- Lote a consumir (INV-01) ---
+        # La salida debe registrar el lote y decrementar su balance: antes `lot_id`
+        # se ignoraba, así que los LotBalance solo crecían (FEFO/trazabilidad rotas).
+        # Lote explícito si se da; si no y el ítem trackea lotes, se elige por el
+        # orden de consumo de la clase (FEFO por vencimiento / FIFO por antigüedad).
+        lot: ItemLot | None = None
+        if item.track_lots:
+            if lot_id:
+                lot = ItemLot.objects.filter(id=lot_id, company=company, item=item).first()
+                if lot is None:
+                    raise ValueError("Lote inválido para este ítem.")
+            else:
+                from .classification import lot_consumption_ordering
+
+                ordering = lot_consumption_ordering(item, prefix="lot__") or ("lot__id",)
+                picked = (
+                    LotBalance.objects.select_for_update()
+                    .filter(
+                        company=company, branch=branch, warehouse=warehouse,
+                        item=item, qty_on_hand__gt=0, lot__status="ACTIVE",
+                    )
+                    .order_by(*ordering)
+                    .first()
+                )
+                lot = picked.lot if picked else None
+        elif lot_id:
+            raise ValueError("El ítem no tiene habilitado tracking de lotes.")
+
+        unit_cost = bal.avg_cost
+        total_cost = _q_cost(qty * unit_cost)
+        new_qty = _q_qty(bal.qty_on_hand - qty)
+        new_avg = Decimal("0.000000") if new_qty == 0 else bal.avg_cost
+
+        mov = StockMovement.objects.create(
+            company=company,
+            branch=branch,
+            warehouse=warehouse,
+            item=item,
+            movement_type=MovementType.ISSUE,
+            cost_policy_version=_cost_policy_version(company, branch),
+            qty_delta=_q_qty(Decimal("0") - qty),
+            unit_cost=unit_cost,
+            total_cost=_q_cost(Decimal("0") - total_cost),
+            lot=lot,
+            expiry_date=lot.expiry_date if lot else None,
+            source_module=source_module or "",
+            source_type=source_type or "",
+            source_id=source_id or "",
+            note=note or "",
+            idempotency_key=idempotency_key or "",
+            created_by=getattr(actor, "pk", None) and actor,
+        )
+
+        bal.qty_on_hand = new_qty
+        bal.avg_cost = new_avg
+        bal.updated_at = timezone.now()
+        bal.save(update_fields=["qty_on_hand", "avg_cost", "updated_at"])
+
+        # Decremento del balance por lote (INV-01): cierra la fuga de trazabilidad.
+        if lot is not None:
+            lot_bal = _get_or_create_lot_balance_locked(
+                company=company, branch=branch, warehouse=warehouse, item=item, lot=lot
+            )
+            if not allow_negative and lot_bal.qty_on_hand < qty:
+                raise InsufficientStockError("stock insuficiente en el lote")
+            lot_bal.qty_on_hand = _q_qty(lot_bal.qty_on_hand - qty)
+            lot_bal.save(update_fields=["qty_on_hand", "updated_at"])
+
+        write_event(
+            request=request,
+            module="INVENTORY",
+            event_type="INVENTORY_MOVEMENT_POSTED",
+            reason_code="INVENTORY_OK",
+            actor_user=actor,
+            subject_type="INVENTORY_MOVEMENT",
+            subject_id=str(mov.id),
+            metadata={
+                "movement_type": mov.movement_type,
+                "warehouse_id": warehouse_id,
+                "item_id": item_id,
+                "qty": str(qty),
+                "unit_cost": str(unit_cost),
+                "total_cost": str(total_cost),
+                "allow_negative": allow_negative,
+                "idempotency_key": idempotency_key,
+            },
+        )
+        outbox_event = publish_outbox_event(
+            request=request,
+            source_module="INVENTORY",
+            event_type="InventoryMovementPosted",
+            payload={
+                "movement_id": mov.id,
+                "movement_type": mov.movement_type,
+                "warehouse_id": warehouse_id,
+                "item_id": item_id,
+                "qty_delta": str(mov.qty_delta),
+                "unit_cost": str(mov.unit_cost),
+                "total_cost": str(mov.total_cost),
+                "qty_on_hand": str(bal.qty_on_hand),
+                "avg_cost": str(bal.avg_cost),
+                "allow_negative": bool(allow_negative),
+                "source_module": mov.source_module,
+                "source_type": mov.source_type,
+                "source_id": mov.source_id,
+                "idempotency_key": idempotency_key,
+            },
+            actor_user=actor,
+            company=company,
+            branch=branch,
+            correlation_id=correlation_id or "",
+            causation_id=causation_id or "",
+        )
+        _link_accounting_for_movement(movement=mov, outbox_event=outbox_event, actor=actor)
+        return _post_result_from_movement(movement=mov, qty_on_hand=bal.qty_on_hand, avg_cost=bal.avg_cost)
+
+
+def post_adjust(
+    *,
+    request,
+    actor,
+    warehouse_id: int,
+    item_id: int,
+    new_qty_on_hand: Decimal,
+    idempotency_key: str = "",
+    note: str = "",
+    movement_type: str = MovementType.ADJUST,
+) -> PostResult:
+    company: OrgUnit = request.company
+    branch = _require_branch(request)
+
+    # Solo los dos sabores de "fijar existencia": ajuste manual o conteo físico.
+    if movement_type not in (MovementType.ADJUST, MovementType.PHYSICAL_COUNT):
+        raise ValueError("movement_type debe ser ADJUST o PHYSICAL_COUNT")
+
+    new_qty_on_hand = _q_qty(new_qty_on_hand)
+
+    with transaction.atomic():
+        existing = _idempotent_movement_existing(company=company, idempotency_key=idempotency_key)
+        if existing:
+            _assert_adjust_idempotency_match(
+                company=company,
+                branch=branch,
+                existing=existing,
+                warehouse_id=warehouse_id,
+                item_id=item_id,
+                new_qty_on_hand=new_qty_on_hand,
+                idempotency_key=idempotency_key,
+                note=note,
+                movement_type=movement_type,
+            )
+            bal = StockBalance.objects.filter(company=company, branch=branch, warehouse_id=warehouse_id, item_id=item_id).first()
+            if not bal:
+                return _post_result_from_movement(
+                    movement=existing,
+                    qty_on_hand=Decimal("0.0000"),
+                    avg_cost=Decimal("0.000000"),
+                )
+            return _post_result_from_movement(movement=existing, qty_on_hand=bal.qty_on_hand, avg_cost=bal.avg_cost)
+
+        warehouse = _get_warehouse_locked(company=company, branch=branch, warehouse_id=warehouse_id)
+        item = _get_item_or_error(company=company, item_id=item_id)
+        bal = _get_or_create_balance_locked(company=company, branch=branch, warehouse=warehouse, item=item)
+
+        delta = _q_qty(new_qty_on_hand - bal.qty_on_hand)
+        unit_cost = bal.avg_cost
+        total_cost = _q_cost(delta * unit_cost)
+
+        mov = StockMovement.objects.create(
+            company=company,
+            branch=branch,
+            warehouse=warehouse,
+            item=item,
+            movement_type=movement_type,
+            cost_policy_version=_cost_policy_version(company, branch),
+            qty_delta=delta,
+            unit_cost=unit_cost,
+            total_cost=total_cost,
+            note=note or "",
+            idempotency_key=idempotency_key or "",
+            created_by=getattr(actor, "pk", None) and actor,
+        )
+
+        bal.qty_on_hand = new_qty_on_hand
+        bal.updated_at = timezone.now()
+        bal.save(update_fields=["qty_on_hand", "updated_at"])
+
+        write_event(
+            request=request,
+            module="INVENTORY",
+            event_type="INVENTORY_ADJUSTMENT_POSTED",
+            reason_code="INVENTORY_OK",
+            actor_user=actor,
+            subject_type="INVENTORY_MOVEMENT",
+            subject_id=str(mov.id),
+            metadata={
+                "movement_type": mov.movement_type,
+                "warehouse_id": warehouse_id,
+                "item_id": item_id,
+                "new_qty_on_hand": str(new_qty_on_hand),
+                "delta": str(delta),
+                "unit_cost": str(unit_cost),
+                "idempotency_key": idempotency_key,
+            },
+        )
+        outbox_event = publish_outbox_event(
+            request=request,
+            source_module="INVENTORY",
+            event_type="InventoryAdjusted",
+            payload={
+                "movement_id": mov.id,
+                "movement_type": mov.movement_type,
+                "warehouse_id": warehouse_id,
+                "item_id": item_id,
+                "qty_delta": str(mov.qty_delta),
+                "new_qty_on_hand": str(new_qty_on_hand),
+                "avg_cost": str(bal.avg_cost),
+                "idempotency_key": idempotency_key,
+            },
+            actor_user=actor,
+            company=company,
+            branch=branch,
+        )
+        _link_accounting_for_movement(movement=mov, outbox_event=outbox_event, actor=actor)
+        return _post_result_from_movement(movement=mov, qty_on_hand=bal.qty_on_hand, avg_cost=bal.avg_cost)
+
+
+def post_transfer(
+    *,
+    request,
+    actor,
+    from_warehouse_id: int,
+    to_warehouse_id: int,
+    item_id: int,
+    qty: Decimal,
+    lot_id: int | None = None,
+    idempotency_key: str = "",
+    note: str = "",
+) -> dict:
+    company: OrgUnit = request.company
+    branch = _require_branch(request)
+
+    qty = _q_qty(qty)
+    if qty <= 0:
+        raise ValueError("qty debe ser > 0")
+    if from_warehouse_id == to_warehouse_id:
+        raise ValueError("from_warehouse_id y to_warehouse_id deben ser distintos")
+
+    with transaction.atomic():
+        existing = _idempotent_movement_existing(company=company, idempotency_key=idempotency_key)
+        if existing:
+            _assert_transfer_idempotency_match(
+                company=company,
+                branch=branch,
+                existing=existing,
+                from_warehouse_id=from_warehouse_id,
+                to_warehouse_id=to_warehouse_id,
+                item_id=item_id,
+                qty=qty,
+                idempotency_key=idempotency_key,
+                note=note,
+            )
+            return {
+                "idempotent": True,
+                "movement_id": existing.id,
+                "out_movement_id": existing.id,
+                "accounting_status": str(existing.accounting_status or ""),
+                "accounting_error": str(existing.accounting_error or ""),
+                "journal_draft_id": existing.accounting_journal_draft_id,
+                "journal_entry_id": existing.accounting_journal_entry_id,
+            }
+
+        # Lock balances in deterministic order to avoid deadlocks
+        wh_ids = sorted([from_warehouse_id, to_warehouse_id])
+        wh_map = {
+            w.id: w
+            for w in Warehouse.objects.select_for_update().filter(id__in=wh_ids, company=company, branch=branch)
+        }
+        if from_warehouse_id not in wh_map or to_warehouse_id not in wh_map:
+            raise ValueError("warehouse inválido")
+
+        item = _get_item_or_error(company=company, item_id=item_id)
+        from_wh = wh_map[from_warehouse_id]
+        to_wh = wh_map[to_warehouse_id]
+
+        from_bal = _get_or_create_balance_locked(company=company, branch=branch, warehouse=from_wh, item=item)
+        to_bal = _get_or_create_balance_locked(company=company, branch=branch, warehouse=to_wh, item=item)
+
+        if from_bal.qty_on_hand < qty:
+            raise InsufficientStockError("stock insuficiente")
+
+        unit_cost = from_bal.avg_cost
+        total_cost = _q_cost(qty * unit_cost)
+
+        out_mov = StockMovement.objects.create(
+            company=company,
+            branch=branch,
+            warehouse=from_wh,
+            item=item,
+            movement_type=MovementType.TRANSFER_OUT,
+            cost_policy_version=_cost_policy_version(company, branch),
+            qty_delta=_q_qty(Decimal("0") - qty),
+            unit_cost=unit_cost,
+            total_cost=_q_cost(Decimal("0") - total_cost),
+            source_module="INVENTORY",
+            source_type="TRANSFER",
+            source_id=f"{from_warehouse_id}:{to_warehouse_id}:{item_id}",
+            note=note or "",
+            idempotency_key=idempotency_key or "",
+            created_by=getattr(actor, "pk", None) and actor,
+        )
+        in_mov = StockMovement.objects.create(
+            company=company,
+            branch=branch,
+            warehouse=to_wh,
+            item=item,
+            movement_type=MovementType.TRANSFER_IN,
+            cost_policy_version=_cost_policy_version(company, branch),
+            qty_delta=qty,
+            unit_cost=unit_cost,
+            total_cost=total_cost,
+            source_module="INVENTORY",
+            source_type="TRANSFER_OUT",
+            source_id=str(out_mov.id),
+            note=note or "",
+            idempotency_key="",  # only one unique key per transfer
+            created_by=getattr(actor, "pk", None) and actor,
+        )
+
+        from_bal.qty_on_hand = _q_qty(from_bal.qty_on_hand - qty)
+        if from_bal.qty_on_hand == 0:
+            from_bal.avg_cost = Decimal("0.000000")
+        from_bal.updated_at = timezone.now()
+        from_bal.save(update_fields=["qty_on_hand", "avg_cost", "updated_at"])
+
+        to_bal.qty_on_hand = _q_qty(to_bal.qty_on_hand + qty)
+        # avg_cost stays the same (weighted average is preserved on transfer at same cost)
+        if to_bal.qty_on_hand == 0:
+            to_bal.avg_cost = unit_cost
+        to_bal.updated_at = timezone.now()
+        to_bal.save(update_fields=["qty_on_hand", "avg_cost", "updated_at"])
+
+        write_event(
+            request=request,
+            module="INVENTORY",
+            event_type="INVENTORY_TRANSFER_POSTED",
+            reason_code="INVENTORY_OK",
+            actor_user=actor,
+            subject_type="INVENTORY_TRANSFER",
+            subject_id=str(out_mov.id),
+            metadata={
+                "from_warehouse_id": from_warehouse_id,
+                "to_warehouse_id": to_warehouse_id,
+                "item_id": item_id,
+                "qty": str(qty),
+                "unit_cost": str(unit_cost),
+                "out_movement_id": out_mov.id,
+                "in_movement_id": in_mov.id,
+                "idempotency_key": idempotency_key,
+            },
+        )
+        outbox_event = publish_outbox_event(
+            request=request,
+            source_module="INVENTORY",
+            event_type="InventoryTransferCompleted",
+            payload={
+                "from_warehouse_id": from_warehouse_id,
+                "to_warehouse_id": to_warehouse_id,
+                "item_id": item_id,
+                "qty": str(qty),
+                "unit_cost": str(unit_cost),
+                "out_movement_id": out_mov.id,
+                "in_movement_id": in_mov.id,
+                "from_qty_on_hand": str(from_bal.qty_on_hand),
+                "to_qty_on_hand": str(to_bal.qty_on_hand),
+                "idempotency_key": idempotency_key,
+            },
+            actor_user=actor,
+            company=company,
+            branch=branch,
+        )
+        _link_accounting_for_movement(movement=out_mov, outbox_event=outbox_event, actor=actor)
+        _set_movement_accounting(
+            movement=in_mov,
+            status=out_mov.accounting_status,
+            error=out_mov.accounting_error,
+            economic_event_id=out_mov.accounting_economic_event_id,
+            journal_draft_id=out_mov.accounting_journal_draft_id,
+            journal_entry_id=out_mov.accounting_journal_entry_id,
+        )
+
+        return {
+            "out_movement_id": out_mov.id,
+            "in_movement_id": in_mov.id,
+            "from_qty_on_hand": str(from_bal.qty_on_hand),
+            "to_qty_on_hand": str(to_bal.qty_on_hand),
+            "avg_cost": str(unit_cost),
+            "accounting_status": str(out_mov.accounting_status or ""),
+            "accounting_error": str(out_mov.accounting_error or ""),
+            "journal_draft_id": out_mov.accounting_journal_draft_id,
+            "journal_entry_id": out_mov.accounting_journal_entry_id,
+        }

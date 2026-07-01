@@ -1,0 +1,1540 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from django.db import transaction
+
+from apps.modulos.rbac.models import Permission, Role, RolePermission
+
+
+@dataclass(frozen=True)
+class SeedResult:
+    roles_created: int
+    roles_updated: int
+    perms_created: int
+    perms_updated: int
+    roleperms_created: int
+
+
+def seed_rbac_v01() -> SeedResult:
+    """
+    Catálogo estándar v0.1 (robusto, modular, extensible).
+    - Idempotente (get_or_create + updates)
+    - No borra cosas existentes.
+    """
+
+    roles = {
+        "company_admin": "Administrador global dentro de la empresa (RBAC + ORG + HR + reportes).",
+        "branch_manager": "Administrador de sucursal.",
+        "hr_manager": "Gestión completa de RRHH.",
+        "hr_clerk": "Operación RRHH (altas/bajas/edición), sin RBAC.",
+        "auditor": "Lectura de auditoría y reportes.",
+        "controls_officer": "Oficial de control interno: reglas SoD y hallazgos anti-fraude.",
+        "warehouse_manager": "Gestión de inventario (placeholder).",
+        "warehouse_operator": "Operación inventario (placeholder).",
+        "sales_manager": "Gestión comercial (placeholder).",
+        "sales_rep": "Operación ventas (placeholder).",
+        "cashier": "Caja (placeholder).",
+        "billing_manager": "Gestión de facturación (kernel).",
+        "procurement_manager": "Gestión de compras/procurement (kernel).",
+        "payroll_manager": "Planillero: opera planilla y asistencia de campo con SoD anti autoaprobación.",
+        "sync_admin": "Administración de Sync (enroll/revoke) (placeholder).",
+
+        # FUEL (Estación de Servicios)
+        "fuel_admin": "Administrador del módulo Estación de Servicios (todo dentro de la empresa).",
+        "fuel_supervisor": "Supervisor Estación (cierres, precios, recibos, conciliaciones).",
+        "fuel_cashier": "Cajero/operador Estación (ventas/dispenses; sin precios ni ajustes).",
+        "fuel_auditor": "Auditor Estación (solo lectura de operación y reportes).",
+
+        # NOMINA / Asistencia de campo
+        "field_supervisor": "Supervisor de campo: revisa/aprueba asistencia de cuadrillas con segregación de funciones.",
+        "payroll_cashier": "Pagador de nómina (sala de pago): ve el resumen consolidado por empleado y registra pagos; NO arma ni aprueba planilla.",
+
+        # FLEET / Mantenimiento
+        "fleet_driver": "Conductor: checklists y reportes de campo (app).",
+        "fleet_mechanic": "Mecánico: ejecuta mantenimiento y atiende defectos.",
+        "fleet_supervisor": "Supervisor de flota: recibe alertas, gestiona planes y documentos.",
+        "fleet_manager": "Gerente de flota: configuración y análisis.",
+        "fleet_clerk": "Bodega/registro de flota.",
+
+        # FINCA / Manejo de fincas (agrícola)
+        "finca_mandador": "Mandador / Administrador de Finca: coordina finca, personal, labores, insumos y bitácora agrícola.",
+        "finca_capataz": "Capataz: supervisa cuadrillas, registra labores ejecutadas, asistencia e insumos en campo.",
+        "finca_tecnico": "Ingeniero/Técnico Agrónomo: asesor técnico — ve todo y define el plan de labores (fertilización/plagas); NO captura ejecución diaria ni postea costos.",
+
+        # FINANCIAMIENTO (préstamos a productores + acopio de café)
+        "financing_officer": "Oficial de financiamiento: registra productores, solicitudes y abonos; NO aprueba ni desembolsa (SoD).",
+        "financing_committee": "Comité de crédito: aprueba/rechaza solicitudes; NO desembolsa (SoD).",
+        "acopio_manager": "Encargado de acopio: recepciones de café, fijaciones de precio y liquidaciones.",
+
+        # PLATAFORMA / FINANZAS (roles transversales)
+        "platform_observer": "SRE/observabilidad: ve errores, hallazgos y diagnósticos y corre el diagnóstico determinista; NO gobierna la IA ni toca negocio.",
+        "ai_steward": "Mayordomo de IA: gobierna el kill switch (enciende/apaga la IA) y corre el motor advisory; segregado de company_admin.",
+        "accountant": "Contador: prepara/aprueba asientos y lee finanzas; NO postea/cierra/override (SoD).",
+        "collections_officer": "Cobranza/cartera CxC: aplica pagos y ve saldos; NO ajusta ni castiga (sensible).",
+        "viewer": "Solo lectura ejecutiva: dashboards, reportes y auditoría; cero operaciones.",
+    }
+
+    permissions = {
+        # ORG
+        "org.company.create": "Crear empresas (COMPANY) bajo el holding",
+        "org.company.read": "Ver datos de empresa.",
+        "org.company.update": "Actualizar datos de empresa.",
+        "org.branch.read": "Ver sucursales.",
+        "org.branch.create": "Crear sucursales.",
+        "org.branch.update": "Actualizar sucursales.",
+        "org.module.read": "Ver módulos habilitados de la empresa.",
+        "org.module.manage": "Habilitar/deshabilitar módulos de la empresa.",
+        # IAM
+        "iam.users.create": "Crear usuarios del sistema (provisionar acceso a empleados).",
+        # HR
+        "hr.position.read": "Ver puestos.",
+        "hr.position.create": "Crear puestos.",
+        "hr.position.update": "Actualizar puestos.",
+        "hr.position.roles.update": "Actualizar mapeo Puesto->Roles.",
+        "hr.employee.read": "Ver empleados.",
+        "hr.employee.create": "Crear empleados.",
+        "hr.employee.update": "Actualizar empleados.",
+        "hr.assignment.read": "Ver asignaciones laborales.",
+        "hr.assignment.create": "Crear asignaciones laborales.",
+        "hr.assignment.end": "Finalizar asignaciones laborales.",
+        # HR — Ola F (contratos a fondo, vacaciones, expediente documental)
+        "hr.contract.read": "Ver contratos laborales.",
+        "hr.contract.manage": "Crear/editar/emitir/renovar/firmar/anular contratos.",
+        "hr.vacation.read": "Ver saldos y solicitudes de vacaciones.",
+        "hr.vacation.manage": "Registrar/anular vacaciones, ajustar saldos y acumular.",
+        "hr.file.read": "Ver documentos del expediente.",
+        "hr.file.manage": "Adjuntar/eliminar documentos del expediente.",
+        # NOMINA (planilla) — los views ya los exigían; faltaban en el seed
+        "nomina.config.read": "Ver configuración de nómina (tasas/IR).",
+        "nomina.config.manage": "Crear/actualizar configuración de nómina y tabla IR.",
+        "nomina.period.read": "Ver períodos de planilla.",
+        "nomina.period.create": "Crear períodos de planilla.",
+        "nomina.sheet.read": "Ver planillas/sub-planillas.",
+        "nomina.sheet.create": "Crear planillas/sub-planillas.",
+        "nomina.sheet.manage": "Enviar/aprobar planillas.",
+        "nomina.entry.read": "Ver líneas de planilla.",
+        "nomina.entry.create": "Crear/calcular líneas de planilla.",
+        "nomina.complement.read": "Ver planillas de complemento de salario.",
+        "nomina.complement.manage": "Armar/editar/enviar y registrar recibo del complemento.",
+        "nomina.complement.approve": "Aprobar planilla de complemento (checker, SoD).",
+        "nomina.inss.read": "Ver régimen/elección INSS.",
+        "nomina.inss.manage": "Gestionar afiliación y elección INSS por período.",
+        "nomina.period.approve.request": "Solicitar aprobación de período (maker, SoD).",
+        "nomina.period.approve": "Aprobar período de planilla (checker, SoD).",
+        # NOMINA — Sala de pago (app del pagador)
+        "nomina.payment.read": "Ver la sala de pago (resumen consolidado por empleado).",
+        "nomina.payment.register": "Registrar el pago del neto al empleado.",
+        # NOMINA — Asistencia de campo (Field Attendance)
+        "nomina.field.read": "Ver asistencia de campo (días, cuadrillas, consolidación).",
+        "nomina.field.capture": "Capturar asistencia de campo (lista, cuadrilla, reporte, evento, traslado).",
+        "nomina.field.consolidate": "Consolidar la asistencia de campo del día.",
+        "nomina.field.approve.request": "Solicitar aprobación de asistencia de campo (maker, SoD).",
+        "nomina.field.approve": "Aprobar asistencia de campo (checker, SoD).",
+        "nomina.field.apply": "Aplicar asistencia aprobada a la planilla.",
+        # RBAC (para UI admin futura)
+        "rbac.roles.read": "Ver roles.",
+        "rbac.roles.update": "Actualizar roles.",
+        "rbac.permissions.read": "Ver permisos.",
+        "rbac.permissions.update": "Actualizar permisos.",
+        "rbac.assignments.read": "Ver asignaciones de roles.",
+        "rbac.assignments.update": "Actualizar asignaciones de roles.",
+        # Terceros (directorio de clientes/proveedores/productores)
+        "parties.party.read": "Ver terceros (clientes, proveedores, productores).",
+        "parties.party.create": "Crear terceros.",
+        "parties.party.update": "Actualizar terceros (datos y estado).",
+        "parties.role.manage": "Asignar/revocar roles del tercero (cliente/proveedor/...).",
+        # Caja de Venta (POS de mercadería: escaneo → precio de catálogo → contado/crédito)
+        "sales.pos.sell": "Vender en caja (factura + cobro contado o crédito).",
+        "sales.pos.price_override": "Cambiar el precio de catálogo en una venta de caja.",
+        "sales.pos.report": "Ver el corte de ventas del día (totales, métodos, utilidad).",
+        "sales.pos.self_service": "Crear pre-tickets de auto-facturación (kiosko de cliente).",
+        # Auditoría
+        "audit.read": "Leer auditoría.",
+        "audit.export": "Exportar auditoría.",
+        # Controls (Capa 3: anti-fraude / SoD)
+        "controls.sod.read": "Ver matriz SoD y violaciones por concesión.",
+        "controls.sod.manage": "Gestionar reglas de segregación de funciones.",
+        "controls.findings.read": "Ver hallazgos de control.",
+        "controls.findings.manage": "Correr detectores y resolver hallazgos.",
+        # Finca (manejo de fincas)
+        "finca.finca.read": "Ver fincas y su geografía.",
+        "finca.finca.manage": "Gestionar perfil/geografía de fincas.",
+        "finca.plot.read": "Ver lotes.",
+        "finca.plot.manage": "Crear/actualizar lotes.",
+        "finca.labor.read": "Ver catálogo de labores.",
+        "finca.labor.manage": "Gestionar catálogo de labores.",
+        "finca.work.read": "Ver órdenes de trabajo / bitácora.",
+        "finca.work.capture": "Registrar labores ejecutadas e insumos.",
+        "finca.report.read": "Ver costeo de fincas/lotes.",
+        "finca.field.read": "Ver costeo real desde asistencia de campo y reconciliación.",
+        "finca.cost.post": "Postear (reclasificar) el costo real de la finca al GL.",
+        "finca.budget.read": "Ver presupuestos de finca y presupuesto-vs-real.",
+        "finca.budget.manage": "Crear/editar/aprobar presupuestos de finca.",
+        # Sync (placeholder)
+        "sync.device.enroll": "Enrolar dispositivos.",
+        "sync.device.revoke": "Revocar dispositivos.",
+        "sync.batch.receive": "Recibir lotes de sync.",
+        # --- Inventario (kernels) ---
+        "inventory.item.read": "Ver items del inventario.",
+        "inventory.item.create": "Crear items del inventario.",
+        "inventory.item.update": "Actualizar items del inventario.",
+        "inventory.warehouse.read": "Ver almacenes/bodegas.",
+        "inventory.warehouse.create": "Crear almacenes/bodegas.",
+        "inventory.lot.read": "Ver lotes de inventario.",
+        "inventory.lot.create": "Crear lotes de inventario.",
+        "inventory.balance.read": "Ver existencias y costo promedio.",
+        "inventory.movement.read": "Ver movimientos de inventario.",
+        "inventory.movement.receive": "Registrar entradas/recepciones de inventario.",
+        "inventory.movement.issue": "Registrar salidas/consumos de inventario.",
+        "inventory.movement.adjust": "Registrar ajustes de inventario.",
+        "inventory.transfer.create": "Registrar transferencias entre almacenes.",
+        "inventory.movement.post": "Registrar/mayorizar movimientos de inventario.",
+        "inventory.adjustment.create": "Crear ajustes de inventario.",
+        "inventory.count.read": "Ver hojas de conteo físico.",
+        "inventory.count.create": "Generar o cancelar hojas de conteo físico.",
+        "inventory.count.capture": "Capturar lo contado en un conteo físico.",
+        "inventory.count.approve": "Aprobar varianzas del conteo (quien cuenta no aprueba).",
+        "inventory.pricelist.read": "Ver listas de precios y sus asignaciones.",
+        "inventory.pricelist.write": "Administrar listas de precios (tramos y asignaciones).",
+
+        # --- Facturación (kernels) ---
+        "billing.customer.read": "Ver clientes.",
+        "billing.customer.create": "Crear clientes.",
+        "billing.customer.update": "Actualizar clientes.",
+        "billing.invoice.read": "Ver facturas.",
+        "billing.invoice.create": "Crear facturas (draft).",
+        "billing.invoice.issue": "Emitir facturas.",
+        "billing.invoice.void": "Anular facturas.",
+        "billing.doc.read": "Ver documentos de facturación (kernel).",
+        "billing.doc.create": "Crear documentos de facturación (kernel).",
+        "billing.doc.issue": "Emitir documentos de facturación (kernel).",
+        "billing.doc.void": "Anular documentos de facturación (kernel).",
+        "billing.fiscal.config.read": "Ver configuración fiscal por sucursal.",
+        "billing.fiscal.config.update": "Actualizar configuración fiscal por sucursal.",
+        "billing.doc.print": "Solicitar impresión fiscal de documento.",
+        "billing.doc.contingency": "Registrar contingencia fiscal sobre documento.",
+        "billing.doc.contingency.resolve": "Resolver contingencia fiscal por reintento o anulación.",
+        # Parte 2: abonos, devoluciones y pedidos con crédito SoD
+        "billing.payment.read": "Ver abonos de un documento.",
+        "billing.payment.create": "Registrar abonos (pagos parciales) a un documento.",
+        "billing.payment.reverse": "Revertir un abono registrado.",
+        "billing.credit_note.issue": "Emitir nota de crédito vinculada (devolución).",
+        "billing.order.read": "Ver pedidos (encargos).",
+        "billing.order.create": "Crear pedidos (encargos).",
+        "billing.order.submit": "Enviar pedido a aprobación de crédito (maker).",
+        "billing.order.approve": "Resolver aprobaciones de crédito (checker, SoD).",
+        # --- Payments & Cash (core module) ---
+        "payments.intent.read": "Ver intents de pago.",
+        "payments.intent.create": "Crear intents de pago.",
+        "payments.cash_session.read": "Ver sesiones de caja.",
+        "payments.cash_session.open": "Abrir sesión de caja.",
+        "payments.cash_session.close": "Cerrar sesión de caja.",
+        "payments.cash_movement.create": "Registrar movimiento de caja.",
+        # Bancos y conciliación (Ola D)
+        "payments.bank.read": "Ver cuentas bancarias y extractos.",
+        "payments.bank.manage": "Crear cuentas bancarias y cargar extractos.",
+        "payments.bank.reconcile": "Conciliar extractos (match de líneas contra pagos).",
+        # --- CEC Control Plane (core module) ---
+        "cec.close_run.read": "Ver cierres CEC.",
+        "cec.close_run.create": "Crear corridas de cierre CEC.",
+        "cec.close_run.update": "Actualizar estado de corridas de cierre CEC.",
+        "cec.exception.read": "Ver excepciones CEC.",
+        "cec.exception.create": "Crear excepciones CEC.",
+        "cec.exception.resolve": "Resolver excepciones CEC.",
+        "cec.evidence.create": "Registrar evidencia en CEC.",
+        # --- Integration Backbone (core module) ---
+        "integration.outbox.read": "Ver outbox canónico.",
+        "integration.outbox.publish": "Marcar/publish outbox canónico.",
+        "integration.inbox.read": "Ver inbox canónico.",
+        "integration.inbox.process": "Procesar/ack inbox canónico.",
+        # --- Accounting kernel ---
+        "accounting.journal_draft.read": "Ver journal drafts contables.",
+        "accounting.journal_draft.approve": "Aprobar journal drafts validados para posting.",
+        "accounting.journal_draft.post": "Ejecutar posting de journal drafts a journal entries.",
+        "accounting.journal_entry.read": "Ver journal entries posteados.",
+        "accounting.journal_entry.reverse": "Generar reversa contable de journal entry.",
+        "accounting.journal_entry.reverse_batch": "Ejecutar reversa contable masiva.",
+        "accounting.period.read": "Ver periodos fiscales contables.",
+        "accounting.period.close": "Cerrar periodo fiscal contable.",
+        "accounting.period.reopen": "Reabrir periodo fiscal contable cerrado (CLOSED -> OPEN).",
+        "accounting.sod.override": "Override excepcional de segregación de funciones en contabilidad.",
+        "accounting.coa.read": "Ver catálogo contable (Chart of Accounts).",
+        "accounting.coa.update": "Actualizar catálogo contable y configuración GL por compañía.",
+        "accounting.fx_rate.read": "Ver tasas FX contables.",
+        "accounting.fx_rate.update": "Crear/actualizar tasas FX contables.",
+        "accounting.report.read": "Ver reportes financieros formales (Trial Balance, GL, PnL, Balance Sheet).",
+        "accounting.revaluation.run": "Ejecutar corrida de revaluación FX.",
+        "accounting.intercompany.read": "Ver ciclo intercompany transaccional.",
+        "accounting.intercompany.write": "Crear/confirmar/cerrar transacciones intercompany.",
+        "accounting.intercompany.reconcile": "Conciliar transacciones intercompany (matching/diferencias/disputa).",
+        "accounting.intercompany.dispute": "Abrir disputa formal intercompany.",
+        "accounting.intercompany.settle": "Resolver disputa y liquidar/cerrar transacción intercompany.",
+        "accounting.consolidation.read": "Ver corridas y reportes de consolidación multi-compañía.",
+        "accounting.consolidation.run": "Ejecutar cierre y consolidación financiera multi-compañía.",
+        # Ola E: centros de costo, asientos manuales, presupuestos, cierre anual
+        "accounting.cost_center.read": "Ver centros de costo (dimensión analítica).",
+        "accounting.cost_center.manage": "Crear/editar centros de costo.",
+        "accounting.manual_journal.create": "Registrar asientos manuales/ajustes (van por aprobación SoD).",
+        "accounting.budget.read": "Ver presupuestos y el reporte presupuesto-vs-real.",
+        "accounting.budget.manage": "Crear/editar/aprobar presupuestos.",
+        "accounting.year_end.close": "Cerrar y reabrir el ejercicio anual (sensible).",
+        # --- Reporting kernel ---
+        "report.catalog.read": "Ver catálogo de datasets certificados.",
+        "report.dataset.read": "Ejecutar datasets del reporting kernel.",
+        "report.dataset.export": "Exportar resultados de datasets.",
+        "report.run.read": "Ver historial de ejecuciones de reporting.",
+        "report.snapshot.generate": "Generar snapshots manuales de reporting.",
+        "report.definition.manage": "Gestionar definiciones y metadatos de datasets.",
+        "report.dashboard.read": "Ver dashboards y vistas guardadas de reporting.",
+        "report.dashboard.compose": "Crear y gestionar vistas guardadas para dashboards.",
+        # --- Nómina field capture / AttendanceReport ---
+        "nomina.field.manage": "Gestionar cuadrillas de campo.",
+        "nomina.attendance.read": "Ver reportes de asistencia derivados.",
+        "nomina.attendance.review": "Solicitar revisión/aprobación de asistencia de campo.",
+        "nomina.attendance.approve": "Aprobar asistencia de campo como checker SoD.",
+        "nomina.attendance.build": "Materializar AttendanceReport desde captura aprobada.",
+
+        # --- Compat / legacy (tests + transición) ---
+        # Nota: se conservan porque varios tests usan estos códigos como canary de RBAC.
+        "inventory.read": "Lectura inventario (legacy/compat).",
+        "inventory.write": "Escritura inventario (legacy/compat).",
+        "clients.read": "Lectura clientes (legacy/compat).",
+        "clients.write": "Escritura clientes (legacy/compat).",
+        "reports.view": "Ver reportes (legacy/compat).",
+        "reports.export": "Exportar reportes (legacy/compat).",
+
+        # FUEL (Estación de Servicios)
+        "fuel.config.read": "Leer configuración de estación.",
+        "fuel.config.update": "Actualizar configuración de estación.",
+        "fuel.shift.open": "Abrir turno.",
+        "fuel.shift.close": "Cerrar turno.",
+        "fuel.shift.read": "Ver turnos.",
+        "fuel.dispense.create": "Registrar despacho (evento físico).",
+        "fuel.dispense.read": "Ver despachos (evento físico).",
+        "fuel.dispense.void": "Anular despacho.",
+        "fuel.sale.create": "Crear venta.",
+        "fuel.sale.read": "Ver ventas.",
+        "fuel.sale.void": "Anular venta.",
+        "fuel.price.read": "Ver precios.",
+        "fuel.price.update": "Actualizar precios.",
+        "fuel.tank.read": "Ver tanques.",
+        "fuel.tank.receive": "Registrar recepción/descarga a tanque.",
+        "fuel.tank.adjust": "Registrar ajustes de tanque (merma/derrame/calibración).",
+        "fuel.reconcile.view": "Ver conciliaciones y variaciones.",
+        "fuel.reconcile.post": "Registrar conciliación.",
+        "fuel.outbox.read": "Ver outbox intercompany.",
+        "fuel.outbox.reprocess": "Reprocesar outbox intercompany.",
+        "fuel.reports.view": "Ver reportes del módulo Estación.",
+        "fuel.reports.export": "Exportar reportes del módulo Estación.",
+        "fuel.uom_preferences.manage": "Gestionar preferencias UOM de combustible.",
+        # RETAIL POS
+        "retail.pos.session.open": "Abrir sesión POS por sucursal.",
+        "retail.pos.session.read": "Ver sesión POS activa y estado de caja.",
+        "retail.pos.session.close": "Cerrar sesión POS y arqueo.",
+        "retail.pos.ticket.open": "Crear ticket POS.",
+        "retail.pos.ticket.read": "Ver tickets POS.",
+        "retail.pos.ticket.checkout": "Ejecutar checkout POS.",
+        "retail.pos.ticket.void": "Anular ticket POS.",
+        "retail.pos.peripherals.read": "Ver estado de periféricos POS.",
+        "retail.pos.peripherals.manage": "Registrar/actualizar estado de periféricos POS.",
+        # FLEET / Mantenimiento
+        "fleet.asset.read": "Ver activos de flota.",
+        "fleet.asset.manage": "Crear/editar activos de flota.",
+        "fleet.driver.read": "Ver conductores.",
+        "fleet.driver.manage": "Crear/editar conductores y asignaciones.",
+        "fleet.document.read": "Ver documentos de flota.",
+        "fleet.document.manage": "Registrar/editar documentos de flota.",
+        "fleet.maintenance.read": "Ver catálogo y planes de mantenimiento.",
+        "fleet.maintenance.manage": "Configurar tipos/planes/reglas y correr alertas.",
+        "fleet.meter.record": "Registrar lecturas de odómetro/horómetro.",
+        "fleet.cost.read": "Ver costos del activo (combustible/mantenimiento/gastos) y resumen.",
+        "fleet.cost.manage": "Registrar combustible, órdenes de mantenimiento y gastos.",
+        "notifications.device.register": "Registrar token de dispositivo para notificaciones.",
+        "documents.scan.create": "Subir/capturar documentos para procesamiento (IDP).",
+        "documents.scan.read": "Ver documentos escaneados y su texto/campos extraídos.",
+        "documents.scan.review": "Revisar y confirmar el resultado de OCR/extracción.",
+        "diagnostics.error.read": "Ver el ledger de errores de runtime (observabilidad/diagnóstico).",
+        "diagnostics.finding.read": "Ver el ledger de hallazgos de seguridad (SCA/SAST).",
+        "diagnostics.ai_control.read": "Ver el estado del botón de apagado de la IA.",
+        "diagnostics.ai_control.manage": "Encender/apagar la IA (kill switch runtime).",
+        "diagnostics.diagnose.read": "Ver diagnósticos de causa raíz de fallos.",
+        "diagnostics.diagnose.run": "Disparar el diagnóstico de causa raíz de un fallo.",
+        "diagnostics.ai_diagnose.run": "Disparar el diagnóstico IA advisory (requiere kill switch ON).",
+        "diagnostics.error.triage": "Triage humano de errores (confirmar/falso positivo/corregido/riesgo aceptado).",
+        "diagnostics.finding.triage": "Triage humano de hallazgos de seguridad (sin accepted_risk: ese va por contrato).",
+        "knowledge.docs.read": "Buscar/consultar la documentación interna (RAG; la síntesis IA respeta el kill switch).",
+        "knowledge.dev.read": "Asistente de DESARROLLO: feedback sobre el CÓDIGO fuente indexado (solo dev/dueño; la síntesis IA respeta el kill switch).",
+    }
+
+    permissions.update(
+        {
+            # INVENTORY kernel (granular)
+            "inventory.item.create": "Crear ítems de inventario.",
+            "inventory.warehouse.create": "Crear almacenes.",
+            "inventory.movement.receive": "Registrar entradas.",
+            "inventory.movement.issue": "Registrar salidas.",
+            "inventory.movement.adjust": "Registrar ajustes.",
+            "inventory.transfer.create": "Registrar transferencias.",
+            "inventory.balance.read": "Ver balances.",
+            # BILLING kernel
+            "billing.doc.create": "Crear documentos (draft).",
+            "billing.doc.read": "Ver documentos.",
+            "billing.doc.issue": "Emitir documentos.",
+            "billing.doc.void": "Anular documentos.",
+            # PROCUREMENT kernel
+            "procurement.doc.create": "Crear documentos de compra (draft).",
+            "procurement.doc.read": "Ver documentos de compra.",
+            "procurement.doc.post": "Postear documentos de compra.",
+            "procurement.doc.void": "Anular documentos de compra.",
+            # Ola B: OC formal, recepciones, 3-way match, requisiciones, reorden, precios
+            "procurement.order.create": "Crear y editar órdenes de compra (borrador).",
+            "procurement.order.read": "Ver órdenes de compra.",
+            "procurement.order.submit": "Enviar órdenes de compra a aprobación.",
+            "procurement.order.approve": "Aprobar órdenes de compra (quien envía no aprueba).",
+            "procurement.order.send": "Marcar la orden de compra como enviada al proveedor.",
+            "procurement.order.receive": "Registrar recepciones de una OC (postea inventario).",
+            "procurement.order.close": "Cerrar o cancelar órdenes de compra.",
+            "procurement.invoice.match_override": "Registrar factura de proveedor fuera de la tolerancia del match.",
+            "procurement.requisition.create": "Crear y enviar requisiciones de compra.",
+            "procurement.requisition.read": "Ver requisiciones de compra.",
+            "procurement.requisition.approve": "Aprobar o rechazar requisiciones (quien pide no aprueba).",
+            "procurement.reorder.read": "Ver sugerencias de reorden de inventario.",
+            "procurement.price.read": "Ver precios por proveedor.",
+            "procurement.price.manage": "Gestionar precios acordados por proveedor.",
+            "procurement.payable.pay": "Pagar CxP a proveedores desde caja (sensible: dinero que sale).",
+            # COMISARIATO (tienda de la empresa a crédito)
+            "comisariato.read": "Ver cuentas/saldos del comisariato.",
+            "comisariato.account.manage": "Crear/editar cuentas de crédito del comisariato (límite, segmento).",
+            "comisariato.sell": "Vender mercadería a crédito en el comisariato.",
+            "comisariato.payroll.apply": "Aplicar el crédito del comisariato a la planilla (descuento + abono).",
+            # FINANCIAMIENTO (préstamos a productores de café + acopio, ex-SIFA)
+            "financing.producer.read": "Ver productores de financiamiento.",
+            "financing.producer.write": "Crear/editar productores de financiamiento.",
+            "financing.application.create": "Registrar/presentar solicitudes de crédito.",
+            "financing.application.read": "Ver solicitudes de crédito.",
+            "financing.application.approve": "Aprobar/rechazar solicitudes de crédito (SoD: no desembolsa).",
+            "financing.application.disburse": "Desembolsar préstamos (SoD: no aprueba).",
+            "financing.loan.read": "Ver préstamos y estados de cuenta.",
+            "financing.payment.register": "Registrar abonos (recibos de caja) a préstamos.",
+            "financing.rate.manage": "Mantener la tasa de cambio C$/US$ del día.",
+            "financing.reception.create": "Registrar recepciones de café en custodia (acopio).",
+            "financing.reception.read": "Ver recepciones, depósito y fijaciones.",
+            "financing.fixation.create": "Fijar precio del café en depósito.",
+            "financing.liquidation.create": "Liquidar café fijado (compra + abono al préstamo).",
+            "financing.liquidation.read": "Ver liquidaciones.",
+            "financing.settings.manage": "Configurar el vertical (bodegas, ítem de café, calidades).",
+            "financing.risk.read": "Ver el análisis de riesgo de la cartera de préstamos (PD + Monte Carlo).",
+            # ALERTAS (recordatorios operativos deterministas)
+            "alerts.read": "Ver alertas operativas (CxC vencidas, stock bajo, flota, préstamos).",
+            "alerts.ack": "Reconocer/resolver alertas.",
+            "alerts.scan": "Disparar el escaneo de alertas de la empresa.",
+            # CHATTER (notas por registro)
+            "chatter.note.read": "Ver notas de un registro.",
+            "chatter.note.write": "Escribir notas en un registro (append-only).",
+            # BENEFICIO (transformación de café)
+            "beneficio.recipe.manage": "Mantener recetas de transformación (pergamino→oro).",
+            "beneficio.order.create": "Crear/anular órdenes de beneficiado.",
+            "beneficio.order.read": "Ver recetas y órdenes de beneficiado.",
+            "beneficio.order.process": "Iniciar/cerrar órdenes (mueve stock y costos).",
+            # SoD (maker-checker) para anulación de documentos de facturación
+            "billing.doc.void.request": "Solicitar anulación de documento (maker).",
+            "billing.doc.void.approve": "Aprobar anulación de documento (checker, SoD).",
+            # SoD (maker-checker) en payments: reembolso de intent y reapertura de caja
+            "payments.refund.request": "Solicitar reembolso de pago (maker).",
+            "payments.refund.approve": "Aprobar reembolso de pago (checker, SoD).",
+            "payments.cash.reopen.request": "Solicitar reapertura de sesión de caja (maker).",
+            "payments.cash.reopen.approve": "Aprobar reapertura de sesión de caja (checker, SoD).",
+            # Portfolio (cartera CxC/CxP/crédito) — cierra rbac=0; ops sensibles con permiso propio
+            "portfolio.receivable.read": "Ver cuentas por cobrar (CxC).",
+            "portfolio.receivable.write": "Crear/editar cuentas por cobrar.",
+            "portfolio.receivable.adjust": "Ajustar monto de una CxC (sensible).",
+            "portfolio.receivable.writeoff": "Castigar/write-off una CxC (sensible).",
+            "portfolio.payable.read": "Ver cuentas por pagar (CxP).",
+            "portfolio.payable.write": "Crear/editar cuentas por pagar.",
+            "portfolio.credit.read": "Ver créditos.",
+            "portfolio.credit.write": "Crear/editar créditos.",
+            "portfolio.credit.disburse": "Desembolsar un crédito (sensible).",
+            "portfolio.allocation.read": "Ver aplicaciones de pago (allocations).",
+            "portfolio.allocation.write": "Crear/editar aplicaciones de pago.",
+            "portfolio.interest.read": "Ver devengo de intereses.",
+            "portfolio.settings.read": "Ver configuración de cartera.",
+            "portfolio.settings.write": "Editar configuración de cartera.",
+            # Cobranza (dunning, Ola D)
+            "portfolio.collections.read": "Ver la mesa de cobranza (clientes con saldo vencido).",
+            "portfolio.collections.remind": "Generar recordatorios de cobro (cartas con nivel).",
+        }
+    )
+
+    role_to_perms = {
+        "company_admin": [
+            "org.company.create",
+            "org.company.read",
+            "org.company.update",
+            "org.branch.read",
+            "org.branch.create",
+            "org.branch.update",
+            "org.module.read",
+            "org.module.manage",
+            "iam.users.create",
+            "documents.scan.create",
+            "documents.scan.read",
+            "documents.scan.review",
+            "diagnostics.error.read",
+            "diagnostics.finding.read",
+            "diagnostics.ai_control.read",
+            "diagnostics.ai_control.manage",
+            "diagnostics.diagnose.read",
+            "diagnostics.diagnose.run",
+            "diagnostics.ai_diagnose.run",
+            "diagnostics.error.triage",
+            "diagnostics.finding.triage",
+            "knowledge.docs.read",
+            "knowledge.dev.read",
+            "hr.position.read",
+            "hr.position.create",
+            "hr.position.update",
+            "hr.position.roles.update",
+            "hr.employee.read",
+            "hr.employee.create",
+            "hr.employee.update",
+            "hr.assignment.read",
+            "hr.assignment.create",
+            "hr.assignment.end",
+            "hr.contract.read",
+            "hr.contract.manage",
+            "hr.vacation.read",
+            "hr.vacation.manage",
+            "hr.file.read",
+            "hr.file.manage",
+            "rbac.roles.read",
+            "rbac.roles.update",
+            "rbac.permissions.read",
+            "rbac.permissions.update",
+            "rbac.assignments.read",
+            "rbac.assignments.update",
+            "parties.party.read",
+            "parties.party.create",
+            "parties.party.update",
+            "parties.role.manage",
+            "sales.pos.sell",
+            "sales.pos.price_override",
+            "sales.pos.report",
+            "sales.pos.self_service",
+            "audit.read",
+            "audit.export",
+            # Reporting / dashboards: company_admin se describe como "...+ reportes". El dueño
+            # del bootstrap (que recibe este rol) debe poder VER dashboards y datasets; sin esto,
+            # /dashboard (que exige report.dashboard.read) le daba 403 al recién creado.
+            "report.catalog.read",
+            "report.dataset.read",
+            "report.dataset.export",
+            "report.run.read",
+            "report.snapshot.generate",
+            "report.definition.manage",
+            "report.dashboard.read",
+            "report.dashboard.compose",
+            "accounting.report.read",
+            "controls.sod.read",
+            "controls.sod.manage",
+            "controls.findings.read",
+            "controls.findings.manage",
+            "finca.finca.read",
+            "finca.finca.manage",
+            "finca.plot.read",
+            "finca.plot.manage",
+            "finca.labor.read",
+            "finca.labor.manage",
+            "finca.work.read",
+            "finca.work.capture",
+            "finca.report.read",
+            "finca.field.read",
+            "finca.cost.post",
+            "finca.budget.read",
+            "finca.budget.manage",
+            "sync.device.enroll",
+            "sync.device.revoke",
+            "sync.batch.receive",
+            # Inventario (granular)
+            "inventory.item.read",
+            "inventory.item.create",
+            "inventory.item.update",
+            "inventory.warehouse.read",
+            "inventory.warehouse.create",
+            "inventory.lot.read",
+            "inventory.lot.create",
+            "inventory.balance.read",
+            "inventory.movement.read",
+            "inventory.movement.receive",
+            "inventory.movement.issue",
+            "inventory.movement.adjust",
+            "inventory.transfer.create",
+            "inventory.movement.post",
+            "inventory.adjustment.create",
+            "inventory.count.read",
+            "inventory.count.create",
+            "inventory.count.capture",
+            "inventory.count.approve",
+            "inventory.pricelist.read",
+            "inventory.pricelist.write",
+            # Facturación (granular)
+            "billing.customer.read",
+            "billing.customer.create",
+            "billing.customer.update",
+            "billing.invoice.read",
+            "billing.invoice.create",
+            "billing.invoice.issue",
+            "billing.invoice.void",
+            "billing.doc.read",
+            "billing.doc.create",
+            "billing.doc.issue",
+            "billing.doc.void",
+            "billing.fiscal.config.read",
+            "billing.fiscal.config.update",
+            "billing.doc.print",
+            "billing.doc.contingency",
+            "billing.doc.contingency.resolve",
+            "billing.payment.read",
+            "billing.payment.create",
+            "billing.payment.reverse",
+            "billing.credit_note.issue",
+            "billing.order.read",
+            "billing.order.create",
+            "billing.order.submit",
+            "billing.order.approve",
+            # Payments/Cash
+            "payments.intent.read",
+            "payments.intent.create",
+            "payments.cash_session.read",
+            "payments.cash_session.open",
+            "payments.cash_session.close",
+            "payments.cash_movement.create",
+            # SoD de pagos: reembolso y reapertura de caja (maker + checker)
+            "payments.refund.request",
+            "payments.refund.approve",
+            "payments.cash.reopen.request",
+            "payments.cash.reopen.approve",
+            # CEC
+            "cec.close_run.read",
+            "cec.close_run.create",
+            "cec.close_run.update",
+            "cec.exception.read",
+            "cec.exception.create",
+            "cec.exception.resolve",
+            "cec.evidence.create",
+            # Integration backbone
+            "integration.outbox.read",
+            "integration.outbox.publish",
+            "integration.inbox.read",
+            "integration.inbox.process",
+            # Accounting
+            "accounting.journal_draft.read",
+            "accounting.journal_draft.approve",
+            "accounting.journal_draft.post",
+            "accounting.journal_entry.read",
+            "accounting.journal_entry.reverse",
+            "accounting.journal_entry.reverse_batch",
+            "accounting.period.read",
+            "accounting.period.close",
+            "accounting.period.reopen",
+            "accounting.sod.override",
+            "accounting.coa.read",
+            "accounting.coa.update",
+            "accounting.fx_rate.read",
+            "accounting.fx_rate.update",
+            "accounting.report.read",
+            "accounting.revaluation.run",
+            "accounting.intercompany.read",
+            "accounting.intercompany.write",
+            "accounting.intercompany.reconcile",
+            "accounting.intercompany.dispute",
+            "accounting.intercompany.settle",
+            "accounting.consolidation.read",
+            "accounting.consolidation.run",
+            "accounting.cost_center.read",
+            "accounting.cost_center.manage",
+            "accounting.manual_journal.create",
+            "accounting.budget.read",
+            "accounting.budget.manage",
+            "accounting.year_end.close",
+            # Reporting kernel
+            "report.catalog.read",
+            "report.dataset.read",
+            "report.dataset.export",
+            "report.run.read",
+            "report.snapshot.generate",
+            "report.definition.manage",
+            "report.dashboard.read",
+            "report.dashboard.compose",
+            # Nómina
+            "nomina.config.read",
+            "nomina.config.manage",
+            "nomina.period.read",
+            "nomina.period.create",
+            "nomina.sheet.read",
+            "nomina.sheet.create",
+            "nomina.sheet.manage",
+            "nomina.entry.read",
+            "nomina.entry.create",
+            "nomina.complement.read",
+            "nomina.complement.manage",
+            "nomina.complement.approve",
+            "nomina.field.read",
+            "nomina.field.manage",
+            "nomina.field.capture",
+            "nomina.attendance.read",
+            "nomina.attendance.review",
+            "nomina.attendance.approve",
+            "nomina.attendance.build",
+            "nomina.inss.read",
+            "nomina.inss.manage",
+            "nomina.payment.read",
+            "nomina.payment.register",
+            # Portfolio (cartera CxC/CxP/crédito)
+            "portfolio.receivable.read",
+            "portfolio.receivable.write",
+            "portfolio.receivable.adjust",
+            "portfolio.receivable.writeoff",
+            "portfolio.payable.read",
+            "portfolio.payable.write",
+            "portfolio.credit.read",
+            "portfolio.credit.write",
+            "portfolio.credit.disburse",
+            "portfolio.allocation.read",
+            "portfolio.allocation.write",
+            "portfolio.interest.read",
+            "portfolio.settings.read",
+            "portfolio.settings.write",
+            # Compat
+            "inventory.read",
+            "inventory.write",
+            "clients.read",
+            "clients.write",
+            "reports.view",
+            "reports.export",
+        ],
+        "branch_manager": [
+            "org.branch.read",
+            "org.branch.update",
+            "hr.employee.read",
+            "hr.employee.update",
+            "hr.assignment.read",
+            # Inventario (granular)
+            "inventory.item.read",
+            "inventory.item.create",
+            "inventory.item.update",
+            "inventory.warehouse.read",
+            "inventory.warehouse.create",
+            "inventory.lot.read",
+            "inventory.lot.create",
+            "inventory.balance.read",
+            "inventory.movement.read",
+            "inventory.movement.receive",
+            "inventory.movement.issue",
+            "inventory.movement.adjust",
+            "inventory.transfer.create",
+            "inventory.movement.post",
+            "inventory.adjustment.create",
+            "inventory.count.read",
+            "inventory.count.create",
+            "inventory.count.capture",
+            "inventory.count.approve",
+            # Facturación (lectura + draft)
+            "billing.customer.read",
+            "billing.invoice.read",
+            "billing.invoice.create",
+            "billing.doc.read",
+            "billing.doc.create",
+            "billing.doc.issue",
+            "billing.doc.void",
+            "billing.fiscal.config.read",
+            "billing.doc.print",
+            "billing.doc.contingency",
+            "billing.doc.contingency.resolve",
+            # Payments/Cash
+            "payments.intent.read",
+            "payments.intent.create",
+            "payments.cash_session.read",
+            "payments.cash_session.open",
+            "payments.cash_session.close",
+            "payments.cash_movement.create",
+            # SoD de pagos: reembolso y reapertura de caja (maker + checker)
+            "payments.refund.request",
+            "payments.refund.approve",
+            "payments.cash.reopen.request",
+            "payments.cash.reopen.approve",
+            # CEC control plane
+            "cec.close_run.read",
+            "cec.close_run.create",
+            "cec.close_run.update",
+            "cec.exception.read",
+            "cec.exception.create",
+            "cec.exception.resolve",
+            "cec.evidence.create",
+            # Integration backbone (read)
+            "integration.outbox.read",
+            "integration.inbox.read",
+            # Accounting
+            "accounting.journal_draft.read",
+            "accounting.journal_draft.approve",
+            "accounting.journal_draft.post",
+            "accounting.journal_entry.read",
+            "accounting.journal_entry.reverse",
+            "accounting.journal_entry.reverse_batch",
+            "accounting.period.read",
+            "accounting.coa.read",
+            "accounting.fx_rate.read",
+            "accounting.report.read",
+            "accounting.revaluation.run",
+            "accounting.intercompany.read",
+            "accounting.intercompany.write",
+            "accounting.intercompany.reconcile",
+            "accounting.intercompany.dispute",
+            "accounting.intercompany.settle",
+            "accounting.consolidation.read",
+            # Reporting kernel
+            "report.catalog.read",
+            "report.dataset.read",
+            "report.dataset.export",
+            "report.run.read",
+            "report.snapshot.generate",
+            "report.dashboard.read",
+            "report.dashboard.compose",
+            # Nómina operativa de sucursal
+            "nomina.period.read",
+            "nomina.sheet.read",
+            "nomina.sheet.create",
+            "nomina.sheet.manage",
+            "nomina.entry.read",
+            "nomina.entry.create",
+            "nomina.field.read",
+            "nomina.field.manage",
+            "nomina.field.capture",
+            "nomina.attendance.read",
+            "nomina.attendance.review",
+            # Compat
+            "inventory.read",
+            "inventory.write",
+            "clients.read",
+            "clients.write",
+            "reports.view",
+        ],
+        "hr_manager": [
+            "org.company.read",
+            "org.branch.read",
+            "iam.users.create",
+            "hr.position.read",
+            "hr.position.create",
+            "hr.position.update",
+            "hr.position.roles.update",
+            "hr.employee.read",
+            "hr.employee.create",
+            "hr.employee.update",
+            "hr.assignment.read",
+            "hr.assignment.create",
+            "hr.assignment.end",
+            "hr.contract.read",
+            "hr.contract.manage",
+            "hr.vacation.read",
+            "hr.vacation.manage",
+            "hr.file.read",
+            "hr.file.manage",
+            # RH lleva la nómina: gestiona el régimen INSS desde el perfil del trabajador.
+            "nomina.inss.read",
+            "nomina.inss.manage",
+        ],
+        "hr_clerk": [
+            "org.branch.read",
+            "hr.position.read",
+            "hr.employee.read",
+            "hr.employee.create",
+            "hr.employee.update",
+            "hr.assignment.read",
+            "hr.assignment.create",
+            "hr.assignment.end",
+            "hr.contract.read",
+            "hr.vacation.read",
+            "hr.file.read",
+            "hr.file.manage",
+        ],
+        "auditor": [
+            "audit.read",
+            "reports.view",
+            "cec.close_run.read",
+            "cec.exception.read",
+            "integration.outbox.read",
+            "integration.inbox.read",
+            "accounting.journal_draft.read",
+            "accounting.journal_entry.read",
+            "accounting.period.read",
+            "accounting.coa.read",
+            "accounting.fx_rate.read",
+            "accounting.report.read",
+            "accounting.intercompany.read",
+            "accounting.consolidation.read",
+            # Reporting kernel
+            "report.catalog.read",
+            "report.dataset.read",
+            "report.run.read",
+            "report.dashboard.read",
+            # Controls (lectura)
+            "controls.sod.read",
+            "controls.findings.read",
+        ],
+        "controls_officer": [
+            "controls.sod.read",
+            "controls.sod.manage",
+            "controls.findings.read",
+            "controls.findings.manage",
+            "audit.read",
+        ],
+        "warehouse_manager": [
+            "inventory.item.read",
+            "inventory.item.create",
+            "inventory.item.update",
+            "inventory.warehouse.read",
+            "inventory.lot.read",
+            "inventory.lot.create",
+            "inventory.movement.read",
+            "inventory.movement.post",
+            "inventory.adjustment.create",
+            # Compat
+            "inventory.read",
+            "inventory.write",
+        ],
+        "warehouse_operator": [
+            "inventory.item.read",
+            "inventory.warehouse.read",
+            "inventory.lot.read",
+            "inventory.movement.read",
+            "inventory.movement.post",
+            # Compat
+            "inventory.read",
+        ],
+        "sales_manager": [
+            "billing.customer.read",
+            "billing.customer.create",
+            "billing.customer.update",
+            "billing.invoice.read",
+            "billing.invoice.create",
+            "billing.invoice.issue",
+            "billing.invoice.void",
+            # Listas de precios: gestión comercial administra precios especiales por cliente/segmento
+            "inventory.pricelist.read",
+            "inventory.pricelist.write",
+            # Compat
+            "clients.read",
+            "clients.write",
+            "reports.view",
+        ],
+        "sales_rep": [
+            "billing.customer.read",
+            "billing.invoice.read",
+            "billing.invoice.create",
+            # Compat
+            "clients.read",
+        ],
+        "cashier": [
+            "billing.invoice.read",
+            "billing.invoice.issue",
+            # Compat
+            "reports.view",
+        ],
+        "sync_admin": ["sync.device.enroll", "sync.device.revoke"],
+        "payroll_manager": [
+            "nomina.config.read",
+            "nomina.config.manage",
+            "nomina.period.read",
+            "nomina.period.create",
+            "nomina.sheet.read",
+            "nomina.sheet.create",
+            "nomina.sheet.manage",
+            "nomina.entry.read",
+            "nomina.entry.create",
+            "nomina.field.read",
+            "nomina.field.manage",
+            "nomina.field.capture",
+            "nomina.attendance.read",
+            "nomina.attendance.review",
+            "nomina.attendance.approve",
+            "nomina.attendance.build",
+        ],
+        # Pagador de nómina (sala de pago): ve el resumen y registra pagos; no arma/aprueba planilla.
+        "payroll_cashier": [
+            "nomina.period.read",  # necesita listar períodos para elegir cuál pagar (Sala de pago)
+            "nomina.payment.read",
+            "nomina.payment.register",
+            "nomina.sheet.read",
+            "nomina.entry.read",
+            "nomina.complement.read",
+        ],
+
+        # FUEL
+        "fuel_admin": [
+            "fuel.config.read",
+            "fuel.config.update",
+            "fuel.shift.open",
+            "fuel.shift.close",
+            "fuel.shift.read",
+            "fuel.dispense.create",
+            "fuel.dispense.read",
+            "fuel.dispense.void",
+            "fuel.sale.create",
+            "fuel.sale.read",
+            "fuel.sale.void",
+            "fuel.price.read",
+            "fuel.price.update",
+            "fuel.tank.read",
+            "fuel.tank.receive",
+            "fuel.tank.adjust",
+            "fuel.reconcile.view",
+            "fuel.reconcile.post",
+            "fuel.outbox.read",
+            "fuel.outbox.reprocess",
+            "fuel.reports.view",
+            "fuel.reports.export",
+            "fuel.uom_preferences.manage",
+            "report.dashboard.read",
+        ],
+        "fuel_supervisor": [
+            "fuel.config.read",
+            "fuel.shift.open",
+            "fuel.shift.close",
+            "fuel.shift.read",
+            "fuel.dispense.read",
+            "fuel.dispense.void",
+            "fuel.sale.read",
+            "fuel.sale.void",
+            "fuel.price.read",
+            "fuel.price.update",
+            "fuel.tank.read",
+            "fuel.tank.receive",
+            "fuel.tank.adjust",
+            "fuel.reconcile.view",
+            "fuel.reconcile.post",
+            "fuel.outbox.read",
+            "fuel.outbox.reprocess",
+            "fuel.reports.view",
+            "fuel.reports.export",
+            "fuel.uom_preferences.manage",
+            "report.dashboard.read",
+        ],
+        "fuel_cashier": [
+            "fuel.shift.open",
+            "fuel.shift.read",
+            "fuel.dispense.create",
+            "fuel.dispense.read",
+            "fuel.sale.create",
+            "fuel.sale.read",
+            "fuel.reports.view",
+            "fuel.uom_preferences.manage",
+        ],
+        "fuel_auditor": [
+            "fuel.shift.read",
+            "fuel.dispense.read",
+            "fuel.sale.read",
+            "fuel.price.read",
+            "fuel.tank.read",
+            "fuel.reconcile.view",
+            "fuel.outbox.read",
+            "fuel.reports.view",
+        ],
+    }
+
+    role_to_perms.update(
+        {
+            "warehouse_manager": [
+                "inventory.item.create",
+                "inventory.warehouse.read",
+                "inventory.warehouse.create",
+                "inventory.lot.read",
+                "inventory.lot.create",
+                "inventory.movement.read",
+                "inventory.movement.receive",
+                "inventory.movement.issue",
+                "inventory.movement.adjust",
+                "inventory.transfer.create",
+                "inventory.balance.read",
+            ],
+            "procurement_manager": [
+                "procurement.doc.create",
+                "procurement.doc.read",
+                "procurement.doc.post",
+                "procurement.doc.void",
+                "procurement.order.create",
+                "procurement.order.read",
+                "procurement.order.submit",
+                "procurement.order.approve",
+                "procurement.order.send",
+                "procurement.order.receive",
+                "procurement.order.close",
+                "procurement.invoice.match_override",
+                "procurement.requisition.create",
+                "procurement.requisition.read",
+                "procurement.requisition.approve",
+                "procurement.reorder.read",
+                "procurement.price.read",
+                "procurement.price.manage",
+                "accounting.journal_draft.read",
+                "accounting.journal_draft.approve",
+                "accounting.journal_draft.post",
+                "accounting.journal_entry.read",
+                "accounting.report.read",
+                "cec.close_run.read",
+                "cec.close_run.create",
+                "cec.close_run.update",
+                "cec.exception.read",
+                "cec.exception.resolve",
+            ],
+            "cashier": [
+                "billing.doc.create",
+                "billing.doc.read",
+                "billing.doc.issue",
+                "billing.doc.print",
+                "payments.intent.read",
+                "payments.intent.create",
+                "payments.cash_session.read",
+                "payments.cash_session.open",
+                "payments.cash_session.close",
+                "payments.cash_movement.create",
+                # SoD de pagos: el cajero SOLICITA (maker); aprueba el gerente/admin
+                "payments.refund.request",
+                "payments.cash.reopen.request",
+            ],
+            "billing_manager": [
+                "billing.doc.create",
+                "billing.doc.read",
+                "billing.doc.issue",
+                "billing.doc.void",
+                "billing.fiscal.config.read",
+                "billing.fiscal.config.update",
+                "billing.doc.print",
+                "billing.doc.contingency",
+                "billing.doc.contingency.resolve",
+                "payments.intent.read",
+                "cec.close_run.read",
+                "cec.close_run.create",
+                "cec.close_run.update",
+                "cec.exception.read",
+                "cec.exception.resolve",
+                "cec.evidence.create",
+                "integration.outbox.read",
+                "accounting.journal_draft.read",
+                "accounting.journal_draft.approve",
+                "accounting.journal_draft.post",
+                "accounting.journal_entry.read",
+                "accounting.journal_entry.reverse",
+                "accounting.journal_entry.reverse_batch",
+                "accounting.period.read",
+                "accounting.sod.override",
+                "accounting.coa.read",
+                "accounting.coa.update",
+                "accounting.fx_rate.read",
+                "accounting.fx_rate.update",
+                "accounting.report.read",
+                "accounting.revaluation.run",
+                "accounting.intercompany.read",
+                "accounting.intercompany.write",
+                "accounting.intercompany.reconcile",
+                "accounting.intercompany.dispute",
+                "accounting.intercompany.settle",
+                "accounting.consolidation.read",
+                "procurement.doc.create",
+                "procurement.doc.read",
+                "procurement.doc.post",
+                "procurement.doc.void",
+            ],
+        }
+    )
+
+    for role_name in ("company_admin",):
+        codes = role_to_perms.get(role_name, [])
+        for code in (
+            "procurement.doc.create",
+            "procurement.doc.read",
+            "procurement.doc.post",
+            "procurement.doc.void",
+            "procurement.order.create",
+            "procurement.order.read",
+            "procurement.order.submit",
+            "procurement.order.approve",
+            "procurement.order.send",
+            "procurement.order.receive",
+            "procurement.order.close",
+            "procurement.invoice.match_override",
+            "procurement.requisition.create",
+            "procurement.requisition.read",
+            "procurement.requisition.approve",
+            "procurement.reorder.read",
+            "procurement.price.read",
+            "procurement.price.manage",
+            # Ola D: pago de CxP, cobranza y bancos
+            "procurement.payable.pay",
+            "portfolio.collections.read",
+            "portfolio.collections.remind",
+            "payments.bank.read",
+            "payments.bank.manage",
+            "payments.bank.reconcile",
+        ):
+            if code not in codes:
+                codes.append(code)
+
+    # NOMINA / Asistencia de campo — mapeo de roles (SoD: planillero captura/consolida, jefe aprueba)
+    _nomina_field_maker_perms = [
+        "nomina.config.read",
+        "nomina.config.manage",
+        "nomina.period.read",
+        "nomina.period.create",
+        "nomina.sheet.read",
+        "nomina.sheet.create",
+        "nomina.sheet.manage",
+        "nomina.entry.read",
+        "nomina.entry.create",
+        "nomina.complement.read",
+        "nomina.complement.manage",
+        "nomina.field.read",
+        "nomina.field.manage",
+        "nomina.field.capture",
+        "nomina.field.consolidate",
+        "nomina.field.approve.request",
+        "nomina.field.apply",
+        "nomina.attendance.read",
+        "nomina.attendance.review",
+        "nomina.attendance.approve",
+        "nomina.attendance.build",
+        "nomina.inss.read",
+        "nomina.inss.manage",
+        "nomina.period.approve.request",
+    ]
+    role_to_perms["payroll_manager"] = list(_nomina_field_maker_perms)
+    role_to_perms["field_supervisor"] = [
+        "nomina.field.read",
+        "nomina.field.approve",
+        "nomina.attendance.read",
+        "nomina.attendance.approve",
+        "nomina.period.read",
+        "nomina.period.approve",
+        # Complemento de salario: el jefe (checker) aprueba lo que arma el planillero.
+        "nomina.complement.read",
+        "nomina.complement.approve",
+    ]
+    role_to_perms["finca_mandador"] = [
+        "finca.finca.read",
+        "finca.finca.manage",
+        "finca.plot.read",
+        "finca.plot.manage",
+        "finca.labor.read",
+        "finca.labor.manage",
+        "finca.work.read",
+        "finca.work.capture",
+        "finca.report.read",
+        "finca.field.read",
+        "finca.cost.post",
+        "finca.budget.read",
+        "finca.budget.manage",
+        # Asistencia de campo (la pantalla del día en PC/cel): el mandador levanta la lista.
+        "nomina.field.capture",
+        "nomina.field.read",
+    ]
+    role_to_perms["finca_capataz"] = [
+        "finca.finca.read",
+        "finca.plot.read",
+        "finca.labor.read",
+        "finca.work.read",
+        "finca.work.capture",
+        "finca.field.read",
+        "finca.budget.read",
+        # Asistencia de campo: el capataz también marca novedades de su gente.
+        "nomina.field.capture",
+        "nomina.field.read",
+    ]
+    # Agrónomo (asesor técnico): ve todo y DEFINE el plan de labores (finca.labor.manage),
+    # pero NO captura la ejecución diaria (work.capture, eso es del capataz) ni postea costos
+    # (cost.post, eso es del mandador). SoD: distinto de capataz y de mandador.
+    role_to_perms["finca_tecnico"] = [
+        "finca.finca.read",
+        "finca.plot.read",
+        "finca.labor.read",
+        "finca.labor.manage",
+        "finca.work.read",
+        "finca.report.read",
+        "finca.field.read",
+        "finca.budget.read",
+        "finca.budget.manage",
+    ]
+    _admin_codes = role_to_perms.get("company_admin", [])
+    for code in (*_nomina_field_maker_perms, "nomina.field.approve", "nomina.period.approve"):
+        if code not in _admin_codes:
+            _admin_codes.append(code)
+
+    retail_perms_full = [
+        "retail.pos.session.open",
+        "retail.pos.session.read",
+        "retail.pos.session.close",
+        "retail.pos.ticket.open",
+        "retail.pos.ticket.read",
+        "retail.pos.ticket.checkout",
+        "retail.pos.ticket.void",
+        "retail.pos.peripherals.read",
+        "retail.pos.peripherals.manage",
+    ]
+    retail_perms_operator = [
+        "retail.pos.session.open",
+        "retail.pos.session.read",
+        "retail.pos.ticket.open",
+        "retail.pos.ticket.read",
+        "retail.pos.ticket.checkout",
+        "retail.pos.ticket.void",
+        "retail.pos.peripherals.read",
+    ]
+    retail_perms_auditor = [
+        "retail.pos.session.read",
+        "retail.pos.ticket.read",
+        "retail.pos.peripherals.read",
+    ]
+
+    role_retail_matrix = {
+        "company_admin": retail_perms_full,
+        "branch_manager": retail_perms_full,
+        "cashier": retail_perms_operator,
+        "fuel_admin": retail_perms_full,
+        "fuel_supervisor": retail_perms_full,
+        "fuel_cashier": retail_perms_operator,
+        "fuel_auditor": retail_perms_auditor,
+    }
+    for role_name, codes_to_add in role_retail_matrix.items():
+        current = role_to_perms.get(role_name, [])
+        for code in codes_to_add:
+            if code not in current:
+                current.append(code)
+
+    comisariato_perms_full = [
+        "comisariato.read",
+        "comisariato.account.manage",
+        "comisariato.sell",
+        "comisariato.payroll.apply",
+    ]
+    comisariato_perms_cashier = ["comisariato.read", "comisariato.sell"]
+    role_comisariato_matrix = {
+        "company_admin": comisariato_perms_full,
+        "branch_manager": comisariato_perms_full,
+        "cashier": comisariato_perms_cashier,
+    }
+    for role_name, codes_to_add in role_comisariato_matrix.items():
+        current = role_to_perms.setdefault(role_name, [])
+        for code in codes_to_add:
+            if code not in current:
+                current.append(code)
+
+    fleet_perms_full = [
+        "fleet.asset.read", "fleet.asset.manage", "fleet.driver.read", "fleet.driver.manage",
+        "fleet.document.read", "fleet.document.manage", "fleet.maintenance.read",
+        "fleet.maintenance.manage", "fleet.meter.record", "notifications.device.register",
+        "fleet.cost.read", "fleet.cost.manage",
+    ]
+    fleet_perms_supervisor = [
+        "fleet.asset.read", "fleet.driver.read", "fleet.driver.manage", "fleet.document.read",
+        "fleet.document.manage", "fleet.maintenance.read", "fleet.maintenance.manage",
+        "fleet.meter.record", "notifications.device.register",
+        "fleet.cost.read", "fleet.cost.manage",
+    ]
+    fleet_perms_mechanic = [
+        "fleet.asset.read", "fleet.maintenance.read", "fleet.document.read", "notifications.device.register",
+        "fleet.cost.read", "fleet.cost.manage",
+    ]
+    fleet_perms_driver = ["fleet.asset.read", "fleet.meter.record", "notifications.device.register", "fleet.cost.read"]
+    fleet_perms_clerk = [
+        "fleet.asset.read", "fleet.document.read", "fleet.document.manage", "notifications.device.register",
+        "fleet.cost.read", "fleet.cost.manage",
+    ]
+    role_fleet_matrix = {
+        "company_admin": fleet_perms_full,
+        "branch_manager": fleet_perms_full,
+        "fleet_manager": fleet_perms_full,
+        "fleet_supervisor": fleet_perms_supervisor,
+        "fleet_mechanic": fleet_perms_mechanic,
+        "fleet_driver": fleet_perms_driver,
+        "fleet_clerk": fleet_perms_clerk,
+    }
+    for role_name, codes_to_add in role_fleet_matrix.items():
+        current = role_to_perms.setdefault(role_name, [])
+        for code in codes_to_add:
+            if code not in current:
+                current.append(code)
+
+    # ESTACIÓN (fuel): company_admin administra todo el vertical (igual criterio que
+    # comisariato/fleet); los roles operativos de estación ya tienen su subconjunto arriba.
+    for code in sorted(c for c in permissions if c.startswith("fuel.")):
+        current = role_to_perms.setdefault("company_admin", [])
+        if code not in current:
+            current.append(code)
+
+    # FINANCIAMIENTO: company_admin administra el vertical completo (criterio fuel/fleet);
+    # los roles operativos quedan cortos a propósito para sostener el SoD del flujo
+    # (oficial registra → comité aprueba → admin desembolsa).
+    for code in sorted(c for c in permissions if c.startswith("financing.")):
+        current = role_to_perms.setdefault("company_admin", [])
+        if code not in current:
+            current.append(code)
+    role_to_perms["financing_officer"] = [
+        "financing.producer.read", "financing.producer.write",
+        "financing.application.create", "financing.application.read",
+        "financing.loan.read", "financing.payment.register",
+        "financing.reception.read", "financing.liquidation.read",
+        "financing.risk.read",
+    ]
+    role_to_perms["financing_committee"] = [
+        "financing.application.read", "financing.application.approve", "financing.loan.read",
+        "financing.risk.read",
+    ]
+    for prefix in ("alerts.", "chatter.", "beneficio."):
+        for code in sorted(c for c in permissions if c.startswith(prefix)):
+            current = role_to_perms.setdefault("company_admin", [])
+            if code not in current:
+                current.append(code)
+    role_to_perms["acopio_manager"] = [
+        "financing.producer.read", "financing.reception.create", "financing.reception.read",
+        "financing.fixation.create", "financing.liquidation.create", "financing.liquidation.read",
+        "financing.loan.read",
+        # Beneficio: el encargado de acopio también opera el beneficiado.
+        "beneficio.order.create", "beneficio.order.read", "beneficio.order.process",
+    ]
+
+    # PLATAFORMA / FINANZAS — roles transversales nuevos. Solo permisos YA existentes y con
+    # SoD: cada rol se queda corto a propósito en lo sensible (apagar IA, postear/cerrar
+    # contabilidad, castigar cartera) que queda en company_admin / billing_manager.
+    role_to_perms["platform_observer"] = [
+        "diagnostics.error.read",
+        "diagnostics.finding.read",
+        "diagnostics.diagnose.read",
+        "diagnostics.diagnose.run",
+        "audit.read",
+        "report.dashboard.read",
+    ]
+    role_to_perms["ai_steward"] = [
+        "diagnostics.ai_control.read",
+        "diagnostics.ai_control.manage",
+        "diagnostics.ai_diagnose.run",
+        "diagnostics.diagnose.read",
+        "diagnostics.error.read",
+    ]
+    role_to_perms["accountant"] = [
+        "accounting.journal_draft.read",
+        "accounting.journal_draft.approve",
+        "accounting.journal_entry.read",
+        "accounting.period.read",
+        "accounting.coa.read",
+        "accounting.fx_rate.read",
+        "accounting.report.read",
+        "accounting.intercompany.read",
+        "accounting.consolidation.read",
+        "cec.close_run.read",
+        "cec.exception.read",
+        "report.catalog.read",
+        "report.dataset.read",
+        "report.dataset.export",
+        "report.run.read",
+        "report.dashboard.read",
+        "audit.read",
+        # Conciliación bancaria (Ola D): trabajo clásico del contador
+        "payments.bank.read",
+        "payments.bank.manage",
+        "payments.bank.reconcile",
+        # Ola E: centros de costo, asientos manuales y presupuestos (el cierre anual lo hace admin)
+        "accounting.cost_center.read",
+        "accounting.cost_center.manage",
+        "accounting.manual_journal.create",
+        "accounting.budget.read",
+        "accounting.budget.manage",
+    ]
+    role_to_perms["collections_officer"] = [
+        "portfolio.receivable.read",
+        "portfolio.allocation.read",
+        "portfolio.allocation.write",
+        "portfolio.interest.read",
+        "portfolio.credit.read",
+        "portfolio.collections.read",
+        "portfolio.collections.remind",
+        "comisariato.read",
+        "report.dashboard.read",
+        "report.dataset.read",
+    ]
+    role_to_perms["viewer"] = [
+        "report.catalog.read",
+        "report.dataset.read",
+        "report.run.read",
+        "report.dashboard.read",
+        "accounting.report.read",
+        "finca.report.read",
+        "audit.read",
+    ]
+
+    # Alertas/chatter para los roles operativos (va al FINAL: las asignaciones literales
+    # de arriba sobreescribirían estas adiciones si esto corriera antes).
+    for role_name in ("collections_officer", "warehouse_manager", "fleet_supervisor", "financing_officer"):
+        current = role_to_perms.setdefault(role_name, [])
+        for code in ("alerts.read", "alerts.ack", "chatter.note.read", "chatter.note.write"):
+            if code not in current:
+                current.append(code)
+
+    roles_created = roles_updated = perms_created = perms_updated = roleperms_created = 0
+
+    with transaction.atomic():
+        role_objs: dict[str, Role] = {}
+        for name, desc in roles.items():
+            role_obj, created = Role.objects.get_or_create(
+                name=name,
+                defaults={"description": desc, "is_active": True},
+            )
+            if created:
+                roles_created += 1
+            else:
+                role_update_fields: list[str] = []
+                if role_obj.description != desc:
+                    role_obj.description = desc
+                    role_update_fields.append("description")
+                if not role_obj.is_active:
+                    role_obj.is_active = True
+                    role_update_fields.append("is_active")
+                if role_update_fields:
+                    role_obj.save(update_fields=role_update_fields)
+                    roles_updated += 1
+            role_objs[name] = role_obj
+
+        perm_objs: dict[str, Permission] = {}
+        for code, desc in permissions.items():
+            perm_obj, created = Permission.objects.get_or_create(
+                code=code, defaults={"description": desc, "is_active": True}
+            )
+            if created:
+                perms_created += 1
+            else:
+                perm_update_fields: list[str] = []
+                if perm_obj.description != desc:
+                    perm_obj.description = desc
+                    perm_update_fields.append("description")
+                if not perm_obj.is_active:
+                    perm_obj.is_active = True
+                    perm_update_fields.append("is_active")
+                if perm_update_fields:
+                    perm_obj.save(update_fields=perm_update_fields)
+                    perms_updated += 1
+            perm_objs[code] = perm_obj
+
+        for role_name, perm_codes in role_to_perms.items():
+            role = role_objs[role_name]
+            for code in perm_codes:
+                perm = perm_objs.get(code)
+                if perm is None:
+                    # Catálogo inconsistente => fallo duro
+                    raise ValueError(f"Permiso no existe en seed permissions: {code}")
+                _, rp_created = RolePermission.objects.get_or_create(role=role, permission=perm)
+                if rp_created:
+                    roleperms_created += 1
+    return SeedResult(
+        roles_created=roles_created,
+        roles_updated=roles_updated,
+        perms_created=perms_created,
+        perms_updated=perms_updated,
+        roleperms_created=roleperms_created,
+    )

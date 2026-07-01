@@ -1,0 +1,25 @@
+[run]
+source =
+    src/apps/modulos/sync_engine
+    src/apps/kernels/reporting
+    src/apps/kernels/accounting
+    src/apps/modulos/accounts
+    src/apps/modulos/dashboard
+    src/apps/modulos/integration
+    src/apps/modulos/estacion_servicios
+    src/apps/kernels/nomina
+    src/apps/modulos/retail_pos
+    src/apps/modulos/compras
+omit =
+    */migrations/*
+    */tests/*
+    */src/tests/*
+    */admin.py
+    */urls.py
+    */views.py
+    */config/settings/*
+    */manage.py
+
+[report]
+show_missing = True
+skip_covered = False

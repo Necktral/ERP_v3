@@ -1,0 +1,40 @@
+# Dockerfile (desarrollo) para ERP_CRM backend
+# Optimiza cache de dependencias y soporta hot-reload vía bind-mount (compose.yaml)
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Dependencias del sistema (psycopg; cairo/pango para WeasyPrint → PDF de planilla;
+# tesseract-ocr + idioma español para la etapa OCR del pipeline IDP — apps/modulos/documents)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi-dev \
+    shared-mime-info \
+    fonts-dejavu-core \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+  && rm -rf /var/lib/apt/lists/*
+
+# Dependencias Python (cacheable)
+COPY requirements/ /app/requirements/
+RUN python -m pip install --upgrade pip \
+  && pip install --no-cache-dir -r /app/requirements/dev.txt
+
+# Código (en dev se sobreescribe con bind-mount; esto sirve para build inicial)
+COPY . /app
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8000
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,0 +1,12 @@
+# Dependencias OPCIONALES para el análisis de riesgo de cartera (Random Forest).
+#
+# El sistema funciona SIN estas: el Monte Carlo usa la stdlib y la PD cae a una heurística
+# determinista. Instalá esto SOLO en los nodos que quieran entrenar/servir el modelo RF:
+#
+#     pip install -r requirements-optional.txt
+#     python manage.py train_credit_risk
+#
+# La PD del modelo solo se usa al servir si el kill switch de IA (AI_FEATURES_ENABLED) está encendido.
+numpy>=1.24
+scikit-learn>=1.3
+joblib>=1.3

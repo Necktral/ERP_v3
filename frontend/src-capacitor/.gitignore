@@ -1,0 +1,10 @@
+# Capacitor — artefactos que NO se versionan (se regeneran con build/sync)
+/node_modules
+/www
+
+# Proyecto Android nativo: se regenera con `npx cap add android`.
+# Versionar solo si querés fijar cambios nativos manuales; por defecto, ignorado.
+/android
+
+# iOS (si se agrega más adelante)
+/ios

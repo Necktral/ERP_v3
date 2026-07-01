@@ -1,0 +1,832 @@
+from __future__ import annotations
+
+import json
+from datetime import timedelta
+from io import StringIO
+
+import pytest
+from django.contrib.auth import get_user_model
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.utils import timezone
+
+from apps.kernels.accounting.models import EconomicEvent, FiscalPeriod, JournalDraft, JournalEntry
+from apps.kernels.accounting.services import (
+    OPERATIONAL_ACCOUNTING_EVENTS,
+    build_transfer_payment_settlement_snapshot,
+    dispatch_accounting_outbox_events,
+    evaluate_period_close_gates,
+    reconcile_operational_vs_accounting,
+)
+from apps.modulos.cec.models import CloseRun
+from apps.modulos.iam.models import OrgUnit
+from apps.modulos.integration.models import OutboxEvent
+from apps.modulos.integration.services import publish_outbox_event
+
+User = get_user_model()
+
+
+def _mk_scope():
+    holding = OrgUnit.objects.create(unit_type=OrgUnit.UnitType.HOLDING, name="H")
+    company = OrgUnit.objects.create(unit_type=OrgUnit.UnitType.COMPANY, name="C", parent=holding)
+    branch = OrgUnit.objects.create(unit_type=OrgUnit.UnitType.BRANCH, name="B", parent=company)
+    return company, branch
+
+
+def _mk_packaged_run(*, company: OrgUnit, branch: OrgUnit, user):
+    now = timezone.now()
+    run = CloseRun.objects.create(
+        company=company,
+        branch=branch,
+        run_type=CloseRun.RunType.DAILY,
+        status=CloseRun.Status.PACKAGED,
+        window_start=now - timedelta(hours=1),
+        window_end=now + timedelta(hours=1),
+        output_manifest_hash="a" * 64,
+        summary_json={"schema_version": 1},
+        created_by=user,
+    )
+    publish_outbox_event(
+        source_module="CEC",
+        event_type="CloseRunPackaged",
+        payload={
+            "run_id": str(run.run_id),
+            "output_manifest_hash": run.output_manifest_hash,
+            "consistency_score": 100,
+        },
+        company=company,
+        branch=branch,
+        actor_user=user,
+    )
+    return run
+
+
+def _mk_billing_event(*, company: OrgUnit, branch: OrgUnit, user, doc_id: int = 7001, number: int = 1):
+    publish_outbox_event(
+        source_module="BILLING",
+        event_type="DocumentIssued",
+        payload={
+            "doc_id": int(doc_id),
+            "doc_type": "INVOICE",
+            "series": "A",
+            "number": int(number),
+            "currency": "NIO",
+            "subtotal": "100.00",
+            "tax_total": "15.00",
+            "total": "115.00",
+            "is_fiscal": True,
+            "fiscal_adapter_mode": "B",
+        },
+        company=company,
+        branch=branch,
+        actor_user=user,
+    )
+
+
+def _mk_cash_movement_event(
+    *,
+    company: OrgUnit,
+    branch: OrgUnit,
+    user,
+    movement_id: int = 8101,
+    movement_type: str = "INCOME",
+    amount: str = "36.75",
+):
+    return publish_outbox_event(
+        source_module="PAYMENTS",
+        event_type="CashMovementPosted",
+        payload={
+            "session_id": "phase5-cash-session",
+            "movement_id": int(movement_id),
+            "movement_type": movement_type,
+            "amount": amount,
+            "reference": "phase5-payments-readiness",
+        },
+        company=company,
+        branch=branch,
+        actor_user=user,
+    )
+
+
+def _mk_payment_captured_event(
+    *,
+    company: OrgUnit,
+    branch: OrgUnit,
+    user,
+    payment_method: str = "TRANSFER",
+    amount: str = "36.75",
+):
+    return publish_outbox_event(
+        source_module="PAYMENTS",
+        event_type="PaymentCaptured",
+        payload={
+            "payment_id": f"payment-{payment_method or 'unknown'}",
+            "amount": amount,
+            "currency": "NIO",
+            "status": "CAPTURED",
+            "provider_txn_id": "txn-phase5-transfer",
+            "payment_method": payment_method,
+        },
+        company=company,
+        branch=branch,
+        actor_user=user,
+    )
+
+
+def _mk_payment_capture_reversed_event(
+    *,
+    company: OrgUnit,
+    branch: OrgUnit,
+    user,
+    payment_method: str = "TRANSFER",
+    amount: str = "36.75",
+):
+    return publish_outbox_event(
+        source_module="PAYMENTS",
+        event_type="PaymentCaptureReversed",
+        payload={
+            "payment_id": f"payment-reversed-{payment_method or 'unknown'}",
+            "amount": amount,
+            "currency": "NIO",
+            "payment_method": payment_method,
+            "previous_status": "CAPTURED",
+            "status": "REFUNDED",
+            "reverses_event_type": "PaymentCaptured",
+            "reverses_outbox_event_id": "00000000-0000-0000-0000-000000000002",
+        },
+        company=company,
+        branch=branch,
+        actor_user=user,
+    )
+
+
+@pytest.mark.django_db
+def test_post_journal_drafts_posts_and_is_idempotent():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_ok", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    assert draft.state == JournalDraft.State.VALIDATED
+
+    first_out = StringIO()
+    call_command("post_journal_drafts", run_id=str(run.run_id), company_id=company.id, stdout=first_out)
+    payload = json.loads(first_out.getvalue())
+    assert payload["posted"] == 1
+    assert payload["failed"] == 0
+    assert JournalEntry.objects.filter(draft=draft).count() == 1
+
+    draft.refresh_from_db()
+    assert draft.state == JournalDraft.State.POSTED
+    assert OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="JournalPosted").exists()
+
+    second_out = StringIO()
+    call_command("post_journal_drafts", run_id=str(run.run_id), company_id=company.id, stdout=second_out)
+    payload2 = json.loads(second_out.getvalue())
+    assert payload2["posted"] == 0
+    assert payload2["failed"] == 0
+    assert JournalEntry.objects.filter(draft=draft).count() == 1
+
+
+@pytest.mark.django_db
+def test_post_journal_drafts_blocks_closed_period():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_closed", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    dt_local = timezone.localtime(draft.economic_event.occurred_at)
+    period, _ = FiscalPeriod.objects.get_or_create(
+        company=company,
+        year=dt_local.year,
+        month=dt_local.month,
+    )
+    period.status = FiscalPeriod.Status.CLOSED
+    period.closed_at = timezone.now()
+    period.closed_by = user
+    period.save(update_fields=["status", "closed_at", "closed_by"])
+
+    with pytest.raises(CommandError):
+        call_command("post_journal_drafts", run_id=str(run.run_id), company_id=company.id)
+
+    draft.refresh_from_db()
+    assert draft.state == JournalDraft.State.VALIDATED
+    assert JournalEntry.objects.filter(draft=draft).count() == 0
+
+
+@pytest.mark.django_db
+def test_post_journal_drafts_require_approved_and_auto_approve():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_approved", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    assert draft.state == JournalDraft.State.VALIDATED
+
+    out_skip = StringIO()
+    call_command(
+        "post_journal_drafts",
+        run_id=str(run.run_id),
+        company_id=company.id,
+        require_approved=True,
+        no_strict=True,
+        stdout=out_skip,
+    )
+    skipped_payload = json.loads(out_skip.getvalue())
+    assert skipped_payload["posted"] == 0
+    assert skipped_payload["skipped"] >= 1
+
+    out_post = StringIO()
+    call_command(
+        "post_journal_drafts",
+        run_id=str(run.run_id),
+        company_id=company.id,
+        require_approved=True,
+        auto_approve=True,
+        stdout=out_post,
+    )
+    posted_payload = json.loads(out_post.getvalue())
+    assert posted_payload["approved"] == 1
+    assert posted_payload["posted"] == 1
+
+    draft.refresh_from_db()
+    assert draft.state == JournalDraft.State.POSTED
+    assert JournalEntry.objects.filter(draft=draft).count() == 1
+
+
+@pytest.mark.django_db
+def test_approve_journal_drafts_command():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_approve", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    assert draft.state == JournalDraft.State.VALIDATED
+
+    out = StringIO()
+    call_command("approve_journal_drafts", run_id=str(run.run_id), company_id=company.id, stdout=out)
+    payload = json.loads(out.getvalue())
+
+    assert payload["approved"] == 1
+    assert payload["failed"] == 0
+    draft.refresh_from_db()
+    assert draft.state == JournalDraft.State.APPROVED_FOR_POSTING
+    assert OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="JournalDraftApproved").exists()
+
+
+@pytest.mark.django_db
+def test_close_fiscal_period_requires_no_pending_drafts():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_close", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    dt_local = timezone.localtime(draft.economic_event.occurred_at)
+
+    with pytest.raises(CommandError):
+        call_command(
+            "close_fiscal_period",
+            company_id=company.id,
+            year=dt_local.year,
+            month=dt_local.month,
+        )
+
+    call_command(
+        "approve_journal_drafts",
+        run_id=str(run.run_id),
+        company_id=company.id,
+    )
+    call_command(
+        "post_journal_drafts",
+        run_id=str(run.run_id),
+        company_id=company.id,
+        require_approved=True,
+    )
+
+    out = StringIO()
+    call_command(
+        "close_fiscal_period",
+        company_id=company.id,
+        year=dt_local.year,
+        month=dt_local.month,
+        stdout=out,
+    )
+    payload = json.loads(out.getvalue())
+    assert payload["status"] == FiscalPeriod.Status.CLOSED
+    assert payload["pending_drafts"] == 0
+    assert payload["force_applied"] is False
+    assert payload["gate_summary"]["blocked"] is False
+    assert payload["gate_summary"]["pending_drafts_count"] == 0
+    assert OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="PeriodClosed").exists()
+
+
+@pytest.mark.django_db
+def test_close_fiscal_period_force_allows_pending_drafts_if_no_other_gates_fail():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_close_force_pending", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    dt_local = timezone.localtime(draft.economic_event.occurred_at)
+
+    out = StringIO()
+    call_command(
+        "close_fiscal_period",
+        company_id=company.id,
+        year=dt_local.year,
+        month=dt_local.month,
+        force=True,
+        stdout=out,
+    )
+    payload = json.loads(out.getvalue())
+    assert payload["status"] == FiscalPeriod.Status.CLOSED
+    assert payload["force_applied"] is True
+    assert payload["pending_drafts"] >= 1
+    assert payload["gate_summary"]["force_applied"] is True
+    assert payload["gate_summary"]["blocked"] is False
+    assert payload["gate_summary"]["pending_drafts_count"] >= 1
+
+
+@pytest.mark.django_db
+def test_close_fiscal_period_force_blocks_when_failed_outbox_exists():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_close_force_failed_outbox", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    call_command("approve_journal_drafts", run_id=str(run.run_id), company_id=company.id)
+    call_command("post_journal_drafts", run_id=str(run.run_id), company_id=company.id, require_approved=True)
+
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    dt_local = timezone.localtime(draft.economic_event.occurred_at)
+
+    failed = publish_outbox_event(
+        source_module="INVENTORY",
+        event_type="InventoryAdjusted",
+        payload={
+            "movement_id": 9090,
+            "movement_type": "ADJUST",
+            "warehouse_id": 1,
+            "item_id": 1,
+            "qty_delta": "1.0000",
+            "new_qty_on_hand": "1.0000",
+            "avg_cost": "1.000000",
+        },
+        company=company,
+        branch=branch,
+        actor_user=user,
+    )
+    failed.status = OutboxEvent.Status.FAILED
+    failed.last_error = "broker timeout"
+    failed.occurred_at = draft.economic_event.occurred_at
+    failed.save(update_fields=["status", "last_error", "occurred_at"])
+
+    with pytest.raises(CommandError) as exc_info:
+        call_command(
+            "close_fiscal_period",
+            company_id=company.id,
+            year=dt_local.year,
+            month=dt_local.month,
+            force=True,
+        )
+    assert "outbox fallido" in str(exc_info.value)
+
+    blocked = OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="PeriodCloseBlocked").order_by("-id").first()
+    assert blocked is not None
+    gate = (blocked.payload or {}).get("data", {}).get("gate_summary", {})
+    assert int(gate.get("failed_outbox_count") or 0) >= 1
+    assert "FAILED_OUTBOX" in list(gate.get("blocking_reasons") or [])
+
+
+@pytest.mark.django_db
+def test_close_fiscal_period_force_blocks_when_accounting_outbox_failed():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_close_force_failed_outbox_accounting", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    call_command("approve_journal_drafts", run_id=str(run.run_id), company_id=company.id)
+    call_command("post_journal_drafts", run_id=str(run.run_id), company_id=company.id, require_approved=True)
+
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    dt_local = timezone.localtime(draft.economic_event.occurred_at)
+
+    failed = OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="JournalPosted").order_by("-id").first()
+    assert failed is not None
+    failed.status = OutboxEvent.Status.FAILED
+    failed.last_error = "projection dispatcher failure"
+    failed.occurred_at = draft.economic_event.occurred_at
+    failed.save(update_fields=["status", "last_error", "occurred_at"])
+
+    with pytest.raises(CommandError) as exc_info:
+        call_command(
+            "close_fiscal_period",
+            company_id=company.id,
+            year=dt_local.year,
+            month=dt_local.month,
+            force=True,
+        )
+    assert "outbox fallido" in str(exc_info.value)
+
+    blocked = OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="PeriodCloseBlocked").order_by("-id").first()
+    assert blocked is not None
+    gate = (blocked.payload or {}).get("data", {}).get("gate_summary", {})
+    assert int(gate.get("failed_outbox_count") or 0) >= 1
+    assert "FAILED_OUTBOX" in list(gate.get("blocking_reasons") or [])
+    sample_modules = {str(row.get("source_module")) for row in list(gate.get("failed_outbox_sample") or [])}
+    assert "ACCOUNTING" in sample_modules
+
+
+@pytest.mark.django_db
+def test_close_fiscal_period_force_blocks_when_operational_events_are_unlinked():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_close_force_reconcile", password="x")
+    event = publish_outbox_event(
+        source_module="BILLING",
+        event_type="DocumentIssued",
+        payload={
+            "doc_id": 9901,
+            "doc_type": "INVOICE",
+            "series": "A",
+            "number": 1,
+            "currency": "NIO",
+            "subtotal": "100.00",
+            "tax_total": "15.00",
+            "total": "115.00",
+            "is_fiscal": True,
+            "fiscal_adapter_mode": "B",
+        },
+        company=company,
+        branch=branch,
+        actor_user=user,
+    )
+    dt_local = timezone.localtime(event.occurred_at)
+
+    with pytest.raises(CommandError) as exc_info:
+        call_command(
+            "close_fiscal_period",
+            company_id=company.id,
+            year=dt_local.year,
+            month=dt_local.month,
+            force=True,
+        )
+    message = str(exc_info.value)
+    assert "descuadres reconciliación" in message or "eventos operacionales pendientes" in message
+
+    blocked = OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="PeriodCloseBlocked").order_by("-id").first()
+    assert blocked is not None
+    gate = (blocked.payload or {}).get("data", {}).get("gate_summary", {})
+    assert int(gate.get("pending_operational_events_count") or 0) >= 1
+    assert int(gate.get("reconciliation_mismatch_count") or 0) >= 1
+
+
+@pytest.mark.django_db
+def test_close_fiscal_period_force_blocks_when_draft_exception_exists():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_close_force_draft_exception", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+
+    draft = JournalDraft.objects.get(close_run_id=str(run.run_id))
+    draft.state = JournalDraft.State.EXCEPTION
+    draft.save(update_fields=["state"])
+    dt_local = timezone.localtime(draft.economic_event.occurred_at)
+
+    with pytest.raises(CommandError) as exc_info:
+        call_command(
+            "close_fiscal_period",
+            company_id=company.id,
+            year=dt_local.year,
+            month=dt_local.month,
+            force=True,
+        )
+    assert "drafts en excepción" in str(exc_info.value)
+
+    blocked = OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="PeriodCloseBlocked").order_by("-id").first()
+    assert blocked is not None
+    gate = (blocked.payload or {}).get("data", {}).get("gate_summary", {})
+    assert int(gate.get("draft_exception_count") or 0) >= 1
+    assert "DRAFT_EXCEPTION" in list(gate.get("blocking_reasons") or [])
+
+
+@pytest.mark.django_db
+def test_reconcile_operational_vs_accounting_includes_payments_cash_movement():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_reconcile_payments_cash", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    cash_event = _mk_cash_movement_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    local_dt = timezone.localtime(cash_event.occurred_at).date()
+
+    reconciliation = reconcile_operational_vs_accounting(
+        company=company,
+        branch=branch,
+        date_from=local_dt,
+        date_to=local_dt,
+    )
+    payments_rows = [
+        row
+        for row in reconciliation["by_event_type"]
+        if row["source_module"] == "PAYMENTS" and row["event_type"] == "CashMovementPosted"
+    ]
+
+    assert reconciliation["summary"]["pending_operational_events"] == 0
+    assert len(payments_rows) == 1
+    row = payments_rows[0]
+    assert row["operational_count"] == 1
+    assert row["linked_count"] == 1
+    assert row["operational_amount"] == "36.75"
+    assert row["draft_amount"] == "36.75"
+
+
+@pytest.mark.django_db
+def test_reconcile_operational_vs_accounting_excludes_unknown_payment_captured():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_reconcile_payment_captured", password="x")
+    captured = publish_outbox_event(
+        source_module="PAYMENTS",
+        event_type="PaymentCaptured",
+        payload={
+            "payment_intent_id": 9001,
+            "amount": "36.75",
+            "status": "CAPTURED",
+        },
+        company=company,
+        branch=branch,
+        actor_user=user,
+    )
+    local_dt = timezone.localtime(captured.occurred_at).date()
+
+    reconciliation = reconcile_operational_vs_accounting(
+        company=company,
+        branch=branch,
+        date_from=local_dt,
+        date_to=local_dt,
+    )
+
+    assert reconciliation["summary"]["operational_events"] == 0
+    assert reconciliation["by_event_type"] == []
+
+
+@pytest.mark.django_db
+def test_reconcile_operational_vs_accounting_includes_transfer_capture_and_reversal():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_reconcile_transfer_payments", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    captured_event = _mk_payment_captured_event(company=company, branch=branch, user=user, amount="36.75")
+    _mk_payment_capture_reversed_event(company=company, branch=branch, user=user, amount="12.25")
+
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    local_dt = timezone.localtime(captured_event.occurred_at).date()
+
+    reconciliation = reconcile_operational_vs_accounting(
+        company=company,
+        branch=branch,
+        date_from=local_dt,
+        date_to=local_dt,
+    )
+    rows = {
+        row["event_type"]: row
+        for row in reconciliation["by_event_type"]
+        if row["source_module"] == "PAYMENTS"
+    }
+
+    assert reconciliation["summary"]["pending_operational_events"] == 0
+    assert rows["PaymentCaptured"]["operational_count"] == 1
+    assert rows["PaymentCaptured"]["linked_count"] == 1
+    assert rows["PaymentCaptured"]["operational_amount"] == "36.75"
+    assert rows["PaymentCaptured"]["draft_amount"] == "36.75"
+    assert rows["PaymentCaptureReversed"]["operational_count"] == 1
+    assert rows["PaymentCaptureReversed"]["linked_count"] == 1
+    assert rows["PaymentCaptureReversed"]["operational_amount"] == "12.25"
+    assert rows["PaymentCaptureReversed"]["draft_amount"] == "12.25"
+
+
+@pytest.mark.django_db
+def test_transfer_payment_settlement_snapshot_summarizes_transfer_visibility_without_mutation():
+    company, branch = _mk_scope()
+    other_branch = OrgUnit.objects.create(unit_type=OrgUnit.UnitType.BRANCH, name="B2", parent=company)
+    user = User.objects.create_user(username="phase5_transfer_settlement", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+
+    projected_capture = _mk_payment_captured_event(company=company, branch=branch, user=user, amount="100.00")
+    projected_reversal = _mk_payment_capture_reversed_event(company=company, branch=branch, user=user, amount="25.00")
+    exception_capture = _mk_payment_captured_event(company=company, branch=branch, user=user, amount="10.00")
+    _mk_payment_captured_event(company=company, branch=other_branch, user=user, amount="500.00")
+    for payment_method in ("CASH", "CREDIT", "CARD", ""):
+        _mk_payment_captured_event(
+            company=company,
+            branch=branch,
+            user=user,
+            payment_method=payment_method,
+            amount="999.00",
+        )
+
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    exception_eco = EconomicEvent.objects.get(company=company, source_outbox_event_id=exception_capture.event_id)
+    exception_draft = JournalDraft.objects.get(economic_event=exception_eco)
+    exception_draft.state = JournalDraft.State.EXCEPTION
+    exception_draft.save(update_fields=["state"])
+
+    unprojected_capture = _mk_payment_captured_event(company=company, branch=branch, user=user, amount="7.00")
+    failed_capture = _mk_payment_captured_event(company=company, branch=branch, user=user, amount="3.00")
+    failed_capture.status = OutboxEvent.Status.FAILED
+    failed_capture.last_error = "transfer settlement dispatcher timeout"
+    failed_capture.save(update_fields=["status", "last_error"])
+    local_dt = timezone.localtime(projected_capture.occurred_at).date()
+
+    before_outbox_status = {
+        row.event_id: row.status
+        for row in OutboxEvent.objects.filter(source_module="PAYMENTS").order_by("id")
+    }
+    before_draft_state = {row.id: row.state for row in JournalDraft.objects.order_by("id")}
+    before_counts = (EconomicEvent.objects.count(), JournalDraft.objects.count())
+
+    snapshot = build_transfer_payment_settlement_snapshot(
+        company=company,
+        branch=branch,
+        date_from=local_dt,
+        date_to=local_dt,
+    )
+
+    assert before_outbox_status == {
+        row.event_id: row.status
+        for row in OutboxEvent.objects.filter(source_module="PAYMENTS").order_by("id")
+    }
+    assert before_draft_state == {row.id: row.state for row in JournalDraft.objects.order_by("id")}
+    assert before_counts == (EconomicEvent.objects.count(), JournalDraft.objects.count())
+
+    summary = snapshot["summary"]
+    assert summary["transfer_captured_count"] == 4
+    assert summary["transfer_reversed_count"] == 1
+    assert summary["transfer_captured_amount"] == "120.00"
+    assert summary["transfer_reversed_amount"] == "25.00"
+    assert summary["transfer_net_amount"] == "95.00"
+    assert summary["transfer_projected_count"] == 3
+    assert summary["transfer_unprojected_count"] == 2
+    assert summary["transfer_draft_validated_count"] == 2
+    assert summary["transfer_draft_exception_count"] == 1
+    assert summary["transfer_failed_outbox_count"] == 1
+    assert ("PAYMENTS", "PaymentCaptured") not in OPERATIONAL_ACCOUNTING_EVENTS
+    assert ("PAYMENTS", "PaymentCaptureReversed") not in OPERATIONAL_ACCOUNTING_EVENTS
+
+    samples = snapshot["samples"]
+    unprojected_ids = {row["outbox_event_id"] for row in samples["unprojected_sample"]}
+    failed_ids = {row["outbox_event_id"] for row in samples["failed_sample"]}
+    exception_rows = {
+        row["outbox_event_id"]: row
+        for row in samples["exception_sample"]
+    }
+
+    assert str(unprojected_capture.event_id) in unprojected_ids
+    assert str(failed_capture.event_id) in unprojected_ids
+    assert failed_ids == {str(failed_capture.event_id)}
+    assert exception_rows[str(exception_capture.event_id)]["journal_draft_state"] == JournalDraft.State.EXCEPTION
+    assert exception_rows[str(exception_capture.event_id)]["payment_method"] == "TRANSFER"
+    assert str(projected_reversal.event_id) not in unprojected_ids
+
+
+@pytest.mark.django_db
+def test_payment_capture_reversed_transfer_is_not_operational_auto_posted():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_reversal_no_operational_post", password="x")
+    reversed_event = _mk_payment_capture_reversed_event(company=company, branch=branch, user=user)
+
+    assert ("PAYMENTS", "PaymentCaptured") not in OPERATIONAL_ACCOUNTING_EVENTS
+    assert ("PAYMENTS", "PaymentCaptureReversed") not in OPERATIONAL_ACCOUNTING_EVENTS
+
+    summary = dispatch_accounting_outbox_events(limit=10, source_module="PAYMENTS")
+    reversed_event.refresh_from_db()
+
+    assert summary.attempted == 1
+    assert summary.sent == 1
+    assert reversed_event.status == OutboxEvent.Status.SENT
+    assert EconomicEvent.objects.filter(company=company, source_outbox_event_id=reversed_event.event_id).count() == 0
+    assert JournalDraft.objects.count() == 0
+    assert JournalEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_period_close_gates_include_failed_payments_outbox():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_close_payments_failed_outbox", password="x")
+    failed = _mk_cash_movement_event(company=company, branch=branch, user=user)
+    failed.status = OutboxEvent.Status.FAILED
+    failed.last_error = "cash dispatcher timeout"
+    failed.save(update_fields=["status", "last_error"])
+    local_dt = timezone.localtime(failed.occurred_at)
+
+    gate = evaluate_period_close_gates(
+        company=company,
+        year=local_dt.year,
+        month=local_dt.month,
+        force=True,
+    )
+
+    assert gate.failed_outbox_count == 1
+    assert "FAILED_OUTBOX" in gate.blocking_reasons
+    assert gate.failed_outbox_sample[0]["source_module"] == "PAYMENTS"
+    assert gate.failed_outbox_sample[0]["event_type"] == "CashMovementPosted"
+
+
+@pytest.mark.django_db
+def test_reverse_journal_entry_command_is_idempotent():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_reverse", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    call_command("approve_journal_drafts", run_id=str(run.run_id), company_id=company.id)
+    call_command("post_journal_drafts", run_id=str(run.run_id), company_id=company.id, require_approved=True)
+
+    entry = JournalEntry.objects.get(draft__close_run_id=str(run.run_id))
+
+    out1 = StringIO()
+    call_command(
+        "reverse_journal_entry",
+        company_id=company.id,
+        entry_id=entry.id,
+        reason="Ajuste de cierre",
+        stdout=out1,
+    )
+    payload1 = json.loads(out1.getvalue())
+    assert payload1["original_entry_id"] == entry.id
+    assert payload1["idempotent"] is False
+
+    out2 = StringIO()
+    call_command(
+        "reverse_journal_entry",
+        company_id=company.id,
+        entry_id=entry.id,
+        reason="Ajuste de cierre",
+        stdout=out2,
+    )
+    payload2 = json.loads(out2.getvalue())
+    assert payload2["idempotent"] is True
+    assert payload2["reversal_entry_id"] == payload1["reversal_entry_id"]
+    assert JournalEntry.objects.filter(reversed_entry_id=entry.id).count() == 1
+    assert OutboxEvent.objects.filter(source_module="ACCOUNTING", event_type="JournalReversed").exists()
+
+
+@pytest.mark.django_db
+def test_reverse_journal_entries_batch_command_by_run():
+    company, branch = _mk_scope()
+    user = User.objects.create_user(username="phase5_reverse_batch", password="x")
+    call_command("seed_posting_rules_v1", company_id=company.id)
+    run = _mk_packaged_run(company=company, branch=branch, user=user)
+    _mk_billing_event(company=company, branch=branch, user=user, doc_id=7101, number=1)
+    _mk_billing_event(company=company, branch=branch, user=user, doc_id=7102, number=2)
+    call_command("project_shadow_ledger", run_id=str(run.run_id))
+    call_command("approve_journal_drafts", run_id=str(run.run_id), company_id=company.id)
+    call_command("post_journal_drafts", run_id=str(run.run_id), company_id=company.id, require_approved=True)
+
+    out1 = StringIO()
+    call_command(
+        "reverse_journal_entries_batch",
+        company_id=company.id,
+        run_id=str(run.run_id),
+        reason="Ajuste por lote",
+        stdout=out1,
+    )
+    payload1 = json.loads(out1.getvalue())
+    assert payload1["attempted"] == 2
+    assert payload1["reversed"] == 2
+    assert payload1["idempotent"] == 0
+    assert payload1["failed"] == 0
+
+    out2 = StringIO()
+    call_command(
+        "reverse_journal_entries_batch",
+        company_id=company.id,
+        run_id=str(run.run_id),
+        reason="Ajuste por lote",
+        stdout=out2,
+    )
+    payload2 = json.loads(out2.getvalue())
+    assert payload2["attempted"] == 2
+    assert payload2["reversed"] == 0
+    assert payload2["idempotent"] == 2
+    assert payload2["failed"] == 0
