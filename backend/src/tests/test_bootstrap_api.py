@@ -203,3 +203,47 @@ def test_bootstrap_init_establishes_session_and_returns_user():
     )
     assert org.status_code == 200, org.data
     assert OrgUnit.objects.filter(unit_type=OrgUnit.UnitType.COMPANY).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_bootstrap_init_concurrent_creates_single_admin():
+    """BUG-004: dos POST /bootstrap/init/ concurrentes en DB vacía deben crear UN solo admin.
+
+    Sin el advisory lock + re-chequeo dentro de la txn, ambos POST pasaban el `User.objects.exists()`
+    (los dos ven cero usuarios) y creaban dos superadmins. Con el fix, uno gana (201) y el otro es
+    rechazado con 'Sistema ya inicializado' (400).
+    """
+    import threading
+    from django.db import connection as db_conn
+
+    barrier = threading.Barrier(2, timeout=10)
+    results: list[int] = []
+    results_lock = threading.Lock()
+
+    def attempt(username: str) -> None:
+        pwd = _demo_pwd(username)
+        try:
+            barrier.wait()  # sincroniza los dos hilos para maximizar el solape
+            r = APIClient().post(
+                "/api/auth/bootstrap/init/",
+                {
+                    "username": username,
+                    "email": f"{username}@t.com",
+                    "password": pwd,
+                    "password_confirm": pwd,
+                },
+                format="json",
+            )
+            with results_lock:
+                results.append(r.status_code)
+        finally:
+            db_conn.close()  # cada hilo cierra SU conexión (connection es thread-local)
+
+    threads = [threading.Thread(target=attempt, args=(u,)) for u in ("adminA", "adminB")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=20)
+
+    assert User.objects.count() == 1, f"esperaba 1 admin, hay {User.objects.count()}"
+    assert sorted(results) == [201, 400], f"esperaba un 201 y un 400, obtuve {results}"

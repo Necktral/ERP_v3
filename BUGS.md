@@ -47,6 +47,29 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs cerrados
 
+### BUG-004 — El bootstrap inicial podía crear DOS superadmins bajo POST concurrente (race)
+
+- **Módulo / paso del ROADMAP:** 1 (arranque) / `accounts.BootstrapInitView`
+- **Fecha:** 2026-07-01
+- **Severidad:** media (ventana angosta: solo en el primer arranque, antes de que exista cualquier usuario)
+- **Estado:** CERRADO
+- **Pasos para reproducir:**
+  1. Con la DB vacía (primer arranque), enviar **dos** `POST /auth/bootstrap/init/` casi simultáneos
+     con usuarios distintos.
+  2. Ambos pasaban el chequeo `if User.objects.exists()` (los dos ven cero usuarios) y ambos creaban
+     un `create_user(..., is_superuser=True)`.
+- **Esperado:** el contrato "solo se permite cuando no hay usuarios" se respeta → **un** admin.
+- **Actual:** el chequeo y el `create_user` no estaban dentro de una transacción con lock, así que dos
+  requests concurrentes creaban **dos superadmins** (o un 500 por `IntegrityError` si coincidían en el
+  username).
+- **Impacto:** dos superusuarios no intencionados en el arranque. No bloqueaba el demo, pero violaba
+  el contrato de arranque.
+- **Causa raíz / fix:** faltaba serialización. **Fix:** `accounts/views.py::BootstrapInitView.post`
+  ahora envuelve el chequeo+creación en `transaction.atomic()` con un `pg_advisory_xact_lock` y
+  re-chequea `User.objects.exists()` **dentro** del lock (double-check + fast-path fuera del lock).
+  **Test de regresión:** `src/tests/test_bootstrap_api.py::test_bootstrap_init_concurrent_creates_single_admin`
+  (dos hilos con barrier; afirma un solo admin y `[201, 400]`). Verde (8/8 en el archivo).
+
 ### BUG-003 — El `qa/` de raíz de v2 no se copió a v3 (copiado incompleto)
 
 - **Módulo / paso del ROADMAP:** tooling de QA (no bloquea ningún paso del demo)

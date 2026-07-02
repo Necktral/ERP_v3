@@ -7,7 +7,7 @@ from typing import Any
 from django.conf import settings
 from django.core.signing import BadSignature, SignatureExpired
 from django.core import signing
-from django.db import transaction
+from django.db import connection, transaction
 from django.http import QueryDict
 from django.utils import timezone
 import pyotp
@@ -972,8 +972,11 @@ class BootstrapInitView(APIView):
     permission_classes = [AllowAny]
     throttle_scope = "admin_writes"
 
+    # BUG-004: clave arbitraria del advisory lock que serializa el bootstrap concurrente.
+    _BOOTSTRAP_ADVISORY_LOCK = 0x42_00_71
+
     def post(self, request):
-        # contrato: solo se permite cuando no hay usuarios
+        # contrato: solo se permite cuando no hay usuarios (fast-path sin tomar el lock)
         if User.objects.exists():
             return Response({"detail": "Sistema ya inicializado."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -982,34 +985,44 @@ class BootstrapInitView(APIView):
             return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)
         v = s.validated_data
 
-        user = User.objects.create_user(
-            username=v["username"].strip(),
-            email=(v.get("email") or None),
-            password=v["password"],
-            first_name=v.get("first_name", ""),
-            last_name=v.get("last_name", ""),
-        )
-        user.is_staff = True
-        user.is_superuser = True
-        user.must_change_password = False
-        user.save(update_fields=["is_staff", "is_superuser", "must_change_password"])
+        # BUG-004: serializar con un advisory lock para que dos POST concurrentes en el primer
+        # arranque no creen dos superadmins. Re-chequeamos User.objects.exists() DENTRO del lock.
+        with transaction.atomic():
+            with connection.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", [self._BOOTSTRAP_ADVISORY_LOCK])
+            if User.objects.exists():
+                return Response(
+                    {"detail": "Sistema ya inicializado."}, status=status.HTTP_400_BAD_REQUEST
+                )
 
-        write_event(
-            request=request,
-            event_type="AUTH_BOOTSTRAP_ADMIN_CREATED",
-            reason_code="OK",
-            actor_user=user,
-            subject_type="USER",
-            subject_id=str(user.id),
-            metadata={"username": user.username},
-        )
+            user = User.objects.create_user(
+                username=v["username"].strip(),
+                email=(v.get("email") or None),
+                password=v["password"],
+                first_name=v.get("first_name", ""),
+                last_name=v.get("last_name", ""),
+            )
+            user.is_staff = True
+            user.is_superuser = True
+            user.must_change_password = False
+            user.save(update_fields=["is_staff", "is_superuser", "must_change_password"])
 
-        # Dejar la sesión INICIADA igual que LoginView: el siguiente paso del wizard
-        # (BootstrapOrgView) exige IsAuthenticated. Antes esto se hacía con un /auth/login/
-        # aparte en el frontend que, si fallaba, dejaba el wizard varado en el paso 1.
-        transport = _request_auth_transport(request)
-        refresh = RefreshToken.for_user(user)
-        _persist_refresh_token(token=refresh, user=user, request=request)
+            write_event(
+                request=request,
+                event_type="AUTH_BOOTSTRAP_ADMIN_CREATED",
+                reason_code="OK",
+                actor_user=user,
+                subject_type="USER",
+                subject_id=str(user.id),
+                metadata={"username": user.username},
+            )
+
+            # Dejar la sesión INICIADA igual que LoginView: el siguiente paso del wizard
+            # (BootstrapOrgView) exige IsAuthenticated. Antes esto se hacía con un /auth/login/
+            # aparte en el frontend que, si fallaba, dejaba el wizard varado en el paso 1.
+            transport = _request_auth_transport(request)
+            refresh = RefreshToken.for_user(user)
+            _persist_refresh_token(token=refresh, user=user, request=request)
         user_payload = {
             "id": user.id,
             "username": user.username,
