@@ -22,7 +22,7 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U5 — accounting: posteo | PENDIENTE | |
 | U6 — accounting: períodos/FX | PENDIENTE | |
 | U7 — accounting: API | PENDIENTE | |
-| U8 — inventarios kernel | PENDIENTE | |
+| U8 — inventarios kernel | EN-CURSO | Guard `InsufficientStockError` = VERIFICADO-OK (corre DENTRO del lock del balance). Falta: idempotency match (warehouse/lot), post_transfer deadlock, costing, reversal, link contable |
 | U9 — facturacion kernel | PENDIENTE | |
 | U10 — payments: intents/caja/arqueo | PENDIENTE | |
 | U11 — payments: conciliación | PENDIENTE | |
@@ -67,6 +67,8 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 |----------|----------------------------|-------|
 | `nomina/portfolio_link.py` — supuesto doble-cobro silencioso | NM-06 en `register_payroll_loan_deduction` (setea `abono_applied`, loguea `payroll_loan_abono_pending`) | Residual = MEJORA (falta cola de reintento/alerta), no bug |
 | `boot/axios.ts` — supuesto refresh sin single-flight (logout espurio) | `auth.store.ts::refresh()` (guard `if (this.refreshInFlight) return`, con `refreshInFlight` asignado **sincrónicamente** justo después del guard) | Single-flight correcto → falsa alarma del diseño; N×401 disparan UN solo refresh |
+| `inventarios/services.py::post_issue` — supuesto stock negativo (guard fuera del lock) | `_get_or_create_balance_locked` toma `select_for_update` (L844) ANTES del guard `InsufficientStockError` (L846) | Chequeo-luego-descuento serializado dentro del lock → correcto |
+| `portfolio::apply_payroll_abono` / `reverse_payroll_abono` — supuesto over-allocation | lock `select_for_update` (L952/L1003) ANTES de leer `outstanding` y topar con `min()` | Patrón correcto (a diferencia de allocate_payment, que era BUG-005) |
 
 ---
 
