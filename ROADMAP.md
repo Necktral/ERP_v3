@@ -31,7 +31,7 @@ El resto (fleet, beneficio, estación de servicios, financiamiento, etc.) queda 
 | #  | Paso                                                        | Estado | Notas |
 |----|-------------------------------------------------------------|--------|-------|
 | 1  | Estructura organizacional (holding → empresa → sucursal)    | DONE   | Verificado E2E por la UI real · BUG-001 cerrado · ver bitácora ↓ |
-| 2  | Contabilidad base (CoA, período fiscal, tipo de cambio)     | TODO   |       |
+| 2  | Contabilidad base (CoA, período fiscal, tipo de cambio)     | DOING  | En prueba manual por UI (guión B2–B4) · el período fiscal se abre solo al primer posteo (ver bitácora) |
 | 3  | HR + asistencia (empleados y fichaje)                       | TODO   |       |
 | 4  | Nómina (se apoya en HR + contabilidad)                      | TODO   |       |
 | 5  | Inventarios                                                 | TODO   |       |
@@ -57,3 +57,17 @@ El resto (fleet, beneficio, estación de servicios, financiamiento, etc.) queda 
 - **Módulos:** los verticales (fleet, beneficio, financiamiento, fuel, cec, comisariato, finca) quedan OFF por default — la regla "el resto apagado" se cumple sola.
 
 **Pendiente global (no bloquea):** push de la baseline a GitHub, bloqueado hasta que el repo v3 sea **privado**.
+
+---
+
+## Auditoría profunda (escaneo de bugs) — documentada, pendiente de ejecutar
+
+Se **diseñó** una auditoría profunda de todo el repo (30 unidades + 5 lentes transversales, con
+hot-spots a nivel archivo:línea) y se **preparó el arnés** (Fase 0: `qa/` repuesto, suite backend
+verde, BUG-003 cerrado). La **ejecución** (Fase 1 revisión → Fase 2 fixes crítico/alto → Fase 3
+regresión) quedó **pendiente**: la flota multi-agente topó el límite de sesión.
+
+Todo está documentado como runbook auto-contenido para ejecutarlo en frío:
+**[`docs/ESCANEO_PROFUNDO_OPUS.md`](docs/ESCANEO_PROFUNDO_OPUS.md)** — catálogo de unidades/lentes,
+comandos del arnés, protocolo de hallazgos (BUGS.md primero), restricciones, y hallazgos preliminares
+ya verificados a mano. Recomendación: correr en lotes chicos / inline para no repetir el tope de cuota.
