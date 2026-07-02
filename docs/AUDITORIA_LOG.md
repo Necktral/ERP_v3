@@ -26,7 +26,7 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U9 — facturacion kernel | PENDIENTE | |
 | U10 — payments: intents/caja/arqueo | PENDIENTE | |
 | U11 — payments: conciliación | PENDIENTE | |
-| U12 — portfolio kernel | PENDIENTE | |
+| U12 — portfolio kernel | EN-CURSO | **BUG-005** (over-allocation → outstanding negativo en `allocate_payment_to_obligation`) CERRADO con fix+test. `apply_payroll_abono`/`reverse_payroll_abono` = lock correcto (VERIFICADO-OK). Falta: link_billing doble-CxC, accrue_interest idempotencia, write_off |
 | U13 — nomina: cálculo legal | PENDIENTE | |
 | U14 — nomina: rieles de pago | PENDIENTE | |
 | U15 — nomina: asistencia campo | PENDIENTE | |

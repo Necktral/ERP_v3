@@ -47,6 +47,31 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs cerrados
 
+### BUG-005 — `allocate_payment_to_obligation` podía sobre-aplicar un pago (outstanding negativo) bajo concurrencia
+
+- **Módulo / paso del ROADMAP:** portfolio kernel (pasos 7/9/10: CxC, pagos, cartera)
+- **Fecha:** 2026-07-01
+- **Severidad:** alta (integridad de dinero: descuadre de cartera, viola el invariante de saldo)
+- **Estado:** CERRADO
+- **Pasos para reproducir:**
+  1. Una obligación (CxC) con outstanding = 100.
+  2. Dos `allocate_payment_to_obligation` concurrentes, cada uno aplicando 80 (individualmente ≤ 100).
+  3. Ambos pasan la validación `allocated_amount > obligation.outstanding_amount` (línea ~816), que
+     lee el saldo **sin lock**. Luego cada uno toma el lock, re-lee e incrementa.
+- **Esperado:** el segundo se rechaza (EXCEEDS_OUTSTANDING) — no se aplica más de lo que se debe.
+- **Actual:** la validación de `outstanding` estaba **fuera** del lock y **no se repetía adentro**;
+  el `select_for_update` protegía el `+=` (lost-update) pero no la sobre-aplicación. Resultado:
+  `allocated_amount` supera `total_amount` → `outstanding_amount` **negativo**. No hay
+  `CheckConstraint` que lo impida (solo existen `principal>0` y `allocated>=0`). Contraste:
+  `apply_payroll_abono` sí lee el saldo DENTRO del lock y topa con `min()` — patrón correcto.
+- **Impacto:** pago mal aplicado / cartera descuadrada de forma silenciosa (sin excepción ni
+  constraint). Ventana: dos aplicaciones concurrentes a la misma obligación (p. ej. auto + manual).
+- **Causa raíz / fix:** `portfolio/services.py::allocate_payment_to_obligation` ahora **re-valida
+  `allocated_amount > obligation.outstanding_amount` DENTRO del `transaction.atomic()`**, después del
+  `select_for_update`, y levanta `EXCEEDS_OUTSTANDING` (roll-back de la allocation). **Test de
+  regresión determinístico:** `test_portfolio_services.py::test_allocate_payment_rejects_over_allocation_under_concurrent_change`
+  (objeto en memoria con saldo viejo + DB avanzada → rechaza y no deja allocation huérfana). Verde.
+
 ### BUG-004 — El bootstrap inicial podía crear DOS superadmins bajo POST concurrente (race)
 
 - **Módulo / paso del ROADMAP:** 1 (arranque) / `accounts.BootstrapInitView`

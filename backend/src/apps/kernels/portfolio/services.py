@@ -876,6 +876,17 @@ def allocate_payment_to_obligation(
         # over-allocation cuando la aplicación automática y la manual concurren).
         obligation = type(obligation)._default_manager.select_for_update().get(pk=obligation.pk)
 
+        # BUG-005: re-validar outstanding DENTRO del lock. El chequeo EXCEEDS_OUTSTANDING de arriba
+        # usó una lectura SIN lock; sin este re-chequeo, dos allocations parciales concurrentes a la
+        # misma obligación sobre-aplican (allocated > total → outstanding negativo) y no hay
+        # constraint de DB que lo impida. (apply_payroll_abono ya lee el saldo DENTRO del lock.)
+        if allocated_amount > obligation.outstanding_amount:
+            raise PortfolioDomainError(
+                "EXCEEDS_OUTSTANDING",
+                f"Allocated amount ({allocated_amount}) exceeds outstanding "
+                f"({obligation.outstanding_amount})",
+            )
+
         # Actualizar obligation
         obligation.allocated_amount += allocated_amount
         obligation.last_payment_date = allocation_date

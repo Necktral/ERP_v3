@@ -693,3 +693,48 @@ def test_update_aging_skips_paid():
 
     paid.refresh_from_db()
     assert paid.status == ObligationStatus.PAID
+
+
+@pytest.mark.django_db
+def test_allocate_payment_rejects_over_allocation_under_concurrent_change():
+    """BUG-005: allocate_payment_to_obligation valida `outstanding` FUERA del lock. Si el saldo
+    cambió entre esa lectura y el lock (una aplicación concurrente ya commiteada), debe re-validar
+    DENTRO del lock y rechazar la sobre-aplicación, en vez de dejar allocated > total (outstanding
+    negativo). Se simula la carrera de forma determinística: se pasa un objeto en memoria con saldo
+    viejo mientras la DB ya avanzó."""
+    from django.contrib.auth import get_user_model
+
+    from apps.kernels.portfolio.models import PaymentAllocation
+
+    company, branch = _mk_scope()
+    party = _mk_party(company)
+    user = get_user_model().objects.create_user(username=f"u_{uuid.uuid4().hex[:6]}", password="x")
+
+    receivable = create_receivable(
+        company=company, branch=branch, party=party,
+        reference_type="INVOICE", reference_id=1,
+        principal_amount=Decimal("100.00"), currency="NIO",
+        issue_date=_today(), due_date=_due(30),
+    )
+    intent = _mk_payment_intent(company, amount="1000.00")
+
+    # objeto en memoria con saldo VIEJO (allocated=0, outstanding=100)
+    stale = Receivable.objects.get(pk=receivable.pk)
+    # simular una aplicación concurrente YA commiteada: la DB avanzó a allocated=80 (outstanding=20)
+    Receivable.objects.filter(pk=receivable.pk).update(allocated_amount=Decimal("80.00"))
+
+    # el pre-chequeo pasa (80 <= 100 del objeto viejo), pero DENTRO del lock outstanding real = 20
+    with pytest.raises(PortfolioDomainError, match="EXCEEDS_OUTSTANDING"):
+        allocate_payment_to_obligation(
+            payment_intent=intent,
+            obligation=stale,
+            allocated_amount=Decimal("80.00"),
+            allocation_date=_today(),
+            created_by=user,
+        )
+
+    # la obligación NO se sobre-aplicó: sigue en 80 (no 160), sin allocation huérfana (rollback)
+    receivable.refresh_from_db()
+    assert receivable.allocated_amount == Decimal("80.00")
+    assert receivable.outstanding_amount == Decimal("20.00")
+    assert not PaymentAllocation.objects.filter(payment_intent=intent).exists()
