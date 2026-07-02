@@ -47,6 +47,20 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs cerrados
 
+### BUG-006 — Un 403 en un poll de fondo expulsaba al usuario a /403 (interceptor global sin distinción)
+
+- **Módulo / paso del ROADMAP:** frontend core (boot/axios) / hot-spot U22-3 de la auditoría — oleada 0
+- **Fecha:** 2026-07-02
+- **Severidad:** media (UX: te saca de la pantalla donde estás trabajando)
+- **Estado:** CERRADO
+- **Pasos para reproducir:**
+  1. Estar en el tablero (poll de resumen cada 60s) con una sesión cuyo permiso del resumen fue revocado (o un 403 transitorio de contexto).
+  2. Esperar el siguiente tick del poll.
+- **Esperado:** el poll falla en silencio (o avisa discreto); el usuario sigue donde está.
+- **Actual:** el interceptor de respuesta hacía `router.replace('/403')` ante CUALQUIER 403, incluidos los de requests en segundo plano — el usuario era expulsado de su pantalla sin haber hecho nada.
+- **Impacto:** no descuadra nada, pero confunde y hace perder el trabajo en curso (formularios a medio llenar).
+- **Causa raíz / fix:** el interceptor no distinguía requests de usuario vs. de fondo. **Fix:** flag `background?: boolean` en la config de axios (`frontend/src/boot/axios.ts`); con `background:true` el 403 NO navega (el caller decide). El poll del tablero (`TableroPage.vue` + `getDailySummary`) marca sus requests como background. El caso `DEVICE_REVOKED` (kill-switch) queda intacto.
+
 ### BUG-005 — `allocate_payment_to_obligation` podía sobre-aplicar un pago (outstanding negativo) bajo concurrencia
 
 - **Módulo / paso del ROADMAP:** portfolio kernel (pasos 7/9/10: CxC, pagos, cartera)

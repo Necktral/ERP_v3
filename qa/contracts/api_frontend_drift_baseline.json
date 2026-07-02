@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "generated_at": "2026-07-02T22:11:37.100374+00:00",
+  "orphans": {
+    "accounting/consolidation/runs/<p>/summary": {
+      "route": "/accounting/consolidation/runs/<p>/summary/",
+      "module": "apps.kernels.accounting.urls",
+      "reason": "summary de consolidación sin UI",
+      "planned_wave": "O2"
+    },
+    "accounting/health": {
+      "route": "/accounting/health/",
+      "module": "apps.kernels.accounting.urls",
+      "reason": "endpoint de salud para monitoreo, sin UI por diseño",
+      "planned_wave": null
+    },
+    "billing/credit-approvals/<p>/resolve": {
+      "route": "/billing/credit-approvals/<p>/resolve/",
+      "module": "apps.kernels.facturacion.urls",
+      "reason": "flujo pedido-con-crédito SoD sin UI (lado checker)",
+      "planned_wave": "O1"
+    },
+    "billing/health": {
+      "route": "/billing/health/",
+      "module": "apps.kernels.facturacion.urls",
+      "reason": "endpoint de salud para monitoreo, sin UI por diseño",
+      "planned_wave": null
+    },
+    "billing/orders": {
+      "route": "/billing/orders/",
+      "module": "apps.kernels.facturacion.urls",
+      "reason": "flujo pedido-con-crédito SoD sin UI",
+      "planned_wave": "O1"
+    },
+    "billing/orders/<p>/submit-credit": {
+      "route": "/billing/orders/<p>/submit-credit/",
+      "module": "apps.kernels.facturacion.urls",
+      "reason": "flujo pedido-con-crédito SoD sin UI",
+      "planned_wave": "O1"
+    },
+    "inventory/balances": {
+      "route": "/inventory/balances/",
+      "module": "apps.kernels.inventarios.urls",
+      "reason": "alias legacy intencional; la UI usa stock/",
+      "planned_wave": null
+    },
+    "inventory/health": {
+      "route": "/inventory/health/",
+      "module": "apps.kernels.inventarios.urls",
+      "reason": "endpoint de salud para monitoreo, sin UI por diseño",
+      "planned_wave": null
+    },
+    "legacy/billing/health-legacy": {
+      "route": "/legacy/billing/health-legacy/",
+      "module": "apps.kernels.facturacion.urls_legacy",
+      "reason": "rutas legacy deprecadas (LegacyApiDeprecationMiddleware)",
+      "planned_wave": null
+    },
+    "legacy/billing/invoices": {
+      "route": "/legacy/billing/invoices/",
+      "module": "apps.kernels.facturacion.urls_legacy",
+      "reason": "rutas legacy deprecadas (LegacyApiDeprecationMiddleware)",
+      "planned_wave": null
+    },
+    "nomina/biometric/push": {
+      "route": "/nomina/biometric/push/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "device-side: push del reloj biométrico, sin UI por diseño",
+      "planned_wave": null
+    },
+    "nomina/config/<p>": {
+      "route": "/nomina/config/<p>/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "detalle/patch de NominaConfig sin UI (la UI usa el listado)",
+      "planned_wave": "O3"
+    },
+    "nomina/field/approvals/<p>/approve": {
+      "route": "/nomina/field/approvals/<p>/approve/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/capture/work-days": {
+      "route": "/nomina/field/capture/work-days/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/crews": {
+      "route": "/nomina/field/crews/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/crews/<p>/report": {
+      "route": "/nomina/field/crews/<p>/report/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/reports/<p>/approve": {
+      "route": "/nomina/field/reports/<p>/approve/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/reports/<p>/approve/request": {
+      "route": "/nomina/field/reports/<p>/approve/request/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/reports/<p>/build-attendance": {
+      "route": "/nomina/field/reports/<p>/build-attendance/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/reports/<p>/events": {
+      "route": "/nomina/field/reports/<p>/events/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/work-days": {
+      "route": "/nomina/field/work-days/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/work-days/<p>": {
+      "route": "/nomina/field/work-days/<p>/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/work-days/<p>/consolidations": {
+      "route": "/nomina/field/work-days/<p>/consolidations/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/work-days/<p>/crews": {
+      "route": "/nomina/field/work-days/<p>/crews/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/work-days/<p>/events": {
+      "route": "/nomina/field/work-days/<p>/events/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/work-days/<p>/rollcall": {
+      "route": "/nomina/field/work-days/<p>/rollcall/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "nomina/field/work-days/<p>/transfers": {
+      "route": "/nomina/field/work-days/<p>/transfers/",
+      "module": "apps.kernels.nomina.urls",
+      "reason": "UI de asistencia de campo pendiente",
+      "planned_wave": "O4"
+    },
+    "payments/health": {
+      "route": "/payments/health/",
+      "module": "apps.kernels.payments.urls",
+      "reason": "endpoint de salud para monitoreo, sin UI por diseño",
+      "planned_wave": null
+    },
+    "portfolio/allocations/<p>": {
+      "route": "/portfolio/allocations/<p>/",
+      "module": "apps.kernels.portfolio.urls",
+      "reason": "detalle de allocation sin UI (solo listado)",
+      "planned_wave": "O5"
+    },
+    "portfolio/credits/<p>": {
+      "route": "/portfolio/credits/<p>/",
+      "module": "apps.kernels.portfolio.urls",
+      "reason": "detalle de crédito sin UI (solo listado/disburse)",
+      "planned_wave": "O5"
+    },
+    "portfolio/interest-accruals": {
+      "route": "/portfolio/interest-accruals/",
+      "module": "apps.kernels.portfolio.urls",
+      "reason": "devengo de intereses sin UI",
+      "planned_wave": "O5"
+    },
+    "portfolio/interest-accruals/<p>": {
+      "route": "/portfolio/interest-accruals/<p>/",
+      "module": "apps.kernels.portfolio.urls",
+      "reason": "devengo de intereses sin UI",
+      "planned_wave": "O5"
+    },
+    "portfolio/payables/<p>": {
+      "route": "/portfolio/payables/<p>/",
+      "module": "apps.kernels.portfolio.urls",
+      "reason": "detalle de payable sin UI (solo listado)",
+      "planned_wave": "O5"
+    },
+    "portfolio/receivables/<p>": {
+      "route": "/portfolio/receivables/<p>/",
+      "module": "apps.kernels.portfolio.urls",
+      "reason": "detalle de receivable sin UI (solo listado/acciones)",
+      "planned_wave": "O5"
+    },
+    "portfolio/settings": {
+      "route": "/portfolio/settings/",
+      "module": "apps.kernels.portfolio.urls",
+      "reason": "configuración de cartera sin UI",
+      "planned_wave": "O5"
+    },
+    "portfolio/settings/<p>": {
+      "route": "/portfolio/settings/<p>/",
+      "module": "apps.kernels.portfolio.urls",
+      "reason": "configuración de cartera sin UI",
+      "planned_wave": "O5"
+    },
+    "reporting/catalog": {
+      "route": "/reporting/catalog/",
+      "module": "apps.kernels.reporting.urls",
+      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
+      "planned_wave": "O6"
+    },
+    "reporting/catalog/<p>": {
+      "route": "/reporting/catalog/<p>/",
+      "module": "apps.kernels.reporting.urls",
+      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
+      "planned_wave": "O6"
+    },
+    "reporting/exports/<p>": {
+      "route": "/reporting/exports/<p>/",
+      "module": "apps.kernels.reporting.urls",
+      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
+      "planned_wave": "O6"
+    },
+    "reporting/runs": {
+      "route": "/reporting/runs/",
+      "module": "apps.kernels.reporting.urls",
+      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
+      "planned_wave": "O6"
+    },
+    "reporting/runs/<p>": {
+      "route": "/reporting/runs/<p>/",
+      "module": "apps.kernels.reporting.urls",
+      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
+      "planned_wave": "O6"
+    },
+    "reporting/saved-views/<p>": {
+      "route": "/reporting/saved-views/<p>/",
+      "module": "apps.kernels.reporting.urls",
+      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
+      "planned_wave": "O6"
+    },
+    "reporting/snapshots": {
+      "route": "/reporting/snapshots/",
+      "module": "apps.kernels.reporting.urls",
+      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
+      "planned_wave": "O6"
+    }
+  },
+  "notes": [
+    "Baseline-trinquete de rutas KERNEL sin consumo en el frontend (dirección B de la lente L4).",
+    "Cada entrada exige razón explícita y, si aplica, la oleada donde se cierra (planned_wave).",
+    "El cableado ROTO (frontend → ruta inexistente) NUNCA se baselinea: se arregla."
+  ]
+}

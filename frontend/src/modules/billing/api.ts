@@ -5,7 +5,7 @@
  * con reintento o anulación.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export type BillingDocType = 'INVOICE' | 'CREDIT_NOTE' | 'QUOTE' | 'ORDER';
 export type BillingDocStatus = 'DRAFT' | 'ISSUED' | 'VOIDED';
@@ -131,6 +131,22 @@ export async function listBillingDocs(filters: BillingFilters = {}): Promise<Bil
   }
   const { data } = await api.get<Paginated<BillingDocRow>>('/billing/docs/', { params });
   return data.results;
+}
+
+/**
+ * Variante paginada server-side (envelope completo con `count`).
+ * El backend acepta ordering: created_at, id, total (con "-" para descendente).
+ */
+export async function listBillingDocsPage(
+  filters: BillingFilters,
+  page: PageReq,
+): Promise<Paginated<BillingDocRow>> {
+  const params: Record<string, string | number> = { ...page };
+  for (const [k, v] of Object.entries(filters)) {
+    if (v) params[k] = v;
+  }
+  const { data } = await api.get<Paginated<BillingDocRow>>('/billing/docs/', { params });
+  return data;
 }
 
 export async function getBillingDoc(docId: number): Promise<BillingDoc> {

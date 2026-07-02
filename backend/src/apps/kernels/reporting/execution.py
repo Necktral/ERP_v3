@@ -213,6 +213,7 @@ def execute_dataset(
         branch=scope.branch,
         required_permissions=required_permissions,
         effective_permissions_override=getattr(request, "reporting_effective_permissions", None),
+        request=request,
     )
 
     materialization = resolve_materialization(

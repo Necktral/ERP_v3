@@ -17,7 +17,7 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 |--------|--------|----------------------------|
 | U1 — auth/accounts/2FA/bootstrap | EN-CURSO | **BUG-004** (race bootstrap → 2 superadmins) CERRADO con fix+test. refresh single-flight = VERIFICADO-OK. Falta: 2FA replay, rotación refresh token, flags de cookies, `is_superuser` bypass |
 | U2 — iam contexto + middlewares | PENDIENTE | |
-| U3 — rbac + org (módulos) | PENDIENTE | |
+| U3 — rbac + org (módulos) | EN-CURSO | Oleada 0: memo RBAC por-request (`get_effective_permissions_for_scope_cached`) elimina las ~3 queries fijas por evaluación repetida; tests en `src/tests/perf/test_query_budgets.py` (2ª evaluación = 0 queries, sin bleed entre requests/companies, override intacto) = VERIFICADO-OK. `route_authz_guard` verde post-cambio. Falta: el resto de la unidad (org, seeds, activación de módulos) |
 | U4 — audit + common | PENDIENTE | |
 | U5 — accounting: posteo | PENDIENTE | |
 | U6 — accounting: períodos/FX | PENDIENTE | |
@@ -36,7 +36,7 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U19 — retail_pos + sync_engine | PENDIENTE | |
 | U20 — comisariato + intercompany + parties | PENDIENTE | |
 | U21 — reporting kernel | PENDIENTE | |
-| U22 — frontend core (boot/stores/router) | PENDIENTE | |
+| U22 — frontend core (boot/stores/router) | EN-CURSO | Oleada 0: hot-spot U22-3 (interceptor expulsaba a /403 ante CUALQUIER 403, incluidos polls) CERRADO — flag `background` en axios + polling del tablero marcado (**BUG-006**). Infra de paginación server-side (`useListadoServer` + `PageReq`/`toPageParams`) con pilotos en billing (FacturacionPage) y accounting (DiarioPage). Falta: resto de la unidad |
 | U23 — frontend auth/org/rbac/devices | PENDIENTE | |
 | U24 — frontend hr/nomina/pagador | PENDIENTE | |
 | U25 — frontend ventas/pos/billing | PENDIENTE | |
@@ -53,7 +53,7 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | L1 — seguridad/authz (IDOR + self-auth) | PENDIENTE | |
 | L2 — concurrencia/idempotencia | PENDIENTE | |
 | L3 — integridad contable | PENDIENTE | |
-| L4 — calidad frontend | PENDIENTE | |
+| L4 — calidad frontend | EN-CURSO | Oleada 0: guard automatizado `qa/api_frontend_drift_guard.py` (drift api.ts ↔ urls.py, ratchet+baseline): **0 cableado roto**; 43 huérfanos kernel baselineados con razón y oleada de cierre en `qa/contracts/api_frontend_drift_baseline.json`. `make qa-l4-drift`; en CI report-only (bloqueante desde O1). Falta: L4b (diccionario de códigos) |
 | L5 — drift v2↔v3 y arrastre | PENDIENTE | |
 
 ---

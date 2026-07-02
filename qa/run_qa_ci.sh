@@ -130,6 +130,7 @@ if [[ "${run_status}" == "passed" ]]; then
   if make_cmd qa-namespace-guard \
     && make_cmd qa-analytics-contract-guard \
     && make_cmd qa-route-contract-guard \
+    && (cd "${ROOT_DIR}" && python3 qa/api_frontend_drift_guard.py --report-only --output "${REPORTS_REL}/api_frontend_drift_report.json") \
     && make_cmd qa-readme-section-guard \
     && make_cmd qa-pr-blast-radius-guard \
     && make_cmd qa-reporting-registry-guard \

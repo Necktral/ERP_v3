@@ -59,6 +59,50 @@ def get_effective_permissions_for_scope(
     return set(perm_codes)
 
 
+def get_effective_permissions_for_scope_cached(
+    *,
+    request,
+    user,
+    company: OrgUnit,
+    branch: OrgUnit | None = None,
+    include_global: bool = False,
+) -> set[str]:
+    """
+    Variante memoizada por-request de get_effective_permissions_for_scope.
+
+    El memo vive en el HttpRequest crudo (muere con el request; cero estado
+    cross-request), así la 2ª evaluación de permisos del mismo request no
+    vuelve a consultar la BD. Con request=None degrada a la variante directa.
+    """
+    if request is None or user is None or getattr(user, "pk", None) is None:
+        return get_effective_permissions_for_scope(
+            user, company=company, branch=branch, include_global=include_global
+        )
+
+    raw = getattr(request, "_request", request)
+    memo = getattr(raw, "_rbac_perms_memo", None)
+    if memo is None:
+        memo = {}
+        try:
+            raw._rbac_perms_memo = memo
+        except (AttributeError, TypeError):
+            return get_effective_permissions_for_scope(
+                user, company=company, branch=branch, include_global=include_global
+            )
+
+    key = (
+        user.pk,
+        getattr(company, "id", None),
+        getattr(branch, "id", None),
+        bool(include_global),
+    )
+    if key not in memo:
+        memo[key] = get_effective_permissions_for_scope(
+            user, company=company, branch=branch, include_global=include_global
+        )
+    return memo[key]
+
+
 def get_effective_permissions(user) -> list[str]:
     if user.is_superuser:
         return ["*"]

@@ -12,7 +12,7 @@ from __future__ import annotations
 from django.conf import settings
 from rest_framework.permissions import BasePermission
 
-from apps.modulos.rbac.selectors import get_effective_permissions_for_scope
+from apps.modulos.rbac.selectors import get_effective_permissions_for_scope_cached
 
 
 def _set_on_request_and_raw(request, key: str, value):
@@ -73,11 +73,13 @@ def rbac_permission(required_permission: str):
 
             override = getattr(request, "rbac_effective_permissions_override", None)
             if override is not None:
+                # El camino override (hooks de test) no pasa por el memo por-request.
                 perms = {str(code).strip() for code in list(override) if str(code).strip()}
             else:
                 include_global = bool(getattr(settings, "RBAC_INCLUDE_GLOBAL_USERROLES", False))
-                perms = get_effective_permissions_for_scope(
-                    user,
+                perms = get_effective_permissions_for_scope_cached(
+                    request=request,
+                    user=user,
                     company=company,
                     branch=branch,
                     include_global=include_global,

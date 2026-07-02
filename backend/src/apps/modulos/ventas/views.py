@@ -10,7 +10,7 @@ from apps.kernels.payments.services import PaymentsDomainError
 from apps.kernels.portfolio.services import PortfolioDomainError
 from apps.modulos.comisariato.services import ComisariatoError
 from apps.modulos.common.permissions import rbac_permission
-from apps.modulos.rbac.selectors import get_effective_permissions_for_scope
+from apps.modulos.rbac.selectors import get_effective_permissions_for_scope_cached
 
 from .serializers import (
     CollectReceivableSerializer,
@@ -99,8 +99,8 @@ class PosSaleView(APIView):
         s.is_valid(raise_exception=True)
         v = s.validated_data
 
-        effective = get_effective_permissions_for_scope(
-            request.user, company=request.company, branch=request.branch
+        effective = get_effective_permissions_for_scope_cached(
+            request=request, user=request.user, company=request.company, branch=request.branch
         )
         allow_override = "*" in effective or "sales.pos.price_override" in effective
 

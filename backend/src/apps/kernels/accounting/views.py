@@ -19,7 +19,7 @@ from apps.modulos.common.api_exceptions import ConflictError
 from apps.modulos.common.pagination import get_limit_offset, paginate_list, paginate_queryset
 from apps.modulos.common.permissions import rbac_permission
 from apps.modulos.integration.services import publish_outbox_event
-from apps.modulos.rbac.selectors import get_effective_permissions_for_scope
+from apps.modulos.rbac.selectors import get_effective_permissions_for_scope_cached
 from config.error_envelope import build_error_envelope
 
 from .models import (
@@ -1186,8 +1186,9 @@ class JournalDraftPostView(APIView):
 
     @staticmethod
     def _can_override_sod(request) -> bool:
-        perms = get_effective_permissions_for_scope(
-            request.user,
+        perms = get_effective_permissions_for_scope_cached(
+            request=request,
+            user=request.user,
             company=request.company,
             branch=getattr(request, "branch", None),
         )
@@ -1237,8 +1238,9 @@ class FiscalPeriodCloseView(APIView):
 
     @staticmethod
     def _can_override_sod(request) -> bool:
-        perms = get_effective_permissions_for_scope(
-            request.user,
+        perms = get_effective_permissions_for_scope_cached(
+            request=request,
+            user=request.user,
             company=request.company,
             branch=getattr(request, "branch", None),
         )
@@ -1297,8 +1299,9 @@ class FiscalPeriodReopenView(APIView):
 
     @staticmethod
     def _can_override_sod(request) -> bool:
-        perms = get_effective_permissions_for_scope(
-            request.user,
+        perms = get_effective_permissions_for_scope_cached(
+            request=request,
+            user=request.user,
             company=request.company,
             branch=getattr(request, "branch", None),
         )
@@ -1351,8 +1354,9 @@ class JournalEntryReverseView(APIView):
 
     @staticmethod
     def _can_override_sod(request) -> bool:
-        perms = get_effective_permissions_for_scope(
-            request.user,
+        perms = get_effective_permissions_for_scope_cached(
+            request=request,
+            user=request.user,
             company=request.company,
             branch=getattr(request, "branch", None),
         )
@@ -1399,8 +1403,9 @@ class JournalEntryReverseBatchView(APIView):
 
     @staticmethod
     def _can_override_sod(request) -> bool:
-        perms = get_effective_permissions_for_scope(
-            request.user,
+        perms = get_effective_permissions_for_scope_cached(
+            request=request,
+            user=request.user,
             company=request.company,
             branch=getattr(request, "branch", None),
         )

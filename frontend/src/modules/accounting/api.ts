@@ -4,7 +4,7 @@
  * tipo de cambio/revaluación e intercompany.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   ASSET: 'Activo',
@@ -146,6 +146,21 @@ export async function listJournalEntries(filters: { year?: number; month?: numbe
   if (filters.month) params.month = filters.month;
   const { data } = await api.get<Paginated<JournalEntryRow>>('/accounting/journal-entries/', { params });
   return data.results;
+}
+
+/**
+ * Variante paginada server-side (envelope completo con `count`).
+ * El backend ordena fijo por -posted_at; no acepta `ordering`.
+ */
+export async function listJournalEntriesPage(
+  filters: { year?: number; month?: number },
+  page: PageReq,
+): Promise<Paginated<JournalEntryRow>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (filters.year) params.year = filters.year;
+  if (filters.month) params.month = filters.month;
+  const { data } = await api.get<Paginated<JournalEntryRow>>('/accounting/journal-entries/', { params });
+  return data;
 }
 
 export async function reverseJournalEntry(entryId: number, reason: string): Promise<void> {

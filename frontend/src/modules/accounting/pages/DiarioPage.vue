@@ -115,14 +115,16 @@
 
       <q-tab-panel name="asientos" class="q-pa-none">
         <q-table
+          v-model:pagination="paginacionAsientos"
           class="app-table"
           :rows="asientos"
           :columns="columnasAsiento"
           row-key="id"
           flat
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="cargandoAsientos"
+          :rows-per-page-options="[10, 25, 50, 100]"
           no-data-label="Sin asientos posteados."
+          @request="onRequestAsientos"
         >
           <template #body-cell-fecha="props">
             <q-td :props="props">{{ formatDate(props.row.entry_date) }}</q-td>
@@ -262,6 +264,7 @@ import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import EstadoChip, { type EstadoEstilo } from 'src/components/EstadoChip.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatDateTime, formatMoney } from 'src/core/format';
 import {
   ACCOUNTING_PLUS_MENSAJES,
@@ -271,7 +274,7 @@ import {
   getChartOfAccounts,
   listCostCenters,
   listJournalDrafts,
-  listJournalEntries,
+  listJournalEntriesPage,
   postDrafts,
   reverseJournalBatch,
   reverseJournalEntry,
@@ -316,7 +319,19 @@ const cargando = ref(false);
 const accionando = ref(false);
 const filtroEstado = ref<string | null>(null);
 const borradores = ref<JournalDraftRow[]>([]);
-const asientos = ref<JournalEntryRow[]>([]);
+
+// Asientos: paginación server-side (el diario crece sin límite). auto:false
+// porque la carga está gateada por el permiso accounting.journal_entry.read.
+const {
+  rows: asientos,
+  loading: cargandoAsientos,
+  pagination: paginacionAsientos,
+  onRequest: onRequestAsientos,
+  reload: recargarAsientos,
+} = useListadoServer<JournalEntryRow>((page) => listJournalEntriesPage({}, page), {
+  errorMessage: 'No se pudieron cargar los asientos.',
+  auto: false,
+});
 
 function puede(code: string): boolean {
   const companyId = ctx.activeCompanyId;
@@ -352,11 +367,7 @@ async function recargar() {
       }),
     ];
     if (puede('accounting.journal_entry.read')) {
-      tareas.push(
-        listJournalEntries().then((r) => {
-          asientos.value = r;
-        }),
-      );
+      tareas.push(recargarAsientos());
     }
     await Promise.all(tareas);
   } catch (e) {
