@@ -20,6 +20,7 @@ privado** (pendiente global del ROADMAP).
 | `oleada-0/infra-transversal` | `7fe535e` | lista para PR | Memo RBAC por-request, CACHES, red assertNumQueries, paginación server-side (useListadoServer + pilotos), guard L4 (`qa/api_frontend_drift_guard.py`), fix 403 background (BUG-006) |
 | `oleada-1/venta-fact-inv` | `ae1d5ec` | lista para PR | bulk_create líneas venta/pedido + golden tests, filtro sargable, remisiones/conteo sin N+1, U8 HECHO (BUG-007), UI pedido-con-crédito SoD, Existencias/Kardex server-side |
 | `oleada-2/venta-pay-acct` | `efeed07` | lista para PR | post_journal_drafts optimizado, GL totales en BD + tope, suggest_matches batch, U10/U11 HECHAS (BUG-008, BUG-009), UI reconciliación operativa + summary consolidación, tablas intents/intercompany server-side |
+| `oleada-3/nomina-perf` | _(ver git log)_ | lista para PR | planilla con bulk_update atómico + golden de equivalencia, tramos IR cacheados (N+1 real), dedupe biométrico por lote, tablas entries/marcas server-side (PR-4, después de PR-3) |
 
 ## Tareas para Codex (en orden)
 

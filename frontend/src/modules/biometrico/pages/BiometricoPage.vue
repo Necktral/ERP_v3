@@ -85,6 +85,7 @@
           <q-btn flat dense round icon="refresh" :loading="cargandoMarcas" aria-label="Actualizar" @click="cargarMarcas" />
         </div>
         <q-table
+          v-model:pagination="paginacionMarcas"
           class="app-table"
           :rows="checks"
           :columns="checkCols"
@@ -92,8 +93,9 @@
           flat
           dense
           :loading="cargandoMarcas"
-          :pagination="{ rowsPerPage: 50 }"
+          :rows-per-page-options="[10, 25, 50, 100]"
           no-data-label="Sin marcas. Subí el archivo del aparato."
+          @request="onRequestMarcas"
         >
           <template #body-cell-employee="props">
             <q-td :props="props">
@@ -208,11 +210,12 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import {
   createDevice,
   importChecks,
   listBatches,
-  listChecks,
+  listChecksPage,
   listDevices,
   mapCode,
   rollup,
@@ -303,9 +306,20 @@ function copiarToken() {
 const importDeviceId = ref<number | null>(null);
 const archivo = ref<File | null>(null);
 const subiendo = ref(false);
-const checks = ref<BiometricCheck[]>([]);
-const cargandoMarcas = ref(false);
 const soloNoMapeadas = ref(true);
+
+// Marcas: paginación server-side (la tabla que más crece del reloj).
+// auto:false — la primera carga la dispara reload() junto con aparatos y períodos.
+const {
+  rows: checks,
+  loading: cargandoMarcas,
+  pagination: paginacionMarcas,
+  onRequest: onRequestMarcas,
+  reload: cargarMarcas,
+} = useListadoServer<BiometricCheck>(
+  (page) => listChecksPage({ only_unmatched: soloNoMapeadas.value }, page),
+  { errorMessage: 'No se pudieron cargar las marcas.', auto: false, rowsPerPage: 50 },
+);
 
 const checkCols: QTableColumn<BiometricCheck>[] = [
   { name: 'external_code', label: 'Código aparato', field: 'external_code', align: 'left' },
@@ -331,17 +345,6 @@ async function subirArchivo() {
     $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo importar el archivo.') });
   } finally {
     subiendo.value = false;
-  }
-}
-
-async function cargarMarcas() {
-  cargandoMarcas.value = true;
-  try {
-    checks.value = await listChecks({ only_unmatched: soloNoMapeadas.value });
-  } catch (e) {
-    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudieron cargar las marcas.') });
-  } finally {
-    cargandoMarcas.value = false;
   }
 }
 

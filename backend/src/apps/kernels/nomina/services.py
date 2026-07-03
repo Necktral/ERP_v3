@@ -397,18 +397,36 @@ def compute_all_entries_in_sheet(*, sheet: PayrollSheet, worker_count: int | Non
     """Recalcula todas las entradas de una planilla. Retorna cantidad procesada.
 
     Si `worker_count` es None se deriva del conteo real de trabajadores del período (BUG-7).
+
+    Oleada 3: cómputo en memoria + UN bulk_update para toda la planilla (antes:
+    un UPDATE completo por entrada). Equivalencia campo por campo garantizada
+    por tests/test_golden_compute_sheet_bulk.py — el neto legal no se toca.
     """
     company = sheet.period.company
     period_date = sheet.period.start_date
     config = NominaConfig.get_active(company=company, date=period_date)
     if worker_count is None:
         worker_count = _worker_count_for_period(sheet.period)
-    count = 0
-    for entry in sheet.entries.all():
+
+    entries = list(sheet.entries.all())
+    now = timezone.now()
+    for entry in entries:
         entry.compute_all(config=config, worker_count=worker_count)
-        entry.save()
-        count += 1
-    return count
+        # updated_at es auto_now: save() lo refrescaba, bulk_update NO — se fija
+        # explícito para conservar la traza de recálculo.
+        entry.updated_at = now
+
+    if entries:
+        campos = [
+            f.name
+            for f in PayrollEntry._meta.concrete_fields
+            if not f.primary_key and f.name not in ("sheet", "employee", "created_at", "sync_uid", "origin_node")
+        ]
+        # Atómico: en planillas grandes bulk_update parte en varios statements
+        # (batch_size); un fallo a mitad no debe dejar la planilla a medias.
+        with transaction.atomic():
+            PayrollEntry.objects.bulk_update(entries, campos, batch_size=200)
+    return len(entries)
 
 
 # ---------------------------------------------------------------------------

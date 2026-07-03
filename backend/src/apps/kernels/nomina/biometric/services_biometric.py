@@ -262,35 +262,50 @@ class IngestResult:
 def ingest_checks(
     *, device: BiometricDevice, parsed_checks: list[ParsedCheck], batch: BiometricImportBatch | None = None
 ) -> IngestResult:
-    """Inserta chequeos de forma idempotente (reimportar/reenviar no duplica)."""
+    """Inserta chequeos de forma idempotente (reimportar/reenviar no duplica).
+
+    Oleada 3: dedupe por LOTE — un solo query trae las keys ya existentes y las
+    filas nuevas entran con UN bulk_create (antes: exists() + INSERT por marcaje).
+    Misma semántica: el duplicado dentro del MISMO lote también se descarta.
+    """
     created = duplicates = unmatched = 0
     company = device.company
     match_cache: dict[str, Employee | None] = {}
 
-    for p in parsed_checks:
-        key = _dedupe_key(device, p)
-        if BiometricCheck.objects.filter(dedupe_key=key).exists():
+    keys = [_dedupe_key(device, p) for p in parsed_checks]
+    existentes = set(
+        BiometricCheck.objects.filter(dedupe_key__in=keys).values_list("dedupe_key", flat=True)
+    )
+
+    nuevos: list[BiometricCheck] = []
+    vistos: set[str] = set()
+    for p, key in zip(parsed_checks, keys):
+        if key in existentes or key in vistos:
             duplicates += 1
             continue
+        vistos.add(key)
         if p.external_code not in match_cache:
             match_cache[p.external_code] = match_employee(company=company, external_code=p.external_code)
         employee = match_cache[p.external_code]
         if employee is None:
             unmatched += 1
-        BiometricCheck.objects.create(
-            device=device,
-            company=company,
-            employee=employee,
-            external_code=p.external_code,
-            external_name=p.external_name,
-            direction=p.direction,
-            checked_at=p.checked_at,
-            work_date=timezone.localtime(p.checked_at).date(),
-            import_batch=batch,
-            raw=p.raw,
-            dedupe_key=key,
+        nuevos.append(
+            BiometricCheck(
+                device=device,
+                company=company,
+                employee=employee,
+                external_code=p.external_code,
+                external_name=p.external_name,
+                direction=p.direction,
+                checked_at=p.checked_at,
+                work_date=timezone.localtime(p.checked_at).date(),
+                import_batch=batch,
+                raw=p.raw,
+                dedupe_key=key,
+            )
         )
         created += 1
+    BiometricCheck.objects.bulk_create(nuevos, batch_size=500)
     return IngestResult(created=created, duplicates=duplicates, unmatched=unmatched)
 
 

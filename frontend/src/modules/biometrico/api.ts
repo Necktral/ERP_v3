@@ -6,7 +6,7 @@
  * consolidar las marcas al período de planilla (rollup).
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export interface BiometricDevice {
   id: number;
@@ -112,6 +112,27 @@ export async function listChecks(params: {
     },
   });
   return data.results;
+}
+
+/**
+ * Variante paginada server-side (envelope completo con `count`): las marcas son
+ * la tabla que más crece del reloj (cada día suma chequeos de todos los
+ * aparatos). El backend no acepta `ordering`.
+ */
+export async function listChecksPage(
+  filtros: { work_date?: string; employee_id?: number; only_unmatched?: boolean },
+  page: PageReq,
+): Promise<Paginated<BiometricCheck>> {
+  const { data } = await api.get<Paginated<BiometricCheck>>(`${BASE}/checks/`, {
+    params: {
+      limit: page.limit,
+      offset: page.offset,
+      ...(filtros.work_date ? { work_date: filtros.work_date } : {}),
+      ...(filtros.employee_id ? { employee_id: filtros.employee_id } : {}),
+      ...(filtros.only_unmatched ? { only_unmatched: 1 } : {}),
+    },
+  });
+  return data;
 }
 
 /** Mapea el código del aparato a un empleado; re-asocia las marcas pendientes de ese código. */
