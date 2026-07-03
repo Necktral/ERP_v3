@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 from datetime import date, timedelta
 
 from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 
@@ -229,6 +229,18 @@ def link_billing_document_to_receivable(*, outbox_event, actor_user=None) -> Dic
     company = outbox_event.company
 
     with transaction.atomic():
+        # U12 (oleada 5): el chequeo filter-first tiene ventana de carrera y
+        # Receivable no tiene constraint único por (company, reference) — dos
+        # consumidores simultáneos del mismo evento podrían crear doble CxC.
+        # Advisory lock por (company, doc) — mismo patrón que BUG-004/BUG-008:
+        # la BD arbitra, el segundo espera y ve la CxC del primero.
+        # Forma de 1 argumento (bigint) con key hasheada: la de 2 args es int4
+        # y desbordaría con BigAutoField (DEFAULT_AUTO_FIELD del proyecto).
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                [f"portfolio:link_billing:{int(company.id)}:{doc_id}"],
+            )
         existing = Receivable.objects.filter(
             company=company, reference_type="BILLING_DOC", reference_id=doc_id
         ).first()

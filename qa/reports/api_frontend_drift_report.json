@@ -1,14 +1,14 @@
 {
   "status": "passed",
-  "generated_at": "2026-07-03T02:49:30.311658+00:00",
+  "generated_at": "2026-07-03T03:38:51.134250+00:00",
   "summary": {
     "backend_routes_total": 504,
     "kernel_routes_total": 192,
-    "frontend_calls_total": 375,
+    "frontend_calls_total": 380,
     "dynamic_calls_skipped": 2,
     "broken_calls": 0,
-    "kernel_orphans_total": 24,
-    "orphans_baselined": 24,
+    "kernel_orphans_total": 19,
+    "orphans_baselined": 19,
     "orphans_unbaselined": 0,
     "stale_baseline_entries": 0
   },

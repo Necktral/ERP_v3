@@ -68,20 +68,39 @@ export interface Credit {
   id: number;
   obligation_id: string;
   company: number;
-  party: number;
-  status: ObligationStatus;
+  // El serializer NO expone `party`: el deudor es `borrower_party`.
+  borrower_party: number;
+  lender_party: number;
+  guarantor_party: number | null;
   credit_type: string;
   credit_status: string;
   contract_number: string;
   currency: string;
+  approved_amount: string;
+  disbursed_amount: string;
   principal_amount: string;
+  interest_amount: string;
+  allocated_amount: string;
   total_amount: string;
   outstanding_amount: string;
   interest_rate: string;
+  interest_calculation_method: string;
+  payment_frequency: string;
   term_months: number | null;
+  grace_period_months: number;
   approval_date: string | null;
   disbursement_date: string | null;
+  first_payment_date: string | null;
   maturity_date: string | null;
+  due_date: string;
+  late_payment_penalty_rate: string;
+  days_past_due: number;
+  collateral_type: string;
+  collateral_value: string | null;
+  loan_to_value_ratio: string | null;
+  collateral_description: string;
+  restructure_count: number;
+  notes: string;
 }
 
 export interface AllocationRow {
@@ -141,6 +160,12 @@ export async function listCredits(): Promise<Credit[]> {
   return data;
 }
 
+/** Detalle fresco de un crédito (el saldo/interés cambia con devengos y abonos). */
+export async function getCredit(id: number): Promise<Credit> {
+  const { data } = await api.get<Credit>(`/portfolio/credits/${id}/`);
+  return data;
+}
+
 export async function disburseCredit(
   id: number,
   input: { disbursed_amount: string; disbursement_date: string },
@@ -151,6 +176,86 @@ export async function disburseCredit(
 
 export async function listAllocations(): Promise<AllocationRow[]> {
   const { data } = await api.get<AllocationRow[]>('/portfolio/allocations/');
+  return data;
+}
+
+// --- O5: devengo de intereses (InterestAccrualViewSet, solo lectura) ----------
+
+export interface InterestAccrual {
+  id: number;
+  accrual_id: string;
+  credit: number;
+  accrual_date: string;
+  period_start: string;
+  period_end: string;
+  days_in_period: number;
+  principal_balance: string;
+  interest_rate_applied: string;
+  accrued_interest: string;
+  is_capitalized: boolean;
+  capitalized_at: string | null;
+  calculation_method: string;
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+}
+
+/** Listado de devengos (array plano; filtra por crédito y/o capitalización). */
+export async function listInterestAccruals(
+  filters: { credit?: number; is_capitalized?: boolean } = {},
+): Promise<InterestAccrual[]> {
+  const params: Record<string, string | number | boolean> = {};
+  if (filters.credit) params.credit = filters.credit;
+  if (filters.is_capitalized !== undefined) params.is_capitalized = filters.is_capitalized;
+  const { data } = await api.get<InterestAccrual[]>('/portfolio/interest-accruals/', { params });
+  return data;
+}
+
+/** Detalle fresco de un devengo (trae metadata_json con el cálculo completo). */
+export async function getInterestAccrual(id: number): Promise<InterestAccrual> {
+  const { data } = await api.get<InterestAccrual>(`/portfolio/interest-accruals/${id}/`);
+  return data;
+}
+
+// --- O5: configuración de cartera (PortfolioSettingsViewSet, 1 por empresa) ---
+
+export interface PortfolioSettings {
+  company: number;
+  aging_buckets_json: Record<string, string>;
+  auto_allocate_payments: boolean;
+  allocation_strategy: string;
+  interest_accrual_frequency: string;
+  auto_capitalize_interest: boolean;
+  auto_writeoff_enabled: boolean;
+  auto_writeoff_days: number;
+  gate_mode: string;
+  functional_currency: string;
+  auto_convert_currency: boolean;
+  sync_with_billing: boolean;
+  sync_with_procurement: boolean;
+  integration_mode: string;
+  settings_json: Record<string, unknown>;
+  updated_at: string;
+}
+
+export type PortfolioSettingsInput = Partial<Omit<PortfolioSettings, 'company' | 'updated_at'>>;
+
+/** La configuración es única por empresa: el listado (scoped) trae 0 o 1 filas. */
+export async function getPortfolioSettings(): Promise<PortfolioSettings | null> {
+  const { data } = await api.get<PortfolioSettings[]>('/portfolio/settings/');
+  return data[0] ?? null;
+}
+
+export async function createPortfolioSettings(input: PortfolioSettingsInput): Promise<PortfolioSettings> {
+  const { data } = await api.post<PortfolioSettings>('/portfolio/settings/', input);
+  return data;
+}
+
+/** El pk del recurso es el id de la empresa (OneToOne company ↔ settings). */
+export async function updatePortfolioSettings(
+  companyId: number,
+  input: PortfolioSettingsInput,
+): Promise<PortfolioSettings> {
+  const { data } = await api.patch<PortfolioSettings>(`/portfolio/settings/${companyId}/`, input);
   return data;
 }
 

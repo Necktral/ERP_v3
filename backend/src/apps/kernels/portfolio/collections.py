@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Any, Optional
 
 from django.db import transaction
+from django.db.models import DecimalField, ExpressionWrapper, F
 from django.utils import timezone
 
 from .models import CollectionReminder, ObligationStatus, Receivable
@@ -49,14 +50,30 @@ def _base_level(days_overdue: int) -> int:
 
 
 def _overdue_receivables(*, company, party_id: Optional[int] = None):
+    """CxC vencidas con saldo, filtradas EN LA BD (oleada 5).
+
+    Antes traía TODA la cartera vencida a memoria y filtraba el outstanding
+    en Python; ahora el saldo (componentes − asignado) se calcula y filtra
+    sargable en el queryset.
+    """
     today = timezone.localdate()
-    qs = Receivable.objects.filter(
-        company=company, status__in=_OPEN_STATUSES,
-        due_date__isnull=False, due_date__lt=today,
-    ).select_related("party")
+    outstanding = ExpressionWrapper(
+        F("principal_amount") + F("interest_amount") + F("fee_amount")
+        + F("penalty_amount") - F("allocated_amount"),
+        output_field=DecimalField(max_digits=18, decimal_places=2),
+    )
+    qs = (
+        Receivable.objects.filter(
+            company=company, status__in=_OPEN_STATUSES,
+            due_date__isnull=False, due_date__lt=today,
+        )
+        .annotate(outstanding_db=outstanding)
+        .filter(outstanding_db__gt=0)
+        .select_related("party")
+    )
     if party_id is not None:
         qs = qs.filter(party_id=party_id)
-    return [rx for rx in qs if rx.outstanding_amount > 0]
+    return list(qs)
 
 
 def _last_reminder(*, company, party_id: int, currency: str) -> Optional[CollectionReminder]:
@@ -104,9 +121,19 @@ def collections_workbench(*, company) -> list[dict[str, Any]]:
         g["total_outstanding"] += _q2(rx.outstanding_amount)
         g["max_days_overdue"] = max(g["max_days_overdue"], (today - rx.due_date).days)
 
+    # Último recordatorio por (cliente, moneda) en UNA query (antes: una por
+    # grupo). DISTINCT ON de Postgres: la primera fila de cada grupo ordenado
+    # por -created_at es la más reciente.
+    last_by_key: dict[tuple[int, str], CollectionReminder] = {
+        (r.party_id, r.currency): r
+        for r in CollectionReminder.objects.filter(company=company)
+        .order_by("party_id", "currency", "-created_at")
+        .distinct("party_id", "currency")
+    }
+
     rows: list[dict[str, Any]] = []
     for (party_id, currency), g in groups.items():
-        last = _last_reminder(company=company, party_id=party_id, currency=currency)
+        last = last_by_key.get((party_id, currency))
         cooldown = (
             last is not None
             and (timezone.now() - last.created_at) < timedelta(days=REMINDER_COOLDOWN_DAYS)

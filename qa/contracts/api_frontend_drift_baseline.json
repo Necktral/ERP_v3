@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-07-03T02:44:05.660198+00:00",
+  "generated_at": "2026-07-03T03:38:16.494484+00:00",
   "orphans": {
     "accounting/health": {
       "route": "/accounting/health/",
@@ -59,50 +59,20 @@
     "portfolio/allocations/<p>": {
       "route": "/portfolio/allocations/<p>/",
       "module": "apps.kernels.portfolio.urls",
-      "reason": "detalle de allocation sin UI (solo listado)",
-      "planned_wave": "O5"
-    },
-    "portfolio/credits/<p>": {
-      "route": "/portfolio/credits/<p>/",
-      "module": "apps.kernels.portfolio.urls",
-      "reason": "detalle de crédito sin UI (solo listado/disburse)",
-      "planned_wave": "O5"
-    },
-    "portfolio/interest-accruals": {
-      "route": "/portfolio/interest-accruals/",
-      "module": "apps.kernels.portfolio.urls",
-      "reason": "devengo de intereses sin UI",
-      "planned_wave": "O5"
-    },
-    "portfolio/interest-accruals/<p>": {
-      "route": "/portfolio/interest-accruals/<p>/",
-      "module": "apps.kernels.portfolio.urls",
-      "reason": "devengo de intereses sin UI",
-      "planned_wave": "O5"
+      "reason": "retrieve del ViewSet con el mismo serializer que el listado (sin campos extra); la fila de Aplicaciones ya trae todo y la reversa vive en payments; sin UI de detalle por decisión (O5)",
+      "planned_wave": null
     },
     "portfolio/payables/<p>": {
       "route": "/portfolio/payables/<p>/",
       "module": "apps.kernels.portfolio.urls",
-      "reason": "detalle de payable sin UI (solo listado)",
-      "planned_wave": "O5"
+      "reason": "retrieve del ViewSet con el mismo serializer que el listado (sin campos extra); la fila de CxP ya trae todo y el pago sale del listado (PagoProveedorDialog); sin UI de detalle por decisión (O5)",
+      "planned_wave": null
     },
     "portfolio/receivables/<p>": {
       "route": "/portfolio/receivables/<p>/",
       "module": "apps.kernels.portfolio.urls",
-      "reason": "detalle de receivable sin UI (solo listado/acciones)",
-      "planned_wave": "O5"
-    },
-    "portfolio/settings": {
-      "route": "/portfolio/settings/",
-      "module": "apps.kernels.portfolio.urls",
-      "reason": "configuración de cartera sin UI",
-      "planned_wave": "O5"
-    },
-    "portfolio/settings/<p>": {
-      "route": "/portfolio/settings/<p>/",
-      "module": "apps.kernels.portfolio.urls",
-      "reason": "configuración de cartera sin UI",
-      "planned_wave": "O5"
+      "reason": "retrieve del ViewSet con el mismo serializer que el listado (sin campos extra); la fila de CxC ya trae todo y las acciones adjust/writeoff salen del listado; sin UI de detalle por decisión (O5)",
+      "planned_wave": null
     },
     "reporting/catalog": {
       "route": "/reporting/catalog/",

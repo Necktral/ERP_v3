@@ -7,6 +7,14 @@
       @refresh="reload"
     >
       <template #actions>
+        <q-btn
+          v-if="puedeVerIntereses"
+          flat
+          no-caps
+          icon="percent"
+          label="Intereses"
+          to="/cartera/intereses"
+        />
         <BackButton to="/cartera" />
       </template>
     </PageHeader>
@@ -22,7 +30,7 @@
       no-data-label="No hay créditos registrados."
     >
       <template #body-cell-parte="props">
-        <q-td :props="props">{{ nombreParte(props.row.party) }}</q-td>
+        <q-td :props="props">{{ nombreParte(props.row.borrower_party) }}</q-td>
       </template>
       <template #body-cell-monto="props">
         <q-td :props="props">{{ formatMoney(props.row.principal_amount) }}</q-td>
@@ -38,6 +46,15 @@
       <template #body-cell-acciones="props">
         <q-td :props="props" class="text-right">
           <q-btn
+            flat
+            dense
+            no-caps
+            size="sm"
+            icon="visibility"
+            label="Detalle"
+            @click="abrirDetalle(props.row)"
+          />
+          <q-btn
             v-if="puedeDesembolsar && (props.row.credit_status === 'PENDING' || props.row.credit_status === 'APPROVED')"
             flat
             dense
@@ -52,13 +69,20 @@
       </template>
     </q-table>
 
+    <!-- Diálogo: detalle del crédito (fetch fresco + devengos de interés) -->
+    <CreditoDetalleDialog
+      v-model="dlgDetalle"
+      :credito-id="creditoDetalleId"
+      :nombres-parte="nombresParte"
+    />
+
     <!-- Diálogo: desembolsar -->
     <q-dialog v-model="dlgDesembolso">
       <q-card class="app-dialog">
         <q-card-section class="text-h6">Desembolsar crédito</q-card-section>
         <q-card-section class="app-form">
           <div class="text-caption text-muted">
-            {{ objetivo ? `${nombreParte(objetivo.party)} · principal ${formatMoney(objetivo.principal_amount)}` : '' }}
+            {{ objetivo ? `${nombreParte(objetivo.borrower_party)} · principal ${formatMoney(objetivo.principal_amount)}` : '' }}
           </div>
           <q-input v-model="formDes.monto" outlined dense type="number" min="0" label="Monto a desembolsar C$ *" />
           <q-input v-model="formDes.fecha" outlined dense type="date" label="Fecha de desembolso *" />
@@ -85,6 +109,7 @@ import BackButton from 'src/components/BackButton.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
+import CreditoDetalleDialog from 'src/modules/portfolio/components/CreditoDetalleDialog.vue';
 import { apiErrorMessage } from 'src/core/api';
 import { useListado } from 'src/core/composables/useListado';
 import { formatDate, formatMoney } from 'src/core/format';
@@ -113,13 +138,18 @@ const puedeDesembolsar = computed(() => {
   return companyId ? acl.hasPermission(companyId, 'portfolio.credit.disburse') : false;
 });
 
+const puedeVerIntereses = computed(() => {
+  const companyId = ctx.activeCompanyId;
+  return companyId ? acl.hasPermission(companyId, 'portfolio.interest.read') : false;
+});
+
 function nombreParte(partyId: number): string {
   return nombresParte.value.get(partyId) ?? `Tercero #${partyId}`;
 }
 
 const columns: QTableColumn<Credit>[] = [
   { name: 'contrato', label: 'Contrato', field: 'contract_number', align: 'left' },
-  { name: 'parte', label: 'Deudor', field: 'party', align: 'left' },
+  { name: 'parte', label: 'Deudor', field: 'borrower_party', align: 'left' },
   { name: 'tipo', label: 'Tipo', field: 'credit_type', align: 'left' },
   { name: 'monto', label: 'Principal', field: 'principal_amount', align: 'right' },
   { name: 'saldo', label: 'Saldo', field: 'outstanding_amount', align: 'right' },
@@ -128,6 +158,15 @@ const columns: QTableColumn<Credit>[] = [
   { name: 'estado', label: 'Estado', field: 'credit_status', align: 'left' },
   { name: 'acciones', label: '', field: 'id', align: 'right' },
 ];
+
+// --- Detalle ---
+const dlgDetalle = ref(false);
+const creditoDetalleId = ref<number | null>(null);
+
+function abrirDetalle(c: Credit) {
+  creditoDetalleId.value = c.id;
+  dlgDetalle.value = true;
+}
 
 // --- Desembolso ---
 const dlgDesembolso = ref(false);

@@ -15,6 +15,14 @@
           label="Créditos"
           to="/cartera/creditos"
         />
+        <q-btn
+          v-if="puede('portfolio.settings.read')"
+          flat
+          no-caps
+          icon="tune"
+          label="Configuración"
+          to="/cartera/configuracion"
+        />
       </template>
     </PageHeader>
 
@@ -30,7 +38,7 @@
       <q-tab name="cxc" icon="call_received" label="Por cobrar (CxC)" />
       <q-tab v-if="puede('portfolio.payable.read')" name="cxp" icon="call_made" label="Por pagar (CxP)" />
       <q-tab
-        v-if="puede('portfolio.payment.allocation.read')"
+        v-if="puede('portfolio.allocation.read')"
         name="aplicaciones"
         icon="rule"
         label="Aplicaciones"
@@ -368,7 +376,7 @@ async function recargar() {
         }),
       );
     }
-    if (puede('portfolio.payment.allocation.read')) {
+    if (puede('portfolio.allocation.read')) {
       tareas.push(
         listAllocations().then((r) => {
           aplicaciones.value = r;

@@ -123,5 +123,15 @@ inventarios → **O2** payments+accounting → **O3** nómina núcleo → **O4**
   (baseline 39 → 24). **U15 HECHO**: SoD certificado + 2 tests nuevos de idempotencia (re-consolidar
   no duplica y se bloquea tras aprobar; re-aplicar no mueve días ni neto). MEJORA anotada: faltan GET
   de solicitudes SoD y de cuadrillas/rollcall del día (la UI degrada a bitácora/localStorage).
-- O5-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
+- **O5 — portfolio (`oleada-5/portfolio`): HECHA.** Cartera vencida filtrada sargable en la BD
+  (outstanding con F() — antes cargaba TODA la cartera a Python) y último recordatorio por grupo en
+  1 query (DISTINCT ON); budget: la mesa de cobranza cuesta lo mismo con 2 que con 8 clientes.
+  **U12 HECHO**: doble-CxC concurrente verificado (test 2 hilos) + endurecido con advisory lock
+  bigint (hashtextextended — la forma de 2 args es int4 y desbordaría con BigAutoField). UI:
+  InteresesPage (devengos con detalle), ConfiguracionCarteraPage (settings honestos: solo lo
+  implementado), detalle de crédito con devengos; fixes de la revisión: permiso fantasma
+  `portfolio.payment.allocation.read` (la pestaña Aplicaciones nunca se mostraba) y tipo `Credit`
+  desalineado del serializer. Baseline L4: 24 → 19 (retrieves sin campos extra baselineados con
+  razón honesta, no cableado postizo).
+- O6-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
   están enumerados con su oleada en `qa/contracts/api_frontend_drift_baseline.json`).

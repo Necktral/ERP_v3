@@ -246,6 +246,22 @@ export const NAV: NavItem[] = [
     section: 'Caja',
   },
   {
+    module: 'portfolio',
+    label: 'Intereses de créditos',
+    icon: 'percent',
+    to: '/cartera/intereses',
+    perm: 'portfolio.interest.read',
+    section: 'Caja',
+  },
+  {
+    module: 'portfolio',
+    label: 'Configuración de cartera',
+    icon: 'tune',
+    to: '/cartera/configuracion',
+    perm: 'portfolio.settings.read',
+    section: 'Caja',
+  },
+  {
     module: 'billing',
     label: 'Historial de ventas',
     icon: 'receipt_long',
