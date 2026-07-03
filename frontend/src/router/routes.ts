@@ -659,6 +659,28 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['report.dashboard.read'] },
       },
       {
+        path: 'reportes',
+        name: 'reportes-catalogo',
+        component: () => import('src/modules/reportes/pages/CatalogoReportesPage.vue'),
+        // Catálogo del kernel reporting (CatalogListView); ejecutar/exportar se
+        // gatean en la página (report.dataset.read / report.dataset.export).
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['report.catalog.read'] },
+      },
+      {
+        path: 'reportes/ejecuciones',
+        name: 'reportes-ejecuciones',
+        component: () => import('src/modules/reportes/pages/EjecucionesPage.vue'),
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['report.run.read'] },
+      },
+      {
+        path: 'reportes/snapshots',
+        name: 'reportes-snapshots',
+        component: () => import('src/modules/reportes/pages/SnapshotsPage.vue'),
+        // Listado exige report.run.read (SnapshotsListView); generar se gatea en
+        // la página con report.snapshot.generate (SnapshotGenerateView).
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['report.run.read'] },
+      },
+      {
         path: 'documentos',
         name: 'documentos',
         component: () => import('src/modules/documents/pages/EscaneosPage.vue'),

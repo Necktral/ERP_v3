@@ -133,5 +133,12 @@ inventarios → **O2** payments+accounting → **O3** nómina núcleo → **O4**
   `portfolio.payment.allocation.read` (la pestaña Aplicaciones nunca se mostraba) y tipo `Credit`
   desalineado del serializer. Baseline L4: 24 → 19 (retrieves sin campos extra baselineados con
   razón honesta, no cableado postizo).
-- O6-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
-  están enumerados con su oleada en `qa/contracts/api_frontend_drift_baseline.json`).
+- **O6 — reporting (`oleada-6/reporting`): HECHA.** Adaptadores hr (headcount con GROUP BY en BD) e
+  inventory (totales agregados en BD + detalle con tope 5000 y warning — patrón GL) — antes iteraban
+  todo en Python; cache TTL 45s SOLO para datasets `CACHE_ALLOWED` (contrato de freshness; LIVE_ONLY
+  nunca cachea) con copias profundas. fuel.py DIFERIDO con razón (módulo dormido todo el demo).
+  UI: módulo `reportes` nuevo — CatalogoReportesPage (ejecutar con filtros dinámicos por
+  filters_schema, exportar con POLL en background y backoff, vistas guardadas), EjecucionesPage y
+  SnapshotsPage (server-side); las funciones reporting salen del dashboard a una sola casa.
+  Baseline L4: 19 → 12 huérfanos. U21 EN-CURSO.
+- O7: pendiente (sync engine + cierre de calidad frontend).

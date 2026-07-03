@@ -3,40 +3,59 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum, Value
+from django.db.models.functions import Coalesce
+
 from apps.kernels.inventarios.models import StockBalance, StockMovement
 from apps.kernels.reporting.exceptions import DatasetExecutionError
 
 from .utils import q2, q4, q6, resolve_bounds, resolve_date_range
 
+# Tope de filas de detalle (oleada 6): los totales salen agregados de la BD
+# (exactos sobre todo el rango); el detalle se corta para no materializar
+# históricos completos en memoria/JSON.
+MAX_DETAIL_ROWS = 5000
+
+_MONEY = DecimalField(max_digits=18, decimal_places=2)
+
 
 def _stock_balance_payload(*, company, branch, filters: dict[str, Any]) -> dict[str, Any]:
-    qs = (
-        StockBalance.objects.select_related("warehouse", "item")
-        .filter(company=company, branch=branch)
-        .order_by("warehouse__code", "item__sku")
+    qs = StockBalance.objects.filter(company=company, branch=branch)
+
+    valor = ExpressionWrapper(F("qty_on_hand") * F("avg_cost"), output_field=_MONEY)
+    totales = qs.aggregate(
+        qty=Coalesce(Sum("qty_on_hand"), Value(Decimal("0.0000"))),
+        value=Coalesce(Sum(valor), Value(Decimal("0.00"), output_field=_MONEY)),
     )
 
-    rows: list[dict[str, Any]] = []
-    total_qty = Decimal("0.0000")
-    total_value = Decimal("0.00")
+    detalle = list(
+        qs.values(
+            "warehouse__code", "warehouse__name", "item__sku", "item__name", "item__uom",
+            "qty_on_hand", "avg_cost",
+        )
+        .order_by("warehouse__code", "item__sku")[: MAX_DETAIL_ROWS + 1]
+    )
 
-    for bal in qs:
-        qty = Decimal(bal.qty_on_hand)
-        avg_cost = Decimal(bal.avg_cost)
-        value = qty * avg_cost
-        total_qty += qty
-        total_value += value
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    for bal in detalle[:MAX_DETAIL_ROWS]:
+        qty = Decimal(bal["qty_on_hand"])
+        avg_cost = Decimal(bal["avg_cost"])
         rows.append(
             {
-                "warehouse_code": str(bal.warehouse.code),
-                "warehouse_name": str(bal.warehouse.name),
-                "sku": str(bal.item.sku),
-                "item_name": str(bal.item.name),
-                "uom": str(bal.item.uom),
+                "warehouse_code": str(bal["warehouse__code"]),
+                "warehouse_name": str(bal["warehouse__name"]),
+                "sku": str(bal["item__sku"]),
+                "item_name": str(bal["item__name"]),
+                "uom": str(bal["item__uom"]),
                 "qty_on_hand": q4(qty),
                 "avg_cost": q6(avg_cost),
-                "stock_value": q2(value),
+                "stock_value": q2(qty * avg_cost),
             }
+        )
+    if len(detalle) > MAX_DETAIL_ROWS:
+        warnings.append(
+            f"Detalle truncado a {MAX_DETAIL_ROWS} filas; los totales cubren todo el inventario."
         )
 
     return {
@@ -45,10 +64,10 @@ def _stock_balance_payload(*, company, branch, filters: dict[str, Any]) -> dict[
         "measures": ["qty_on_hand", "avg_cost", "stock_value"],
         "rows": rows,
         "totals": {
-            "qty_on_hand": q4(total_qty),
-            "stock_value": q2(total_value),
+            "qty_on_hand": q4(Decimal(totales["qty"])),
+            "stock_value": q2(Decimal(totales["value"])),
         },
-        "warnings": [],
+        "warnings": warnings,
         "source_summary": {"source_modules": ["INVENTORY"]},
         "effective_filters": {},
     }
@@ -58,34 +77,42 @@ def _movements_payload(*, company, branch, filters: dict[str, Any]) -> dict[str,
     date_from, date_to = resolve_date_range(filters)
     start, end = resolve_bounds(date_from=date_from, date_to=date_to)
 
-    qs = (
-        StockMovement.objects.select_related("warehouse", "item")
-        .filter(company=company, branch=branch, created_at__gte=start, created_at__lte=end)
-        .order_by("created_at", "id")
+    qs = StockMovement.objects.filter(
+        company=company, branch=branch, created_at__gte=start, created_at__lte=end
     )
 
-    rows: list[dict[str, Any]] = []
-    total_qty_delta = Decimal("0.0000")
-    total_cost = Decimal("0.00")
-    movement_count = 0
+    totales = qs.aggregate(
+        movement_count=Count("id"),
+        qty_delta=Coalesce(Sum("qty_delta"), Value(Decimal("0.0000"))),
+        total_cost=Coalesce(Sum("total_cost"), Value(Decimal("0.00"), output_field=_MONEY)),
+    )
 
-    for mov in qs:
-        qty_delta = Decimal(mov.qty_delta)
-        total_c = Decimal(mov.total_cost)
-        total_qty_delta += qty_delta
-        total_cost += total_c
-        movement_count += 1
-        rows.append(
-            {
-                "movement_type": str(mov.movement_type),
-                "warehouse_code": str(mov.warehouse.code),
-                "sku": str(mov.item.sku),
-                "item_name": str(mov.item.name),
-                "qty_delta": q4(qty_delta),
-                "unit_cost": q6(Decimal(mov.unit_cost)),
-                "total_cost": q2(total_c),
-                "source_module": str(mov.source_module or ""),
-            }
+    detalle = list(
+        qs.values(
+            "movement_type", "warehouse__code", "item__sku", "item__name",
+            "qty_delta", "unit_cost", "total_cost", "source_module",
+        )
+        .order_by("created_at", "id")[: MAX_DETAIL_ROWS + 1]
+    )
+
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = [
+        {
+            "movement_type": str(mov["movement_type"]),
+            "warehouse_code": str(mov["warehouse__code"]),
+            "sku": str(mov["item__sku"]),
+            "item_name": str(mov["item__name"]),
+            "qty_delta": q4(Decimal(mov["qty_delta"])),
+            "unit_cost": q6(Decimal(mov["unit_cost"])),
+            "total_cost": q2(Decimal(mov["total_cost"])),
+            "source_module": str(mov["source_module"] or ""),
+        }
+        for mov in detalle[:MAX_DETAIL_ROWS]
+    ]
+    if len(detalle) > MAX_DETAIL_ROWS:
+        warnings.append(
+            f"Detalle truncado a {MAX_DETAIL_ROWS} movimientos; los totales cubren TODO el rango. "
+            "Acotá el rango de fechas para ver el detalle completo."
         )
 
     return {
@@ -94,11 +121,11 @@ def _movements_payload(*, company, branch, filters: dict[str, Any]) -> dict[str,
         "measures": ["qty_delta", "unit_cost", "total_cost"],
         "rows": rows,
         "totals": {
-            "movement_count": movement_count,
-            "qty_delta": q4(total_qty_delta),
-            "total_cost": q2(total_cost),
+            "movement_count": int(totales["movement_count"]),
+            "qty_delta": q4(Decimal(totales["qty_delta"])),
+            "total_cost": q2(Decimal(totales["total_cost"])),
         },
-        "warnings": [],
+        "warnings": warnings,
         "source_summary": {"source_modules": ["INVENTORY"]},
         "effective_filters": {
             "date_from": date_from.isoformat(),

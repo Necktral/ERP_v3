@@ -117,17 +117,18 @@ import { computed, onMounted, ref, watch } from 'vue';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
 import { useQuasar } from 'quasar';
+import { listWorkspaces, type WorkspaceRow } from 'src/modules/dashboard/api';
+// El consumo del kernel reporting vive en el módulo de Reportes (una sola casa
+// para las rutas /reporting/*); Analítica reusa esas funciones.
 import {
   createRunExport,
   createSavedView,
   generateSnapshot,
   listSavedViews,
-  listWorkspaces,
   runDataset,
   type DatasetEnvelope,
   type SavedView,
-  type WorkspaceRow,
-} from 'src/modules/dashboard/api';
+} from 'src/modules/reportes/api';
 
 interface ReportView {
   key: string;
