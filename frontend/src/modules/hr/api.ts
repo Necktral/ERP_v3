@@ -5,7 +5,7 @@
  * `/api/org/branches/`). Las vistas NO llaman a axios directo: usan estas funciones.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export interface Position {
   id: number;
@@ -180,6 +180,14 @@ export async function listBranches(): Promise<Branch[]> {
 export async function listEmployees(): Promise<EmployeeRow[]> {
   const { data } = await api.get<Paginated<EmployeeRow>>('/hr/employees/', { params: PAGE });
   return data.results;
+}
+
+/** Página de trabajadores con envelope completo (para useListadoServer). */
+export async function listEmployeesPage(page: PageReq): Promise<Paginated<EmployeeRow>> {
+  const { data } = await api.get<Paginated<EmployeeRow>>('/hr/employees/', {
+    params: { limit: page.limit, offset: page.offset },
+  });
+  return data;
 }
 
 export async function createEmployee(input: EmployeeInput): Promise<number> {

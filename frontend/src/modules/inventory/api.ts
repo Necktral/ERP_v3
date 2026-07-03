@@ -190,6 +190,18 @@ export async function listItems(filters: { search?: string; is_active?: boolean 
   return data.results;
 }
 
+/** Página de artículos con envelope completo (para useListadoServer). */
+export async function listItemsPage(
+  filters: { search?: string; is_active?: boolean },
+  page: PageReq,
+): Promise<Paginated<InventoryItem>> {
+  const params: Record<string, string | number | boolean> = { limit: page.limit, offset: page.offset };
+  if (filters.search) params.search = filters.search;
+  if (filters.is_active !== undefined) params.is_active = filters.is_active;
+  const { data } = await api.get<Paginated<InventoryItem>>('/inventory/items/', { params });
+  return data;
+}
+
 export interface ItemInput {
   sku: string;
   name: string;
@@ -437,6 +449,17 @@ export async function listPhysicalCounts(filters: { status?: PhysicalCountStatus
   if (filters.status) params.status = filters.status;
   const { data } = await api.get<Paginated<PhysicalCountRow>>('/inventory/counts/', { params });
   return data.results;
+}
+
+/** Página de conteos con envelope completo (para useListadoServer). */
+export async function listPhysicalCountsPage(
+  filters: { status?: PhysicalCountStatus | '' },
+  page: PageReq,
+): Promise<Paginated<PhysicalCountRow>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (filters.status) params.status = filters.status;
+  const { data } = await api.get<Paginated<PhysicalCountRow>>('/inventory/counts/', { params });
+  return data;
 }
 
 export async function getPhysicalCount(countId: number): Promise<PhysicalCountDetail> {

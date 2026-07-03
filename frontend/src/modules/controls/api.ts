@@ -3,7 +3,7 @@
  * violaciones vivas por concesión y hallazgos materializados con triage.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export const FINDING_STATUS_LABELS: Record<string, string> = {
   OPEN: 'Abierto',
@@ -69,6 +69,17 @@ export async function listFindings(status?: string): Promise<ControlFinding[]> {
   if (status) params.status = status;
   const { data } = await api.get<Paginated<ControlFinding>>('/controls/findings/', { params });
   return data.results;
+}
+
+/** Página de hallazgos con envelope completo (para useListadoServer). */
+export async function listFindingsPage(
+  status: string | undefined,
+  page: PageReq,
+): Promise<Paginated<ControlFinding>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (status) params.status = status;
+  const { data } = await api.get<Paginated<ControlFinding>>('/controls/findings/', { params });
+  return data;
 }
 
 export async function resolveFinding(

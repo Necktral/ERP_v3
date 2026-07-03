@@ -33,10 +33,10 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U16 — hr module | PENDIENTE | |
 | U17 — compras | PENDIENTE | |
 | U18 — ventas | PENDIENTE | |
-| U19 — retail_pos + sync_engine | PENDIENTE | |
+| U19 — retail_pos + sync_engine | EN-CURSO | Oleada 7: `process_batch` con UNA transacción por chunk de 20 + savepoint explícito POR comando (antes: un commit/fsync por comando) — cualquier error de BD de un comando revierte solo su savepoint y el resto del chunk procesa; respuesta por comando y semántica de fallo idénticas. VERIFICADO-OK con las suites sync/POS completas (100 tests: contrato v2, comandos POS, retail_pos). Desviaciones documentadas: audit writes NO se bulkearon (write_event con encadenamiento — bulkear arriesga integridad de la bitácora); `run_retail_pos_edge_e2e.sh` requiere el perfil QA CI (contra el stack dev falla en login/Axes) — correr en `make qa-ci`. Falta: certificación profunda del kill-switch y firma de comandos |
 | U20 — comisariato + intercompany + parties | PENDIENTE | |
 | U21 — reporting kernel | EN-CURSO | Oleada 6: adaptadores hr (headcount GROUP BY en BD, antes iteraba todo en Python) e inventory (stock/movimientos: totales agregados en BD + detalle values() con tope 5000 y warning) = VERIFICADO-OK con la suite reporting verde; cache TTL 45s SOLO para freshness CACHE_ALLOWED (LIVE_ONLY nunca cachea, SNAPSHOT_REQUIRED va por snapshots; copias profundas para no contaminar el cache); `reporting_registry_contract_guard` verde. DIFERIDO con razón: fuel.py (módulo dormido todo el demo — convertir cuando despierte, U27). Falta: certificación profunda de la unidad (quality/lineage/exports) |
-| U22 — frontend core (boot/stores/router) | EN-CURSO | Oleada 0: hot-spot U22-3 (interceptor expulsaba a /403 ante CUALQUIER 403, incluidos polls) CERRADO — flag `background` en axios + polling del tablero marcado (**BUG-006**). Infra de paginación server-side (`useListadoServer` + `PageReq`/`toPageParams`) con pilotos en billing (FacturacionPage) y accounting (DiarioPage). Falta: resto de la unidad |
+| U22 — frontend core (boot/stores/router) | HECHO | Oleada 0: hot-spot U22-3 (interceptor expulsaba a /403 ante cualquier 403) CERRADO — flag `background` en axios (**BUG-006**); infra `useListadoServer` + `PageReq`. Oleada 7: poll del tablero con skip-si-no-cambió (sin re-render cada 60s si nada cambió); diccionario central de códigos (`core/codigos.ts` + `apiErrorMessage`, con tests) — códigos crudos traducidos a español con fallback honesto; 26 páginas en paginación server-side y las client-side restantes con comentario de decisión explícita. Certificado por typecheck/lint/vitest (20 tests) + guard L4 bloqueante |
 | U23 — frontend auth/org/rbac/devices | PENDIENTE | |
 | U24 — frontend hr/nomina/pagador | PENDIENTE | |
 | U25 — frontend ventas/pos/billing | PENDIENTE | |
@@ -53,7 +53,7 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | L1 — seguridad/authz (IDOR + self-auth) | PENDIENTE | |
 | L2 — concurrencia/idempotencia | PENDIENTE | |
 | L3 — integridad contable | PENDIENTE | |
-| L4 — calidad frontend | EN-CURSO | Oleada 0: guard automatizado `qa/api_frontend_drift_guard.py` (drift api.ts ↔ urls.py, ratchet+baseline): **0 cableado roto**; 43 huérfanos kernel baselineados con razón y oleada de cierre en `qa/contracts/api_frontend_drift_baseline.json`. `make qa-l4-drift`; en CI report-only (bloqueante desde O1). Falta: L4b (diccionario de códigos) |
+| L4 — calidad frontend | HECHO | Guard `qa/api_frontend_drift_guard.py` (drift api.ts ↔ urls.py) **BLOQUEANTE en CI** desde O7 (promesa de O0 cumplida). Baseline: 43 → **12** huérfanos a lo largo del programa (O1 pedidos-crédito, O2 accounting, O4 field/* completo, O5 portfolio, O6 reporting); los 12 restantes con razón honesta permanente (device-side, legacy, retrieves sin campos extra). **0 cableado roto** en todo el programa. L4b cerrada: diccionario central de códigos (O7) |
 | L5 — drift v2↔v3 y arrastre | PENDIENTE | |
 
 ---

@@ -3,7 +3,7 @@
  * BORRADOR → POSTEADO → ANULADO. El posteo asigna número y crea la CxP.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export type PurchaseDocType =
   | 'GOODS_RECEIPT'
@@ -62,6 +62,19 @@ export async function listPurchaseDocs(filters: PurchaseDocFilters = {}): Promis
   }
   const { data } = await api.get<Paginated<PurchaseDocRow>>('/procurement/docs/', { params });
   return data.results;
+}
+
+/** Variante paginada server-side (envelope completo con `count`). */
+export async function listPurchaseDocsPage(
+  filters: PurchaseDocFilters,
+  page: PageReq,
+): Promise<Paginated<PurchaseDocRow>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  for (const [k, v] of Object.entries(filters)) {
+    if (v) params[k] = v;
+  }
+  const { data } = await api.get<Paginated<PurchaseDocRow>>('/procurement/docs/', { params });
+  return data;
 }
 
 export async function getPurchaseDoc(docId: number): Promise<PurchaseDoc> {

@@ -55,14 +55,16 @@
     </div>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="No hay cuentas de crédito. Creá la primera con «Nueva cuenta»."
+      @request="onRequest"
     >
       <template #body-cell-segmento="props">
         <q-td :props="props">{{ SEGMENT_LABELS[props.row.segment as CustomerSegment] }}</q-td>
@@ -168,11 +170,11 @@ import { computed, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatMoney } from 'src/core/format';
 import PartySelect from 'src/modules/parties/components/PartySelect.vue';
 import {
-  listAccounts,
+  listAccountsPage,
   SEGMENT_LABELS,
   upsertAccount,
   type CreditAccount,
@@ -188,8 +190,10 @@ const ctx = useContextStore();
 const filtroQ = ref('');
 const filtroSegmento = ref<CustomerSegment | null>(null);
 
-const { rows, loading, reload } = useListado<CreditAccount>(
-  () => listAccounts({ q: filtroQ.value?.trim() ?? '', segment: filtroSegmento.value ?? '' }),
+// Paginación server-side: las cuentas (empleados + productores + público)
+// pueden superar 200 (antes truncaba en silencio).
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<CreditAccount>(
+  (page) => listAccountsPage({ q: filtroQ.value?.trim() ?? '', segment: filtroSegmento.value ?? '' }, page),
   { errorMessage: 'No se pudieron cargar las cuentas.' },
 );
 

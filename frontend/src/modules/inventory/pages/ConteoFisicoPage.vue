@@ -36,14 +36,16 @@
     <!-- ============== TAB CONTEOS ============== -->
     <template v-if="tab === 'conteos'">
       <q-table
+        v-model:pagination="pagination"
         class="app-table"
         :rows="rows"
         :columns="columns"
         row-key="id"
         flat
         :loading="loading"
-        :pagination="{ rowsPerPage: 25 }"
+        :rows-per-page-options="[10, 25, 50, 100]"
         no-data-label="No hay hojas de conteo. Generá una para empezar."
+        @request="onRequest"
         @row-click="(_, row) => abrirDetalle(row as PhysicalCountRow)"
       >
         <template #body-cell-estado="props">
@@ -321,9 +323,11 @@ function notificarError(e: unknown, fallback: string) {
 const tab = ref('conteos');
 
 // --- Conteos ---
-const { rows, loading, reload } = useListado<PhysicalCountRow>(() => listPhysicalCounts(), {
-  errorMessage: 'No se pudieron cargar los conteos.',
-});
+// Paginación server-side: las hojas de conteo se acumulan (antes truncaba a 200).
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<PhysicalCountRow>(
+  (page) => listPhysicalCountsPage({}, page),
+  { errorMessage: 'No se pudieron cargar los conteos.' },
+);
 
 const columns: QTableColumn<PhysicalCountRow>[] = [
   { name: 'id', label: '#', field: 'id', align: 'left' },

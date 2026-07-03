@@ -141,4 +141,17 @@ inventarios → **O2** payments+accounting → **O3** nómina núcleo → **O4**
   filters_schema, exportar con POLL en background y backoff, vistas guardadas), EjecucionesPage y
   SnapshotsPage (server-side); las funciones reporting salen del dashboard a una sola casa.
   Baseline L4: 19 → 12 huérfanos. U21 EN-CURSO.
-- O7: pendiente (sync engine + cierre de calidad frontend).
+- **O7 — sync + cierre de calidad frontend (`oleada-7/sync-y-cierre`): HECHA.** Riel POS offline:
+  `process_batch` con UNA transacción por chunk de 20 comandos + savepoint explícito por comando
+  (antes: un commit/fsync por comando; misma semántica de fallo y respuesta, 100 tests sync/POS
+  verdes). Frontend: poll del tablero con skip-si-no-cambió; diccionario central de códigos
+  (`core/codigos.ts` — L4b cerrada: los códigos crudos del backend se traducen a español); barrido
+  final de tablas (26 páginas en server-side; las restantes con comentario de decisión explícita;
+  las de módulos dormidos intactas). Guard L4 ahora **BLOQUEANTE en CI**. U19 EN-CURSO (kill-switch
+  y firma quedan para certificación futura), U22 HECHO.
+
+**PROGRAMA DE OLEADAS COMPLETO (O0-O7).** Resultado global: baseline L4 de 43 → 12 huérfanos
+justificados y 0 cableado roto; red de budgets de queries (ratchet) en `src/tests/perf/`; 4 bugs
+encontrados por test y cerrados (BUG-006 a BUG-009) + 2 endurecimientos de concurrencia (advisory
+locks); U8/U10/U11/U12/U15/U22/L4 HECHAS y U5/U7/U9/U13/U14/U19/U21/U26 avanzadas. Las ramas de
+oleada esperan PR en orden (ver `docs/TAREAS_GITHUB_CODEX.md`).

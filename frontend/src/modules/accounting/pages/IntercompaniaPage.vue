@@ -93,14 +93,16 @@
     <div class="ic-disputas">
       <div class="ic-disputas__title">Disputas intercompañía</div>
       <q-table
+        v-model:pagination="paginacionDisputas"
         class="app-table"
         :rows="disputas"
         :columns="colsDisputa"
         row-key="case_id"
         flat
         :loading="cargandoDisputas"
-        :pagination="{ rowsPerPage: 10 }"
+        :rows-per-page-options="[10, 25, 50]"
         no-data-label="Sin disputas registradas."
+        @request="onRequestDisputas"
       >
         <template #body-cell-estado="props">
           <q-td :props="props">{{ DISPUTE_STATUS_LABELS[props.row.status] ?? props.row.status }}</q-td>
@@ -199,7 +201,7 @@ import {
   disputeIntercompanyTx,
   IC_STATUS_LABELS,
   intercompanyAction,
-  listIntercompanyDisputes,
+  listIntercompanyDisputesPage,
   listIntercompanyTxsPage,
   reviewIntercompanyDispute,
   type DisputeCase,
@@ -310,8 +312,19 @@ const colsDisputa: QTableColumn<DisputeCase>[] = [
   { name: 'resumen', label: 'Resumen', field: 'summary', align: 'left' },
   { name: 'acciones', label: '', field: 'case_id', align: 'right' },
 ];
-const disputas = ref<DisputeCase[]>([]);
-const cargandoDisputas = ref(false);
+// Paginación server-side: antes se pedía sin limit y el backend truncaba a 50
+// en silencio. auto:false porque la carga está gateada por permiso.
+const {
+  rows: disputas,
+  loading: cargandoDisputas,
+  pagination: paginacionDisputas,
+  onRequest: onRequestDisputas,
+  reload: recargarDisputas,
+} = useListadoServer<DisputeCase>((page) => listIntercompanyDisputesPage(undefined, page), {
+  errorMessage: 'No se pudieron cargar las disputas.',
+  auto: false,
+  rowsPerPage: 10,
+});
 const dlgRevision = ref(false);
 const guardandoRevision = ref(false);
 const revision = reactive<{
@@ -323,14 +336,7 @@ const revision = reactive<{
 
 async function cargarDisputas() {
   if (!puede('accounting.intercompany.read')) return;
-  cargandoDisputas.value = true;
-  try {
-    disputas.value = await listIntercompanyDisputes();
-  } catch {
-    disputas.value = [];
-  } finally {
-    cargandoDisputas.value = false;
-  }
+  await recargarDisputas();
 }
 
 function abrirRevision(c: DisputeCase) {

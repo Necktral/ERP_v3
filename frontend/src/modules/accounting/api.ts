@@ -115,6 +115,17 @@ export async function listJournalDrafts(state?: string): Promise<JournalDraftRow
   return data.results;
 }
 
+/** Página de borradores con envelope completo (para useListadoServer). */
+export async function listJournalDraftsPage(
+  state: string | undefined,
+  page: PageReq,
+): Promise<Paginated<JournalDraftRow>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (state) params.state = state;
+  const { data } = await api.get<Paginated<JournalDraftRow>>('/accounting/journal-drafts/', { params });
+  return data;
+}
+
 export async function approveDrafts(limit = 200): Promise<{ attempted: number; approved: number; skipped: number }> {
   const { data } = await api.post('/accounting/journal-drafts/approve/', { limit });
   return data as { attempted: number; approved: number; skipped: number };
@@ -257,6 +268,14 @@ export async function listFxRates(): Promise<FxRateRow[]> {
   return Array.isArray(data) ? data : data.results;
 }
 
+/** Página de tasas de cambio con envelope completo (para useListadoServer). */
+export async function listFxRatesPage(page: PageReq): Promise<Paginated<FxRateRow>> {
+  const { data } = await api.get<Paginated<FxRateRow>>('/accounting/fx-rates/', {
+    params: { limit: page.limit, offset: page.offset },
+  });
+  return data;
+}
+
 export async function upsertFxRate(input: FxRateRow): Promise<void> {
   await api.post('/accounting/fx-rates/', input);
 }
@@ -357,6 +376,17 @@ export async function listIntercompanyDisputes(status?: string): Promise<Dispute
     { params },
   );
   return data.results;
+}
+
+/** Página de disputas con envelope completo (para useListadoServer). */
+export async function listIntercompanyDisputesPage(
+  status: string | undefined,
+  page: PageReq,
+): Promise<Paginated<DisputeCase>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (status) params.status = status;
+  const { data } = await api.get<Paginated<DisputeCase>>('/accounting/intercompany/disputes/', { params });
+  return data;
 }
 
 export async function listDisputeReasons(): Promise<DisputeReason[]> {

@@ -112,7 +112,7 @@ async function reload(background = false) {
   try {
     // El refresco del timer es background: un 403 no debe expulsar del tablero.
     const results = await Promise.allSettled(list.map((c) => getDailySummary(c.company_id, { background })));
-    boards.value = list.map((c, i) => {
+    const nuevos: Board[] = list.map((c, i) => {
       const r = results[i];
       const isActive = String(c.company_id) === activeId;
       if (r && r.status === 'fulfilled') {
@@ -132,6 +132,11 @@ async function reload(background = false) {
         error: true,
       };
     });
+    // En el poll de 60s, si nada cambió no se reasigna boards: evita re-render
+    // de todo el tablero cada minuto. El reload manual siempre pinta.
+    if (!background || JSON.stringify(nuevos) !== JSON.stringify(boards.value)) {
+      boards.value = nuevos;
+    }
     lastUpdated.value = new Date();
   } catch (e) {
     if (!lastUpdated.value) {

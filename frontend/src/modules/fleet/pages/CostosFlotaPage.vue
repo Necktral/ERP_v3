@@ -45,8 +45,11 @@
         <q-btn v-if="tab === 'exp'" unelevated no-caps color="primary" icon="receipt_long" label="Registrar gasto" @click="dlgExp = true" />
       </div>
 
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table v-if="tab === 'fuel'" class="app-table" flat :rows="fuelLogs" :columns="fuelCols" row-key="id" :pagination="{ rowsPerPage: 25 }" no-data-label="Sin cargas de combustible." />
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table v-if="tab === 'maint'" class="app-table" flat :rows="maintOrders" :columns="maintCols" row-key="id" :pagination="{ rowsPerPage: 25 }" no-data-label="Sin órdenes de mantenimiento." />
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table v-if="tab === 'exp'" class="app-table" flat :rows="expenses" :columns="expCols" row-key="id" :pagination="{ rowsPerPage: 25 }" no-data-label="Sin gastos." />
     </template>
 

@@ -82,14 +82,16 @@
 
     <q-table
       v-show="tab === 'documentos'"
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="No hay documentos de compra con esos filtros."
+      @request="onRequest"
       @row-click="(_, row) => abrirDetalle(row as PurchaseDocRow)"
     >
       <template #body-cell-numero="props">
@@ -200,12 +202,12 @@ import PreciosProveedorTab from 'src/modules/procurement/components/PreciosProve
 import ReordenTab from 'src/modules/procurement/components/ReordenTab.vue';
 import RequisicionesTab from 'src/modules/procurement/components/RequisicionesTab.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatMoney } from 'src/core/format';
 import PartySelect from 'src/modules/parties/components/PartySelect.vue';
 import {
   createPurchaseDoc,
-  listPurchaseDocs,
+  listPurchaseDocsPage,
   PURCHASE_DOC_TYPE_LABELS,
   type PurchaseDocRow,
   type PurchaseDocStatus,
@@ -231,13 +233,18 @@ const filtroQ = ref('');
 const filtroEstado = ref<PurchaseDocStatus | null>(null);
 const filtroTipo = ref<PurchaseDocType | null>(null);
 
-const { rows, loading, reload } = useListado<PurchaseDocRow>(
-  () =>
-    listPurchaseDocs({
-      q: filtroQ.value?.trim() ?? '',
-      status: filtroEstado.value ?? '',
-      doc_type: filtroTipo.value ?? '',
-    }),
+// Paginación server-side: los documentos de compra crecen sin límite (antes
+// truncaba a 200). reload() resetea a página 1 al cambiar filtros.
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<PurchaseDocRow>(
+  (page) =>
+    listPurchaseDocsPage(
+      {
+        q: filtroQ.value?.trim() ?? '',
+        status: filtroEstado.value ?? '',
+        doc_type: filtroTipo.value ?? '',
+      },
+      page,
+    ),
   { errorMessage: 'No se pudieron cargar los documentos de compra.' },
 );
 

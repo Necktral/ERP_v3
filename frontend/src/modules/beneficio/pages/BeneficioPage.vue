@@ -31,6 +31,7 @@
           Crea primero una receta.
         </span>
       </div>
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="orders"
         :columns="orderCols"
@@ -62,6 +63,7 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva receta" @click="abrirAltaReceta" />
       </div>
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="recetas"
         :columns="recipeCols"

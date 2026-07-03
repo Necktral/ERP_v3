@@ -18,6 +18,7 @@
       <template #prepend><q-icon name="search" /></template>
     </q-input>
 
+    <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
     <q-table
       :rows="filtradas"
       :columns="cols"

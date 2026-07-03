@@ -20,14 +20,16 @@
 
     <!-- Listado -->
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="employees"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="Aún no hay trabajadores. Empieza con el alta rápida de arriba."
+      @request="onRequest"
     >
       <template #body-cell-nombre="props">
         <q-td :props="props">
@@ -297,7 +299,7 @@ import {
   createAssignment,
   endAssignment,
   listBranches,
-  listEmployees,
+  listEmployeesPage,
   listPositions,
   provisionUser,
   updateEmployee,
@@ -305,14 +307,25 @@ import {
   type ProvisionResult,
 } from 'src/modules/hr/api';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import EmployeeAvatar from 'src/modules/hr/components/EmployeeAvatar.vue';
 import EmployeeRolesDialog from 'src/modules/hr/components/EmployeeRolesDialog.vue';
 
 const $q = useQuasar();
 
-const loading = ref(false);
 const saving = ref(false);
-const employees = ref<EmployeeRow[]>([]);
+
+// Paginación server-side: la plantilla crece y antes truncaba a 200 en silencio.
+const {
+  rows: employees,
+  loading,
+  pagination,
+  onRequest,
+  reload,
+} = useListadoServer<EmployeeRow>((page) => listEmployeesPage(page), {
+  errorMessage: 'No se pudieron cargar los trabajadores.',
+  auto: false, // onMounted de la página ya dispara reload junto con los selectores
+});
 
 const columns: QTableColumn<EmployeeRow>[] = [
   { name: 'employee_code', label: 'Código', field: 'employee_code', align: 'left' },
@@ -332,17 +345,6 @@ const columns: QTableColumn<EmployeeRow>[] = [
 // Selectores para diálogos
 const positionOptions = ref<{ label: string; value: number }[]>([]);
 const branchOptions = ref<{ label: string; value: number }[]>([]);
-
-async function reload() {
-  loading.value = true;
-  try {
-    employees.value = await listEmployees();
-  } catch {
-    $q.notify({ type: 'negative', message: 'No se pudieron cargar los trabajadores.' });
-  } finally {
-    loading.value = false;
-  }
-}
 
 async function loadSelectors() {
   try {

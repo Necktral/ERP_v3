@@ -20,6 +20,7 @@
       </template>
     </PageHeader>
 
+    <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
     <q-table
       class="app-table"
       :rows="rows"

@@ -20,6 +20,7 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva fijación" @click="abrirFix" />
       </div>
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table :rows="fixations" :columns="fixCols" row-key="id" flat bordered :loading="loadingFix" :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }" no-data-label="Sin fijaciones.">
         <template #body-cell-status="props">
           <q-td :props="props">
@@ -34,6 +35,7 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva liquidación" @click="abrirLiq" />
       </div>
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table :rows="liquidations" :columns="liqCols" row-key="id" flat bordered :loading="loadingLiq" :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }" no-data-label="Sin liquidaciones." />
     </div>
 

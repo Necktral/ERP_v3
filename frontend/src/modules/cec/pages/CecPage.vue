@@ -35,6 +35,7 @@
 
     <q-tab-panels v-model="tab" animated class="cec-panels">
       <q-tab-panel name="corridas" class="q-pa-none">
+        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="corridas"
@@ -70,6 +71,7 @@
       </q-tab-panel>
 
       <q-tab-panel name="excepciones" class="q-pa-none">
+        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="excepciones"

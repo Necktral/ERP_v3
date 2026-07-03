@@ -4,7 +4,7 @@
  * baja de inventario + CxC; el cobro a empleados se aplica en planilla.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export type CustomerSegment = 'EMPLOYEE' | 'PRODUCER' | 'PUBLIC';
 
@@ -36,6 +36,18 @@ export async function listAccounts(filters: { q?: string; segment?: CustomerSegm
   if (filters.segment) params.segment = filters.segment;
   const { data } = await api.get<Paginated<CreditAccount>>('/comisariato/accounts/', { params });
   return data.results;
+}
+
+/** Página de cuentas con envelope completo (para useListadoServer). */
+export async function listAccountsPage(
+  filters: { q?: string; segment?: CustomerSegment | '' },
+  page: PageReq,
+): Promise<Paginated<CreditAccount>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (filters.q) params.q = filters.q;
+  if (filters.segment) params.segment = filters.segment;
+  const { data } = await api.get<Paginated<CreditAccount>>('/comisariato/accounts/', { params });
+  return data;
 }
 
 export async function upsertAccount(input: {

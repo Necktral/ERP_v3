@@ -12,14 +12,16 @@
     </PageHeader>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="Aún no hay sesiones de caja."
+      @request="onRequest"
     >
       <template #body-cell-estado="props">
         <q-td :props="props">
@@ -94,12 +96,12 @@ import { computed, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDateTime, formatMoney } from 'src/core/format';
 import {
   approveReopen,
   CASH_SESSION_STATUS_LABELS,
-  listCashSessions,
+  listCashSessionsPage,
   requestReopenCashSession,
   type CashSessionRow,
 } from 'src/modules/payments/api';
@@ -110,9 +112,11 @@ const $q = useQuasar();
 const acl = useAclStore();
 const ctx = useContextStore();
 
-const { rows, loading, reload } = useListado<CashSessionRow>(() => listCashSessions(), {
-  errorMessage: 'No se pudieron cargar las sesiones.',
-});
+// Paginación server-side: el historial de cajas crece sin límite (antes truncaba a 200).
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<CashSessionRow>(
+  (page) => listCashSessionsPage(page),
+  { errorMessage: 'No se pudieron cargar las sesiones.' },
+);
 
 const solicitudes = ref<{ id: string; sessionId: number }[]>([]);
 

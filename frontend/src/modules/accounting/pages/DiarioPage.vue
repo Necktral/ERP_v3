@@ -79,14 +79,16 @@
           />
         </div>
         <q-table
+          v-model:pagination="paginacionBorradores"
           class="app-table"
           :rows="borradores"
           :columns="columnasBorrador"
           row-key="id"
           flat
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="cargandoBorradores"
+          :rows-per-page-options="[10, 25, 50, 100]"
           no-data-label="Sin borradores con ese filtro."
+          @request="onRequestBorradores"
         >
           <template #body-cell-estado="props">
             <q-td :props="props">
@@ -273,7 +275,7 @@ import {
   DRAFT_STATE_LABELS,
   getChartOfAccounts,
   listCostCenters,
-  listJournalDrafts,
+  listJournalDraftsPage,
   listJournalEntriesPage,
   postDrafts,
   reverseJournalBatch,
@@ -318,7 +320,19 @@ const tab = ref('borradores');
 const cargando = ref(false);
 const accionando = ref(false);
 const filtroEstado = ref<string | null>(null);
-const borradores = ref<JournalDraftRow[]>([]);
+
+// Borradores: paginación server-side (la cola SoD crece sin límite; antes
+// truncaba a 200). auto:false porque recargar() los carga al montar.
+const {
+  rows: borradores,
+  loading: cargandoBorradores,
+  pagination: paginacionBorradores,
+  onRequest: onRequestBorradores,
+  reload: recargarBorradores,
+} = useListadoServer<JournalDraftRow>(
+  (page) => listJournalDraftsPage(filtroEstado.value ?? undefined, page),
+  { errorMessage: 'No se pudieron cargar los borradores.', auto: false },
+);
 
 // Asientos: paginación server-side (el diario crece sin límite). auto:false
 // porque la carga está gateada por el permiso accounting.journal_entry.read.
@@ -361,17 +375,12 @@ const columnasAsiento: QTableColumn<JournalEntryRow>[] = [
 async function recargar() {
   cargando.value = true;
   try {
-    const tareas: Promise<void>[] = [
-      listJournalDrafts(filtroEstado.value ?? undefined).then((r) => {
-        borradores.value = r;
-      }),
-    ];
+    // Cada listado server-side notifica su propio error; aquí solo se orquesta.
+    const tareas: Promise<void>[] = [recargarBorradores()];
     if (puede('accounting.journal_entry.read')) {
       tareas.push(recargarAsientos());
     }
     await Promise.all(tareas);
-  } catch (e) {
-    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar el diario.') });
   } finally {
     cargando.value = false;
   }

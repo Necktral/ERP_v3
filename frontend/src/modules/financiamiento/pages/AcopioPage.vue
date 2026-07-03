@@ -73,6 +73,7 @@
       </q-card-section>
     </q-card>
 
+    <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
     <q-table
       :rows="rows"
       :columns="cols"
