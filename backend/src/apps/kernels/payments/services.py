@@ -485,18 +485,27 @@ def open_cash_session_for_scope(
                 f"Ya existe una cash session OPEN para register_id='{reg_id}' en esta sucursal."
             )
 
-        session = CashSession.objects.create(
-            company=company,
-            branch=branch,
-            register_id=reg_id,
-            opened_by=actor_fk,
-            status=CashSession.Status.OPEN,
-            opening_amount=opening_amount,
-            expected_amount=opening_amount,
-            counted_amount=Decimal("0.00"),
-            difference_amount=Decimal("0.00"),
-            notes=notes or "",
-        )
+        # BUG-008: bajo concurrencia el pre-chequeo exists() tiene ventana de
+        # carrera; el árbitro real es el constraint único parcial
+        # (uq_cash_session_open_per_register). Se traduce a error de dominio.
+        try:
+            with transaction.atomic():
+                session = CashSession.objects.create(
+                    company=company,
+                    branch=branch,
+                    register_id=reg_id,
+                    opened_by=actor_fk,
+                    status=CashSession.Status.OPEN,
+                    opening_amount=opening_amount,
+                    expected_amount=opening_amount,
+                    counted_amount=Decimal("0.00"),
+                    difference_amount=Decimal("0.00"),
+                    notes=notes or "",
+                )
+        except IntegrityError as exc:
+            raise PaymentsConflictError(
+                f"Ya existe una cash session OPEN para register_id='{reg_id}' en esta sucursal."
+            ) from exc
 
         # BUG-10: si se da el desglose de apertura, se persiste (stage=OPENING) y su
         # suma pasa a ser el fondo autoritativo (opening_amount/expected_amount).
@@ -1245,15 +1254,20 @@ def _persist_denominations(
             raise PaymentsValidationError("Cantidad de denominación no puede ser negativa.")
         denom_val = Decimal(str(d["denomination_value"]))
         denom_type = str(d.get("denomination_type", CashDenomination.DenominationType.BILL))
-        obj = CashDenomination.objects.create(
+        obj = CashDenomination(
             session=session,
             stage=stage,
             denomination_type=denom_type,
             denomination_value=denom_val,
             quantity=qty,
+            # save() calcula subtotal, pero bulk_create NO pasa por save(): se
+            # fija aquí explícito con la misma fórmula.
+            subtotal=denom_val * Decimal(str(qty)),
         )
         created.append(obj)
         total += obj.subtotal
+    # Un solo INSERT para todo el desglose (antes: uno por denominación).
+    CashDenomination.objects.bulk_create(created)
     return created, total
 
 

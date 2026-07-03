@@ -393,6 +393,14 @@ export const NAV: NavItem[] = [
   },
   {
     module: 'accounting',
+    label: 'Reconciliación operativa',
+    icon: 'rule',
+    to: '/contabilidad/reconciliacion-operativa',
+    perm: 'accounting.report.read',
+    section: 'Contador',
+  },
+  {
+    module: 'accounting',
     label: 'Consolidación del grupo',
     icon: 'account_tree',
     to: '/contabilidad/consolidacion',

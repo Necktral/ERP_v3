@@ -63,6 +63,13 @@ const TARJETAS: Tarjeta[] = [
     perm: 'accounting.report.read',
   },
   {
+    to: '/contabilidad/reconciliacion-operativa',
+    icon: 'rule',
+    title: 'Reconciliación operativa',
+    desc: 'Cuadre entre la operación (ventas, cobros, inventario) y la contabilidad.',
+    perm: 'accounting.report.read',
+  },
+  {
     to: '/contabilidad/monedas',
     icon: 'currency_exchange',
     title: 'Tipo de cambio',

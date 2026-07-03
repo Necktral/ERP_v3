@@ -534,6 +534,12 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['accounting.report.read'] },
       },
       {
+        path: 'contabilidad/reconciliacion-operativa',
+        name: 'contabilidad-reconciliacion-operativa',
+        component: () => import('src/modules/accounting/pages/ReconciliacionOperativaPage.vue'),
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['accounting.report.read'] },
+      },
+      {
         path: 'contabilidad/monedas',
         name: 'contabilidad-monedas',
         component: () => import('src/modules/accounting/pages/MonedasPage.vue'),
