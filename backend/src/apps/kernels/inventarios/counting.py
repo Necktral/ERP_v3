@@ -158,6 +158,7 @@ def capture_physical_count(
             raise InventoryCountError("INVENTORY_COUNT_NOT_OPEN")
 
         by_id = {ln.id: ln for ln in count.lines.select_for_update()}
+        changed = []
         for ln in lines:
             line = by_id.get(int(ln["line_id"]))
             if line is None:
@@ -166,7 +167,9 @@ def capture_physical_count(
             if qty < 0:
                 raise InventoryCountError("INVENTORY_COUNT_QTY_INVALID")
             line.qty_counted = qty
-            line.save(update_fields=["qty_counted"])
+            changed.append(line)
+        # Un solo UPDATE para toda la captura (antes: un save por línea).
+        PhysicalCountLine.objects.bulk_update(changed, ["qty_counted"])
 
         if count.lines.filter(qty_counted__isnull=True).exists():
             # Captura parcial: la hoja sigue abierta hasta contar todo.
@@ -214,14 +217,22 @@ def approve_physical_count(*, request, actor, count_id: int) -> dict[str, Any]:
             raise InventoryCountSoDError("INVENTORY_COUNT_SOD_SELF_APPROVAL")
 
         adjusted = 0
-        for line in count.lines.select_for_update().select_related("item"):
+        count_lines = list(count.lines.select_for_update().select_related("item"))
+        # Balances actuales de TODOS los ítems del conteo en 1 query (antes: una
+        # por línea). Solo lectura para calcular varianza; el lock del balance lo
+        # toma post_adjust por dentro.
+        balances = {
+            b.item_id: b.qty_on_hand
+            for b in StockBalance.objects.filter(
+                company=count.company, branch=count.branch,
+                warehouse=count.warehouse, item_id__in=[ln.item_id for ln in count_lines],
+            )
+        }
+        linked = []
+        for line in count_lines:
             # Varianza contra la existencia ACTUAL (no el snapshot): si alguien ya
             # movió stock y lo contado coincide, no hay nada que ajustar.
-            bal = StockBalance.objects.filter(
-                company=count.company, branch=count.branch,
-                warehouse=count.warehouse, item=line.item,
-            ).first()
-            current = bal.qty_on_hand if bal else Decimal("0.0000")
+            current = balances.get(line.item_id, Decimal("0.0000"))
             if line.qty_counted == current:
                 continue
             qty_counted = line.qty_counted
@@ -238,8 +249,10 @@ def approve_physical_count(*, request, actor, count_id: int) -> dict[str, Any]:
                 movement_type=MovementType.PHYSICAL_COUNT,
             )
             line.movement_id = result.movement_id
-            line.save(update_fields=["movement_id"])
+            linked.append(line)
             adjusted += 1
+        if linked:
+            PhysicalCountLine.objects.bulk_update(linked, ["movement_id"])
 
         count.status = PhysicalCountStatus.POSTED
         count.approved_by = actor

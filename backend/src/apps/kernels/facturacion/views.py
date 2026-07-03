@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, time, timedelta
 from typing import Any
 
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone as dj_timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,7 +15,7 @@ from apps.modulos.common.permissions import rbac_permission
 from apps.modulos.iam.models import OrgUnit
 
 from .credit_notes import issue_credit_note
-from .models import BillingDocument, SalesOrder
+from .models import BillingDocument, CreditApprovalRequest, CreditStatus, SalesOrder
 from .serializers import (
     BranchFiscalConfigOut,
     BranchFiscalConfigUpdateIn,
@@ -127,10 +129,14 @@ class DocListCreateView(APIView):
                 predicate |= Q(number=int(q))
             qs = qs.filter(predicate)
 
+        # Rango de timestamps sargable (created_at__date=DATE(col) impide usar el
+        # índice btree). Semántica idéntica: días completos en el huso activo.
         if v.get("date_from"):
-            qs = qs.filter(created_at__date__gte=v["date_from"])
+            start = dj_timezone.make_aware(datetime.combine(v["date_from"], time.min))
+            qs = qs.filter(created_at__gte=start)
         if v.get("date_to"):
-            qs = qs.filter(created_at__date__lte=v["date_to"])
+            end = dj_timezone.make_aware(datetime.combine(v["date_to"] + timedelta(days=1), time.min))
+            qs = qs.filter(created_at__lt=end)
 
         ordering = str(v.get("ordering") or "-created_at")
         if ordering in {"id", "-id"}:
@@ -595,6 +601,23 @@ class DocConvertView(APIView):
 # ---------------------------------------------------------------------------
 
 def _order_payload(o) -> dict[str, Any]:
+    # pending_approval_id: la solicitud de crédito PENDING del pedido (para que
+    # el checker pueda resolver sin buscarla en la bitácora). En listados viene
+    # anotada por subquery (_annotate_pending_approval); en payloads de una sola
+    # fila se resuelve aquí con una query.
+    pending_approval_id = getattr(o, "pending_approval_id", None)
+    # Estados con solicitud de crédito viva (enum CreditStatus del pedido, NO el
+    # ApprovalStatus de la solicitud — son enums distintos).
+    credit_vivo = {CreditStatus.PENDING_REVIEW, CreditStatus.IN_REVIEW, CreditStatus.ESCALATED}
+    if pending_approval_id is None and o.credit_status in credit_vivo:
+        pending_approval_id = (
+            CreditApprovalRequest.objects.filter(
+                sales_order=o, status=CreditApprovalRequest.ApprovalStatus.PENDING
+            )
+            .order_by("-id")
+            .values_list("id", flat=True)
+            .first()
+        )
     return {
         "id": o.id,
         "status": o.status,
@@ -610,7 +633,21 @@ def _order_payload(o) -> dict[str, Any]:
         "notes": o.notes,
         "billing_doc_id": o.billing_doc_id,
         "created_at": o.created_at,
+        "pending_approval_id": pending_approval_id,
     }
+
+
+def _annotate_pending_approval(qs):
+    from django.db.models import OuterRef, Subquery
+
+    pending = (
+        CreditApprovalRequest.objects.filter(
+            sales_order=OuterRef("pk"), status=CreditApprovalRequest.ApprovalStatus.PENDING
+        )
+        .order_by("-id")
+        .values("id")[:1]
+    )
+    return qs.annotate(pending_approval_id=Subquery(pending))
 
 
 class OrdersView(APIView):
@@ -623,7 +660,7 @@ class OrdersView(APIView):
 
     def get(self, request):
         company: OrgUnit = request.company
-        qs = SalesOrder.objects.filter(company=company).order_by("-created_at")
+        qs = _annotate_pending_approval(SalesOrder.objects.filter(company=company).order_by("-created_at"))
         order_status = request.query_params.get("status")
         if order_status:
             qs = qs.filter(status=order_status)

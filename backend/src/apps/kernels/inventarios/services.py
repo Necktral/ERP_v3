@@ -349,6 +349,30 @@ def _assert_existing_movement(
         _idempotency_conflict()
 
 
+def _assert_lot_matches(
+    *, existing: StockMovement, lot_id: int | None, lot_number: str = "", strict_no_lot: bool = True
+) -> None:
+    """BUG-007: el replay con el mismo key pero OTRO lote debe conflictuar.
+
+    Compara el lote solicitado (por id o por número) contra el del movimiento
+    original. Con strict_no_lot (receive: el lote siempre es explícito) también
+    conflictúa "antes con lote, ahora sin lote". En issue el lote puede
+    auto-seleccionarse (FEFO/FIFO) cuando no se pide → ahí strict_no_lot=False
+    y el replay sin lote explícito no se castiga.
+    """
+    if lot_id:
+        if existing.lot_id != int(lot_id):
+            _idempotency_conflict()
+        return
+    if lot_number:
+        existing_number = existing.lot.lot_number if existing.lot_id else ""
+        if existing_number != lot_number:
+            _idempotency_conflict()
+        return
+    if strict_no_lot and existing.lot_id is not None:
+        _idempotency_conflict()
+
+
 def _assert_receive_idempotency_match(
     *,
     company: OrgUnit,
@@ -363,6 +387,8 @@ def _assert_receive_idempotency_match(
     source_module: str,
     source_type: str,
     source_id: str,
+    lot_id: int | None = None,
+    lot_number: str = "",
 ) -> None:
     _assert_existing_movement(
         movement=existing,
@@ -375,6 +401,7 @@ def _assert_receive_idempotency_match(
         source_type=source_type,
         source_id=source_id,
     )
+    _assert_lot_matches(existing=existing, lot_id=lot_id, lot_number=lot_number)
     data = _outbox_data_for_idempotency(
         company=company,
         idempotency_key=idempotency_key,
@@ -411,6 +438,7 @@ def _assert_issue_idempotency_match(
     source_module: str,
     source_type: str,
     source_id: str,
+    lot_id: int | None = None,
 ) -> None:
     _assert_existing_movement(
         movement=existing,
@@ -423,6 +451,7 @@ def _assert_issue_idempotency_match(
         source_type=source_type,
         source_id=source_id,
     )
+    _assert_lot_matches(existing=existing, lot_id=lot_id, strict_no_lot=False)
     data = _outbox_data_for_idempotency(
         company=company,
         idempotency_key=idempotency_key,
@@ -656,6 +685,8 @@ def post_receive(
                 source_module=source_module,
                 source_type=source_type,
                 source_id=source_id,
+                lot_id=lot_id,
+                lot_number=lot_number,
             )
             bal = StockBalance.objects.filter(company=company, branch=branch, warehouse_id=warehouse_id, item_id=item_id).first()
             if not bal:
@@ -829,6 +860,7 @@ def post_issue(
                 source_module=source_module,
                 source_type=source_type,
                 source_id=source_id,
+                lot_id=lot_id,
             )
             bal = StockBalance.objects.filter(company=company, branch=branch, warehouse_id=warehouse_id, item_id=item_id).first()
             if not bal:

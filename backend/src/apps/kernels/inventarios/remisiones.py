@@ -95,15 +95,24 @@ def create_remision(
         idempotency_key=key,
         created_by=actor,
     )
-    for ln in lines:
-        item = InventoryItem.objects.get(id=int(ln["item_id"]), company=company)
-        RemisionLine.objects.create(
+    # Carga de ítems en 1 query + un solo INSERT de líneas (antes: 2 queries por
+    # línea). Un ítem inexistente o de otra empresa levanta DoesNotExist igual
+    # que el .get() anterior (las views lo traducen a 404).
+    item_ids = [int(ln["item_id"]) for ln in lines]
+    items = {it.id: it for it in InventoryItem.objects.filter(id__in=item_ids, company=company)}
+    missing = [i for i in item_ids if i not in items]
+    if missing:
+        raise InventoryItem.DoesNotExist(f"InventoryItem(s) {missing} no existen en la empresa")
+    RemisionLine.objects.bulk_create(
+        RemisionLine(
             remision=remision,
-            item=item,
-            description=str(ln.get("description") or item.name)[:200],
+            item=items[int(ln["item_id"])],
+            description=str(ln.get("description") or items[int(ln["item_id"])].name)[:200],
             qty_dispatched=Decimal(str(ln["qty_dispatched"])),
             unit_cost=Decimal(str(ln.get("unit_cost", "0") or "0")),
         )
+        for ln in lines
+    )
 
     _audit(
         request=request, actor=actor, remision=remision, event_type="REMISION_CREATED",

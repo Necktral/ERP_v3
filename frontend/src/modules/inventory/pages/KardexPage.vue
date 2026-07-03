@@ -73,14 +73,16 @@
 
     <q-table
       v-else
+      v-model:pagination="pagination"
       class="app-table"
       :rows="movimientos"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 50 }"
+      :rows-per-page-options="[25, 50, 100]"
       no-data-label="Sin movimientos para esos filtros."
+      @request="onRequest"
     >
       <template #body-cell-fecha="props">
         <q-td :props="props">{{ formatDateTime(props.row.created_at) }}</q-td>
@@ -113,10 +115,10 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
-import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDateTime, formatMoney, formatQty } from 'src/core/format';
 import {
-  getKardex,
+  getKardexPage,
   listItems,
   listWarehouses,
   MOVEMENT_TYPE_LABELS,
@@ -134,10 +136,31 @@ const tipo = ref<string | null>(null);
 const desde = ref('');
 const hasta = ref('');
 
-const loading = ref(false);
-const movimientos = ref<KardexRow[]>([]);
 const items = ref<InventoryItem[]>([]);
 const bodegas = ref<Warehouse[]>([]);
+
+// Kardex paginado server-side (el histórico de movimientos crece sin límite).
+// auto:false — solo se consulta cuando hay artículo elegido.
+const {
+  rows: movimientos,
+  loading,
+  pagination,
+  onRequest,
+  reload,
+} = useListadoServer<KardexRow>(
+  (page) =>
+    getKardexPage(
+      {
+        item_id: itemId.value as number,
+        ...(warehouseId.value ? { warehouse_id: warehouseId.value } : {}),
+        ...(tipo.value ? { movement_type: tipo.value } : {}),
+        ...(desde.value ? { date_from: desde.value } : {}),
+        ...(hasta.value ? { date_to: hasta.value } : {}),
+      },
+      page,
+    ),
+  { errorMessage: 'No se pudo cargar el kardex.', auto: false, rowsPerPage: 50 },
+);
 
 const opcionesItem = computed(() =>
   items.value.map((i) => ({ value: i.id, label: `${i.sku} — ${i.name}` })),
@@ -171,20 +194,7 @@ const columns: QTableColumn<KardexRow>[] = [
 
 async function recargar() {
   if (itemId.value == null) return;
-  loading.value = true;
-  try {
-    movimientos.value = await getKardex({
-      item_id: itemId.value,
-      ...(warehouseId.value ? { warehouse_id: warehouseId.value } : {}),
-      ...(tipo.value ? { movement_type: tipo.value } : {}),
-      ...(desde.value ? { date_from: desde.value } : {}),
-      ...(hasta.value ? { date_to: hasta.value } : {}),
-    });
-  } catch (e) {
-    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar el kardex.') });
-  } finally {
-    loading.value = false;
-  }
+  await reload();
 }
 
 onMounted(async () => {

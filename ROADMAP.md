@@ -90,5 +90,13 @@ inventarios → **O2** payments+accounting → **O3** nómina núcleo → **O4**
   (0 cableado roto, 43 huérfanos kernel baselineados con razón/oleada) — `make qa-l4-drift`,
   report-only en CI (bloqueante desde O1). Unidades tocadas: U3, U22, L4 (EN-CURSO en
   `docs/AUDITORIA_LOG.md`).
-- O1-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
+- **O1 — facturación + inventarios (`oleada-1/venta-fact-inv`): HECHA.** Golden tests de líneas
+  byte-a-byte ANTES del refactor; `bulk_create` de líneas (doc y pedido); filtro de fechas sargable;
+  remisiones sin N+1 (ítems en 1 query + bulk); conteo físico con `bulk_update` y balances agrupados;
+  budgets O(1)-en-líneas (create_draft / create_remision). **U8 HECHO** (6 tests: idempotencia
+  warehouse/qty/lote + transferencias cruzadas concurrentes sin deadlock) con **BUG-007** (la
+  idempotencia no comparaba el lote) encontrado por test y cerrado. UI pedido-con-crédito SoD
+  completa (PedidosPage + AprobacionesCreditoPage + `pending_approval_id` en el payload del pedido);
+  Existencias y Kardex con paginación server-side. Baseline L4: 43 → 40 huérfanos.
+- O2-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
   están enumerados con su oleada en `qa/contracts/api_frontend_drift_baseline.json`).

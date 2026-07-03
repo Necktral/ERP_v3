@@ -81,14 +81,16 @@
     </div>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="Sin existencias con esos filtros. Usá «Recibir» para ingresar inventario."
+      @request="onRequest"
     >
       <template #body-cell-disponible="props">
         <q-td :props="props" class="text-weight-bold">
@@ -278,12 +280,12 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatMoney, formatQty } from 'src/core/format';
 import {
   adjustStock,
-  getStock,
   getStockLots,
+  getStockPage,
   issueStock,
   listItems,
   listWarehouses,
@@ -329,13 +331,16 @@ const bodegas = ref<Warehouse[]>([]);
 const items = ref<InventoryItem[]>([]);
 const itemsPorId = computed(() => new Map(items.value.map((i) => [i.id, i])));
 
-const { rows, loading, reload } = useListado<StockRow>(
-  () =>
-    getStock({
-      ...(filtroBodega.value ? { warehouse_id: filtroBodega.value } : {}),
-      ...(filtroItem.value ? { item_id: filtroItem.value } : {}),
-      ...(filtroReorden.value ? { below_reorder: true } : {}),
-    }),
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<StockRow>(
+  (page) =>
+    getStockPage(
+      {
+        ...(filtroBodega.value ? { warehouse_id: filtroBodega.value } : {}),
+        ...(filtroItem.value ? { item_id: filtroItem.value } : {}),
+        ...(filtroReorden.value ? { below_reorder: true } : {}),
+      },
+      page,
+    ),
   { errorMessage: 'No se pudieron cargar las existencias.' },
 );
 

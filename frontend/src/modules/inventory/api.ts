@@ -7,7 +7,7 @@
  * contable (accounting_status) del posteo automático a GL.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 // --- Catálogos / enums --------------------------------------------------------
 export const UOM_LABELS: Record<string, string> = {
@@ -269,17 +269,29 @@ export async function createLot(input: {
 }
 
 // --- Existencias / kardex ---------------------------------------------------------
-export async function getStock(filters: {
+export interface StockFilters {
   warehouse_id?: number;
   item_id?: number;
   below_reorder?: boolean;
-} = {}): Promise<StockRow[]> {
+}
+
+export async function getStock(filters: StockFilters = {}): Promise<StockRow[]> {
   const params: Record<string, string | number | boolean> = { ...PAGE };
   if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
   if (filters.item_id) params.item_id = filters.item_id;
   if (filters.below_reorder) params.below_reorder = 'true';
   const { data } = await api.get<Paginated<StockRow>>('/inventory/stock/', { params });
   return data.results;
+}
+
+/** Variante paginada server-side de existencias (envelope completo con `count`). */
+export async function getStockPage(filters: StockFilters, page: PageReq): Promise<Paginated<StockRow>> {
+  const params: Record<string, string | number | boolean> = { limit: page.limit, offset: page.offset };
+  if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
+  if (filters.item_id) params.item_id = filters.item_id;
+  if (filters.below_reorder) params.below_reorder = 'true';
+  const { data } = await api.get<Paginated<StockRow>>('/inventory/stock/', { params });
+  return data;
 }
 
 export async function getStockLots(itemId: number, warehouseId?: number): Promise<LotStockRow[]> {
@@ -289,16 +301,25 @@ export async function getStockLots(itemId: number, warehouseId?: number): Promis
   return data.results;
 }
 
-export async function getKardex(filters: {
+export interface KardexFilters {
   item_id: number;
   warehouse_id?: number;
   movement_type?: string;
   date_from?: string;
   date_to?: string;
-}): Promise<KardexRow[]> {
+}
+
+export async function getKardex(filters: KardexFilters): Promise<KardexRow[]> {
   const params: Record<string, string | number> = { ...PAGE, ...filters };
   const { data } = await api.get<Paginated<KardexRow>>('/inventory/kardex/', { params });
   return data.results;
+}
+
+/** Variante paginada server-side del kardex (envelope completo con `count`). */
+export async function getKardexPage(filters: KardexFilters, page: PageReq): Promise<Paginated<KardexRow>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset, ...filters };
+  const { data } = await api.get<Paginated<KardexRow>>('/inventory/kardex/', { params });
+  return data;
 }
 
 // --- Movimientos ---------------------------------------------------------------------

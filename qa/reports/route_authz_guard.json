@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "generated_at": "2026-07-02T22:15:18.171215+00:00",
+  "generated_at": "2026-07-02T23:36:20.318335+00:00",
   "summary": {
     "write_views_total": 303,
     "gated_by_rbac": 289,
