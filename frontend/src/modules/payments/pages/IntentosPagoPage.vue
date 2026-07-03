@@ -52,14 +52,16 @@
     </q-card>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="payment_id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="No hay intentos de pago."
+      @request="onRequest"
     >
       <template #body-cell-monto="props">
         <q-td :props="props">{{ formatMoney(props.row.amount) }}</q-td>
@@ -175,7 +177,7 @@ import { computed, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDateTime, formatMoney } from 'src/core/format';
 import { PAYMENT_METHOD_LABELS } from 'src/modules/billing/api';
 import {
@@ -185,7 +187,7 @@ import {
   captureIntent,
   createPaymentIntent,
   INTENT_STATUS_LABELS,
-  listPaymentIntents,
+  listPaymentIntentsPage,
   requestRefund,
   reverseCapturedIntent,
   type PaymentIntentRow,
@@ -197,9 +199,11 @@ const $q = useQuasar();
 const acl = useAclStore();
 const ctx = useContextStore();
 
-const { rows, loading, reload } = useListado<PaymentIntentRow>(() => listPaymentIntents(), {
-  errorMessage: 'No se pudieron cargar los intentos de pago.',
-});
+// Paginación server-side: los intentos de pago crecen sin límite.
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<PaymentIntentRow>(
+  (page) => listPaymentIntentsPage(page),
+  { errorMessage: 'No se pudieron cargar los intentos de pago.' },
+);
 
 const puedeOperar = computed(() => {
   const companyId = ctx.activeCompanyId;

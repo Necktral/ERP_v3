@@ -188,6 +188,58 @@ export async function getAccountingReport(
   return data;
 }
 
+// --- Reconciliación operativa ↔ contable (cuadre por tipo de evento) ---
+export interface OperationalReconciliationSummary {
+  operational_events: number;
+  economic_events_linked: number;
+  drafts_total: number;
+  drafts_validated: number;
+  drafts_exception: number;
+  drafts_posted: number;
+  pending_operational_events: number;
+}
+
+export interface OperationalReconciliationRow {
+  source_module: string;
+  event_type: string;
+  operational_count: number;
+  linked_count: number;
+  posted_count: number;
+  draft_exception_count: number;
+  operational_amount: string;
+  draft_amount: string;
+  posted_amount: string;
+}
+
+export interface PendingOperationalEvent {
+  outbox_event_id: string;
+  source_module: string;
+  event_type: string;
+  occurred_at: string;
+}
+
+export interface OperationalReconciliation {
+  summary: OperationalReconciliationSummary;
+  by_event_type: OperationalReconciliationRow[];
+  /** Eventos operativos sin evento económico vinculado (el backend trunca a 200). */
+  pending_operational_events: PendingOperationalEvent[];
+  filters: { date_from: string; date_to: string; branch_id: number | null };
+}
+
+/** Perm: accounting.report.read. Ambas fechas opcionales (date_from ≤ date_to). */
+export async function getOperationalReconciliation(
+  params: { date_from?: string; date_to?: string } = {},
+): Promise<OperationalReconciliation> {
+  const q: Record<string, string> = {};
+  if (params.date_from) q.date_from = params.date_from;
+  if (params.date_to) q.date_to = params.date_to;
+  const { data } = await api.get<OperationalReconciliation>(
+    '/accounting/reports/operational-reconciliation/',
+    { params: q },
+  );
+  return data;
+}
+
 // --- FX / revaluación ---
 export interface FxRateRow {
   id?: number;
@@ -216,7 +268,8 @@ export async function runRevaluation(input: { year: number; month: number }): Pr
 
 // --- Intercompany ---
 export interface IntercompanyTx {
-  id: number;
+  /** UUID del cruce — el backend NO manda `id` numérico (BUG-009). */
+  tx_id: string;
   status: string;
   amount: string;
   currency: string;
@@ -227,12 +280,21 @@ export interface IntercompanyTx {
   [k: string]: unknown;
 }
 
-export async function listIntercompanyTxs(): Promise<IntercompanyTx[]> {
-  const { data } = await api.get<Paginated<IntercompanyTx> | IntercompanyTx[]>(
+/**
+ * Listado paginado server-side (envelope {count,...}). El backend ordena fijo
+ * por -created_at; no acepta `ordering`. `status` filtra por estado del cruce.
+ */
+export async function listIntercompanyTxsPage(
+  page: PageReq,
+  filters: { status?: string } = {},
+): Promise<Paginated<IntercompanyTx>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (filters.status) params.status = filters.status;
+  const { data } = await api.get<Paginated<IntercompanyTx>>(
     '/accounting/intercompany/transactions/',
-    { params: PAGE },
+    { params },
   );
-  return Array.isArray(data) ? data : data.results;
+  return data;
 }
 
 export async function createIntercompanyTx(input: {
@@ -246,13 +308,13 @@ export async function createIntercompanyTx(input: {
 }
 
 export async function intercompanyAction(
-  txId: number,
+  txId: string,
   action: 'confirm' | 'reconcile' | 'settle' | 'close',
 ): Promise<void> {
   await api.post(`/accounting/intercompany/transactions/${txId}/${action}/`, {});
 }
 
-export async function disputeIntercompanyTx(txId: number, reason: string): Promise<void> {
+export async function disputeIntercompanyTx(txId: string, reason: string): Promise<void> {
   await api.post(`/accounting/intercompany/transactions/${txId}/dispute/`, { reason });
 }
 
@@ -607,6 +669,29 @@ export async function getConsolBalanceSheet(runId: string): Promise<ConsolBalanc
   const { data } = await api.get<ConsolBalanceSheet>(
     '/accounting/consolidation/reports/balance-sheet/',
     { params: { run_id: runId } },
+  );
+  return data;
+}
+
+/** Metadatos + summary_json persistidos de una corrida de consolidación. */
+export interface ConsolidationRunSummary {
+  run_id: string;
+  status: string;
+  parent_company_id: number;
+  year: number;
+  month: number;
+  company_ids: number[];
+  input_manifest_hash: string;
+  output_manifest_hash: string;
+  started_at: string | null;
+  completed_at: string | null;
+  /** summary_json de la corrida: period, metrics, issues, trial_balance, pnl, balance_sheet… */
+  summary: Record<string, unknown>;
+}
+
+export async function getConsolidationRunSummary(runId: string): Promise<ConsolidationRunSummary> {
+  const { data } = await api.get<ConsolidationRunSummary>(
+    `/accounting/consolidation/runs/${runId}/summary/`,
   );
   return data;
 }

@@ -2261,10 +2261,24 @@ def post_journal_drafts(
     errors: list[dict[str, str]] = []
     rows = list(_posting_candidates_qs(company_id=company_id, run_id=run_id, require_approved=require_approved)[: int(limit)])
 
+    # Config contable por empresa cacheada durante el run (antes: get_or_create
+    # por draft). El período NO se cachea: su check de CLOSED debe leerse fresco
+    # por draft (cada draft postea en su propia transacción).
+    cfg_by_company: dict[int, object] = {}
+
     for row in rows:
         attempted += 1
         with transaction.atomic():
-            draft = JournalDraft.objects.select_for_update().get(pk=row.pk)
+            # of=("self",): lockear SOLO la fila del draft — sin el of, el
+            # select_related extendería el FOR UPDATE a company/branch y
+            # serializaría todos los batches de la empresa entre sí.
+            draft = (
+                JournalDraft.objects.select_related(
+                    "economic_event", "economic_event__company", "economic_event__branch"
+                )
+                .select_for_update(of=("self",))
+                .get(pk=row.pk)
+            )
 
             if require_approved and draft.state != JournalDraft.State.APPROVED_FOR_POSTING:
                 if auto_approve and draft.state == JournalDraft.State.VALIDATED:
@@ -2335,7 +2349,11 @@ def post_journal_drafts(
                 )
                 continue
 
-            cfg = get_or_create_accounting_config(company=draft.economic_event.company)
+            company_id_draft = draft.economic_event.company_id
+            cfg = cfg_by_company.get(company_id_draft)
+            if cfg is None:
+                cfg = get_or_create_accounting_config(company=draft.economic_event.company)
+                cfg_by_company[company_id_draft] = cfg
             phase7_enabled = bool(cfg.phase7_enabled)
             functional_currency = str(cfg.functional_currency or "NIO").upper() or "NIO"
 

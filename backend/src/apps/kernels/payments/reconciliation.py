@@ -242,6 +242,13 @@ def _intent_summary(intent: PaymentIntent) -> dict[str, Any]:
 
 
 def suggest_matches(*, company, statement_id: int) -> list[dict[str, Any]]:
+    """Candidatos por línea con UNA query de intents para todo el extracto.
+
+    Misma semántica que la versión línea-por-línea (monto exacto + ventana de
+    fechas por línea + orden por captured_at + top 5), pero los intents libres
+    se traen en un solo query global (montos IN + ventana envolvente) y se
+    reparten en memoria — antes era una query por línea UNMATCHED.
+    """
     statement = (
         BankStatement.objects.select_related("bank_account")
         .filter(company=company, id=statement_id)
@@ -250,14 +257,42 @@ def suggest_matches(*, company, statement_id: int) -> list[dict[str, Any]]:
     if statement is None:
         raise PaymentsDomainError("PAYMENTS_STATEMENT_NOT_FOUND")
     currency = statement.bank_account.currency
+
+    lines = list(statement.lines.filter(status=BankStatementLine.Status.UNMATCHED))
+    deposit_lines = [ln for ln in lines if ln.amount > 0]
+
+    grouped: dict[Decimal, list[PaymentIntent]] = {}
+    if deposit_lines:
+        window_start = min(ln.line_date for ln in deposit_lines) - timedelta(days=MATCH_DATE_WINDOW_DAYS)
+        window_end = max(ln.line_date for ln in deposit_lines) + timedelta(days=MATCH_DATE_WINDOW_DAYS)
+        amounts = {ln.amount for ln in deposit_lines}
+        intents = (
+            PaymentIntent.objects.filter(
+                company=company,
+                status=PaymentIntent.Status.CAPTURED,
+                payment_method__in=BANK_METHODS,
+                currency=currency,
+                amount__in=amounts,
+                captured_at__date__gte=window_start,
+                captured_at__date__lte=window_end,
+                bank_statement_lines__isnull=True,
+            )
+            .order_by("captured_at")
+        )
+        for intent in intents:
+            grouped.setdefault(_q2(intent.amount), []).append(intent)
+
     suggestions = []
-    for line in statement.lines.filter(status=BankStatementLine.Status.UNMATCHED):
-        candidates = [
-            _intent_summary(i)
-            for i in _candidate_intents(
-                company=company, currency=currency, amount=line.amount, line_date=line.line_date
-            )[:5]
-        ]
+    for line in lines:
+        candidates: list[dict[str, Any]] = []
+        if line.amount > 0:
+            start = line.line_date - timedelta(days=MATCH_DATE_WINDOW_DAYS)
+            end = line.line_date + timedelta(days=MATCH_DATE_WINDOW_DAYS)
+            candidates = [
+                _intent_summary(i)
+                for i in grouped.get(_q2(line.amount), [])
+                if i.captured_at is not None and start <= timezone.localtime(i.captured_at).date() <= end
+            ][:5]
         suggestions.append({"line_id": line.id, "candidates": candidates})
     return suggestions
 

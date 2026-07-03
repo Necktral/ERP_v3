@@ -47,6 +47,33 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs cerrados
 
+### BUG-009 — Intercompañía: el frontend usaba `id` pero el backend manda `tx_id` — todas las acciones pegaban a /transactions/undefined/
+
+- **Módulo / paso del ROADMAP:** frontend accounting (IntercompaniaPage) / hito intercompany — detectado en oleada 2 (preexistente, venía así de v2)
+- **Fecha:** 2026-07-02
+- **Severidad:** alta para el hito intercompany (la pantalla lista pero NINGUNA acción funciona)
+- **Estado:** CERRADO
+- **Pasos para reproducir:**
+  1. Crear un cruce intercompañía y abrir la pantalla Intercompañía.
+  2. Intentar "Confirmar" (o conciliar/liquidar/cerrar/disputar).
+- **Esperado:** POST a `/accounting/intercompany/transactions/<tx_id>/confirm/` y la transición de estado.
+- **Actual:** el payload del backend (`_serialize_intercompany`) trae `tx_id` (UUID) y NO `id`; el frontend leía `tx.id` (undefined) → POST a `/transactions/undefined/confirm/` → 404 siempre. Además `row-key="id"` dejaba el row-key undefined y la columna `#` en blanco. El index signature `[k: string]: unknown` del tipo escondía el error al typecheck.
+- **Impacto:** el flujo intercompany por UI está muerto de punta a punta (solo listar funcionaba). No corrompe datos.
+- **Causa raíz / fix:** drift de contrato api.ts ↔ payload (la lente L4 valida rutas, no shapes). **Fix:** `IntercompanyTx.tx_id: string` (sin `id` fantasma), `row-key="tx_id"`, columnas y las llamadas `intercompanyAction`/`disputeIntercompanyTx` usan `tx_id`.
+
+### BUG-008 — Apertura de caja concurrente revienta con IntegrityError crudo (500) en vez de conflicto de dominio (409)
+
+- **Módulo / paso del ROADMAP:** payments kernel (pasos 8-9: caja/arqueo) / unidad U10 de la auditoría — oleada 2
+- **Fecha:** 2026-07-02
+- **Severidad:** media (el invariante NO se viola — el constraint único lo sostiene — pero el segundo cajero ve un error 500 críptico en vez del mensaje claro de "ya hay una caja abierta")
+- **Estado:** CERRADO
+- **Pasos para reproducir:**
+  1. Dos POST concurrentes de apertura de caja para el mismo `register_id` de la misma sucursal.
+- **Esperado:** uno abre (201) y el otro recibe `PaymentsConflictError` ("Ya existe una cash session OPEN…") → 409 con mensaje en español.
+- **Actual:** el chequeo `exists()` bajo `select_for_update` tiene ventana de carrera (no hay filas que lockear cuando ambos llegan a la vez); ambos pasan el chequeo y el segundo INSERT muere con `IntegrityError: uq_cash_session_open_per_register` → 500.
+- **Impacto:** solo UX/robustez del error; los datos quedan bien (1 sola sesión OPEN).
+- **Causa raíz / fix:** el guard de dominio confiaba en el pre-chequeo; el constraint parcial de BD es el árbitro real bajo concurrencia. **Fix:** `open_cash_session_for_scope` captura el `IntegrityError` del constraint y lo re-lanza como `PaymentsConflictError` con el mismo mensaje del pre-chequeo. **Test de regresión:** `kernels/payments/tests/test_u10_u11_concurrencia.py::test_apertura_concurrente_mismo_register_solo_una_open` (encontrado por este test: se escribió ANTES del fix y falló contra el código viejo).
+
 ### BUG-007 — La idempotencia de movimientos de inventario NO comparaba el lote (falso match silencioso)
 
 - **Módulo / paso del ROADMAP:** inventarios kernel (paso 5) / unidad U8 de la auditoría — oleada 1

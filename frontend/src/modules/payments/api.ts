@@ -4,7 +4,7 @@
  * reapertura son SoD: una persona solicita, OTRA aprueba.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 // --- Sesiones de caja --------------------------------------------------------
 export const CASH_SESSION_STATUS_LABELS: Record<string, string> = {
@@ -178,6 +178,18 @@ export async function listPaymentIntents(): Promise<PaymentIntentRow[]> {
     params: PAGE,
   });
   return data.results;
+}
+
+/**
+ * Variante paginada server-side (envelope completo con `count`) para la tabla
+ * de intentos, que crece sin límite. El backend ordena fijo por -created_at;
+ * no acepta `ordering`.
+ */
+export async function listPaymentIntentsPage(page: PageReq): Promise<Paginated<PaymentIntentRow>> {
+  const { data } = await api.get<Paginated<PaymentIntentRow>>('/payments/intents/', {
+    params: { limit: page.limit, offset: page.offset },
+  });
+  return data;
 }
 
 export async function createPaymentIntent(input: {

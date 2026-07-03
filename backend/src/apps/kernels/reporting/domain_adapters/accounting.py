@@ -77,7 +77,16 @@ def _trial_balance_payload(*, company, branch, filters: dict[str, Any]) -> dict[
     }
 
 
+# Tope de filas del detalle GL: los totales salen agregados de la BD (exactos
+# sobre TODO el rango); el detalle se corta aquí para no materializar años de
+# movimientos de una cuenta de alto tráfico en memoria/JSON.
+GL_MAX_ROWS = 5000
+
+
 def _general_ledger_payload(*, company, branch, filters: dict[str, Any]) -> dict[str, Any]:
+    from django.db.models import Sum, Value
+    from django.db.models.functions import Coalesce
+
     validated = _validate_with(GeneralLedgerRangeIn, filters)
     date_from, date_to = _resolve_range_payload(validated)
     qs = general_ledger_queryset(
@@ -88,32 +97,59 @@ def _general_ledger_payload(*, company, branch, filters: dict[str, Any]) -> dict
         date_to=date_to,
     )
 
+    # Totales en la BD (una query de agregación, cubre TODO el rango).
+    zero = Value(Decimal("0.00"))
+    totals = qs.aggregate(
+        debit=Coalesce(Sum("debit_base"), zero),
+        credit=Coalesce(Sum("credit_base"), zero),
+        amount_tx=Coalesce(Sum("amount_tx"), zero),
+    )
+
+    # Detalle con values() (sin instanciar modelos) y tope duro. Se pide
+    # GL_MAX_ROWS+1 en UNA query para saber si hubo truncamiento.
+    detail = list(
+        qs.values(
+            "journal_entry_id",
+            "journal_entry__entry_date",
+            "journal_entry__description",
+            "journal_entry__posted_at",
+            "line_no",
+            "account_code_snapshot",
+            "currency",
+            "fx_rate",
+            "amount_tx",
+            "debit_base",
+            "credit_base",
+        )[: GL_MAX_ROWS + 1]
+    )
+
     rows: list[dict[str, Any]] = []
-    total_debit = Decimal("0.00")
-    total_credit = Decimal("0.00")
-    total_amount_tx = Decimal("0.00")
-    for row in qs:
-        debit = Decimal(row.debit_base)
-        credit = Decimal(row.credit_base)
-        amount_tx = Decimal(row.amount_tx)
+    warnings: list[str] = []
+    for row in detail[:GL_MAX_ROWS]:
         rows.append(
             {
-                "journal_entry_id": int(row.journal_entry_id),
-                "entry_date": str(row.journal_entry.entry_date),
-                "description": str(row.journal_entry.description or ""),
-                "line_no": int(row.line_no),
-                "account_code": str(row.account_code_snapshot),
-                "currency": str(row.currency),
-                "fx_rate": str(row.fx_rate),
-                "amount_tx": _q2(amount_tx),
-                "debit_base": _q2(debit),
-                "credit_base": _q2(credit),
-                "posted_at": row.journal_entry.posted_at.isoformat() if row.journal_entry.posted_at else None,
+                "journal_entry_id": int(row["journal_entry_id"]),
+                "entry_date": str(row["journal_entry__entry_date"]),
+                "description": str(row["journal_entry__description"] or ""),
+                "line_no": int(row["line_no"]),
+                "account_code": str(row["account_code_snapshot"]),
+                "currency": str(row["currency"]),
+                "fx_rate": str(row["fx_rate"]),
+                "amount_tx": _q2(Decimal(row["amount_tx"])),
+                "debit_base": _q2(Decimal(row["debit_base"])),
+                "credit_base": _q2(Decimal(row["credit_base"])),
+                "posted_at": row["journal_entry__posted_at"].isoformat() if row["journal_entry__posted_at"] else None,
             }
         )
-        total_debit += debit
-        total_credit += credit
-        total_amount_tx += amount_tx
+    if len(detail) > GL_MAX_ROWS:
+        warnings.append(
+            f"Detalle truncado a {GL_MAX_ROWS} líneas; los totales cubren TODO el rango. "
+            "Acotá el rango de fechas para ver el detalle completo."
+        )
+
+    total_debit = Decimal(totals["debit"])
+    total_credit = Decimal(totals["credit"])
+    total_amount_tx = Decimal(totals["amount_tx"])
 
     return {
         "grain": "journal_entry_line",
@@ -125,7 +161,7 @@ def _general_ledger_payload(*, company, branch, filters: dict[str, Any]) -> dict
             "debit_base": _q2(total_debit),
             "credit_base": _q2(total_credit),
         },
-        "warnings": [],
+        "warnings": warnings,
         "source_summary": {"source_modules": ["ACCOUNTING"]},
         "effective_filters": {
             "account_code": str(validated["account_code"]).strip().upper(),

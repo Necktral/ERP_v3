@@ -98,5 +98,15 @@ inventarios → **O2** payments+accounting → **O3** nómina núcleo → **O4**
   idempotencia no comparaba el lote) encontrado por test y cerrado. UI pedido-con-crédito SoD
   completa (PedidosPage + AprobacionesCreditoPage + `pending_approval_id` en el payload del pedido);
   Existencias y Kardex con paginación server-side. Baseline L4: 43 → 40 huérfanos.
-- O2-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
+- **O2 — payments + accounting (`oleada-2/venta-pay-acct`): HECHA.** `post_journal_drafts` sin
+  N+1 (select_related + `of=("self",)` + config cacheada por run; el check de período CLOSED se lee
+  fresco por draft a propósito); GL del reporting con totales agregados en BD + tope 5000 filas con
+  warning; `suggest_matches` de conciliación batcheado (1 query global, misma semántica);
+  denominaciones de arqueo con bulk_create (subtotal explícito — save() no corre en bulk).
+  **U10 y U11 HECHAS** con **BUG-008** (apertura de caja concurrente → 500 crudo en vez de 409 de
+  dominio) encontrado por test y cerrado; cierre de caja y match de intent concurrentes certificados.
+  Índice GL **diferido con razón** (BD dev sin datos: EXPLAIN no valida; retomar con volumen).
+  UI: ReconciliacionOperativaPage + resumen de consolidación por corrida; tablas de intents e
+  intercompany a paginación server-side. Baseline L4: 40 → 39 huérfanos.
+- O3-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
   están enumerados con su oleada en `qa/contracts/api_frontend_drift_baseline.json`).

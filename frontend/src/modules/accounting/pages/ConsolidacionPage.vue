@@ -36,11 +36,41 @@
       <q-card-section v-if="run" class="row items-center q-gutter-sm">
         <q-chip dense square :color="run.status === 'BLOCKED' ? 'negative' : 'positive'" text-color="white" :icon="run.status === 'BLOCKED' ? 'block' : 'verified'" :label="run.status === 'BLOCKED' ? 'Bloqueada' : 'Consolidada'" />
         <span class="text-caption text-muted">Corrida {{ run.run_id.slice(0, 8) }} · {{ run.issues_count }} incidencia(s){{ run.idempotent ? ' · ya existía' : '' }}</span>
+        <q-btn flat dense no-caps size="sm" color="primary" icon="summarize" label="Ver resumen" :loading="cargandoResumen" @click="verResumen" />
         <span v-if="run.status === 'BLOCKED'" class="text-caption text-negative">
           Hay incidencias que impiden consolidar (p. ej. cruces intercompañía descuadrados). Revisá y reintentá; con "Estricto" apagado se consolida igual.
         </span>
       </q-card-section>
     </q-card>
+
+    <!-- Diálogo: resumen persistido de la corrida -->
+    <q-dialog v-model="dlgResumen">
+      <q-card class="app-dialog" style="min-width: min(480px, 92vw)">
+        <q-card-section class="text-h6">Resumen de la corrida</q-card-section>
+        <q-card-section v-if="resumen" class="q-pt-none">
+          <q-list dense>
+            <q-item v-for="fila in filasResumen" :key="fila.label">
+              <q-item-section>
+                <q-item-label caption>{{ fila.label }}</q-item-label>
+                <q-item-label>{{ fila.value }}</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <template v-if="incidenciasResumen.length">
+            <div class="text-caption text-negative q-mt-sm">Incidencias</div>
+            <q-list dense>
+              <q-item v-for="(cod, i) in incidenciasResumen" :key="i">
+                <q-item-section avatar><q-icon name="error" color="negative" size="18px" /></q-item-section>
+                <q-item-section>{{ cod }}</q-item-section>
+              </q-item>
+            </q-list>
+          </template>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Cerrar" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Reportes consolidados -->
     <template v-if="run && run.status !== 'BLOCKED'">
@@ -105,17 +135,19 @@ import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { formatMoney } from 'src/core/format';
+import { formatDateTime, formatMoney } from 'src/core/format';
 import { listCompanies } from 'src/modules/org/api';
 import {
   getConsolBalanceSheet,
   getConsolPnl,
   getConsolTrialBalance,
+  getConsolidationRunSummary,
   runConsolidation,
   type ConsolBalanceSheet,
   type ConsolPnl,
   type ConsolTrialRow,
   type ConsolidationRunResult,
+  type ConsolidationRunSummary,
 } from 'src/modules/accounting/api';
 
 const $q = useQuasar();
@@ -201,6 +233,55 @@ async function correr() {
     corriendo.value = false;
   }
 }
+
+// --- Resumen persistido de la corrida (GET /consolidation/runs/<id>/summary/) ---
+const dlgResumen = ref(false);
+const cargandoResumen = ref(false);
+const resumen = ref<ConsolidationRunSummary | null>(null);
+
+async function verResumen() {
+  if (!run.value) return;
+  cargandoResumen.value = true;
+  try {
+    resumen.value = await getConsolidationRunSummary(run.value.run_id);
+    dlgResumen.value = true;
+  } catch (e) {
+    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar el resumen de la corrida.') });
+  } finally {
+    cargandoResumen.value = false;
+  }
+}
+
+const filasResumen = computed<{ label: string; value: string }[]>(() => {
+  const r = resumen.value;
+  if (!r) return [];
+  const s = (r.summary ?? {}) as Record<string, unknown>;
+  const metrics = (typeof s.metrics === 'object' && s.metrics !== null ? s.metrics : {}) as Record<string, unknown>;
+  const mes = mesesOpts.find((m) => m.value === r.month)?.label ?? String(r.month);
+  const filas = [
+    { label: 'Corrida', value: r.run_id },
+    { label: 'Estado', value: r.status === 'BLOCKED' ? 'Bloqueada' : r.status === 'COMPLETED' ? 'Consolidada' : r.status },
+    { label: 'Período', value: `${mes} ${r.year}` },
+    { label: 'Empresas consolidadas', value: r.company_ids.join(', ') || '—' },
+    { label: 'Iniciada', value: r.started_at ? formatDateTime(r.started_at) : '—' },
+    { label: 'Completada', value: r.completed_at ? formatDateTime(r.completed_at) : '—' },
+  ];
+  // Métricas del summary_json (en corridas bloqueadas vienen al nivel raíz).
+  const filasConsol = metrics.rows_count ?? null;
+  const eliminaciones = metrics.elimination_count ?? s.elimination_count ?? null;
+  if (typeof filasConsol === 'number') filas.push({ label: 'Cuentas consolidadas', value: String(filasConsol) });
+  if (typeof eliminaciones === 'number') filas.push({ label: 'Eliminaciones intercompañía', value: String(eliminaciones) });
+  if (r.output_manifest_hash) filas.push({ label: 'Manifest de salida', value: r.output_manifest_hash.slice(0, 16) + '…' });
+  return filas;
+});
+
+const incidenciasResumen = computed<string[]>(() => {
+  const s = (resumen.value?.summary ?? {}) as Record<string, unknown>;
+  const issues = Array.isArray(s.issues) ? s.issues : [];
+  return issues.map((i) =>
+    i && typeof i === 'object' && 'code' in i ? String((i as Record<string, unknown>).code) : String(i),
+  );
+});
 
 async function recargarReportes() {
   if (!run.value || run.value.status === 'BLOCKED') return;

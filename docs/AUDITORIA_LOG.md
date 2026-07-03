@@ -19,13 +19,13 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U2 — iam contexto + middlewares | PENDIENTE | |
 | U3 — rbac + org (módulos) | EN-CURSO | Oleada 0: memo RBAC por-request (`get_effective_permissions_for_scope_cached`) elimina las ~3 queries fijas por evaluación repetida; tests en `src/tests/perf/test_query_budgets.py` (2ª evaluación = 0 queries, sin bleed entre requests/companies, override intacto) = VERIFICADO-OK. `route_authz_guard` verde post-cambio. Falta: el resto de la unidad (org, seeds, activación de módulos) |
 | U4 — audit + common | PENDIENTE | |
-| U5 — accounting: posteo | PENDIENTE | |
+| U5 — accounting: posteo | EN-CURSO | Oleada 2: `post_journal_drafts` optimizado sin cambio de semántica — re-fetch con `select_related` + `select_for_update(of=("self",))` (no bloquea company/branch) + config contable cacheada por run (el check de período CLOSED se lee fresco por draft a propósito); suite accounting completa verde. Falta: certificación profunda de la unidad (SoD approve/post, re-post idempotente bajo concurrencia) |
 | U6 — accounting: períodos/FX | PENDIENTE | |
-| U7 — accounting: API | PENDIENTE | |
+| U7 — accounting: API | EN-CURSO | Oleada 2: GL del adaptador de reporting con totales agregados en la BD (exactos sobre todo el rango) + detalle `values()` con tope 5000 filas y warning de truncamiento (antes: materializaba TODO en Python sin límite). Índice compuesto GL DIFERIDO con razón: la BD dev no tiene datos contables y `explain_financial_queries` no puede validar el plan — retomar cuando haya volumen (paso 2+ del ROADMAP) |
 | U8 — inventarios kernel | HECHO | Oleada 1: **BUG-007** (idempotencia no comparaba el LOTE → falso match silencioso) encontrado por test y CERRADO con fix. Idempotency match warehouse/qty/lote = VERIFICADO-OK; `post_transfer` cruzado concurrente sin deadlock (lock ordenado) = VERIFICADO-OK — `tests/test_u8_idempotencia_y_transferencias.py` (6 tests). Costing/reversal/link contable cubiertos por suites existentes verdes (`test_cost_policy`, `test_movement_reversal`, `test_inventory_accounting_integration`). Guard `InsufficientStockError` = VERIFICADO-OK (previo) |
 | U9 — facturacion kernel | EN-CURSO | Oleada 1: golden tests de fidelidad de líneas/totales byte-a-byte (`tests/test_golden_lineas_bulk.py`) escritos ANTES del refactor a bulk_create (create_draft/create_order) = VERIFICADO-OK; filtro de fechas sargable en listado de docs; budgets O(1)-en-líneas en `src/tests/perf/`. Falta: resto de la unidad (void SoD profundo, contingencia fiscal, secuencias) |
-| U10 — payments: intents/caja/arqueo | PENDIENTE | |
-| U11 — payments: conciliación | PENDIENTE | |
+| U10 — payments: intents/caja/arqueo | HECHO | Oleada 2: **BUG-008** (apertura de caja concurrente → IntegrityError crudo/500 en vez de 409 de dominio; el constraint único sostenía el invariante) encontrado por test y CERRADO. Cierre de caja concurrente no corrompe arqueo (lock + idempotencia) = VERIFICADO-OK — `tests/test_u10_u11_concurrencia.py`. Intents/estado/SoD/arqueo cubiertos por suites existentes verdes (`test_state_machines`, `test_cash_audit`, `test_payments_sod`, `test_opening_denominations`) |
+| U11 — payments: conciliación | HECHO | Oleada 2: match concurrente del MISMO intent contra dos líneas → exactamente uno gana (lock del intent + guard ALREADY_MATCHED) = VERIFICADO-OK — `tests/test_u10_u11_concurrencia.py`. `suggest_matches` batcheado (1 query global, misma semántica) con las suites de comportamiento existentes como red golden (`test_bank_reconciliation*`, `test_reconciliation_e2e_consecuencia_bug`) |
 | U12 — portfolio kernel | EN-CURSO | **BUG-005** (over-allocation → outstanding negativo en `allocate_payment_to_obligation`) CERRADO con fix+test. `apply_payroll_abono`/`reverse_payroll_abono` = lock correcto (VERIFICADO-OK). Falta: link_billing doble-CxC, accrue_interest idempotencia, write_off |
 | U13 — nomina: cálculo legal | PENDIENTE | |
 | U14 — nomina: rieles de pago | PENDIENTE | |
@@ -40,7 +40,7 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U23 — frontend auth/org/rbac/devices | PENDIENTE | |
 | U24 — frontend hr/nomina/pagador | PENDIENTE | |
 | U25 — frontend ventas/pos/billing | PENDIENTE | |
-| U26 — frontend inv/proc/pay/portfolio/acct | PENDIENTE | |
+| U26 — frontend inv/proc/pay/portfolio/acct | EN-CURSO | Oleada 2: **BUG-009** (IntercompaniaPage usaba `id` pero el backend manda `tx_id` UUID → TODAS las acciones pegaban a `/transactions/undefined/` y el flujo intercompany por UI estaba muerto; preexistente de v2, destapado por la revisión adversarial) CERRADO. Tablas de intents, intercompany, existencias y kardex migradas a paginación server-side. Falta: resto de la unidad |
 | U27 — estacion_servicios + fuel (dormido) | PENDIENTE | |
 | U28 — finca/financiamiento/fleet/cec/beneficio (dormidos) | PENDIENTE | |
 | U29 — knowledge/diagnostics/integration (dormidos) | PENDIENTE | |

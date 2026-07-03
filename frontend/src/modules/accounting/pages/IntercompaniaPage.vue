@@ -20,14 +20,16 @@
     </PageHeader>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
-      row-key="id"
+      row-key="tx_id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="Sin transacciones intercompañía."
+      @request="onRequest"
     >
       <template #body-cell-monto="props">
         <q-td :props="props">{{ formatMoney(props.row.amount) }}</q-td>
@@ -190,7 +192,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatMoney } from 'src/core/format';
 import {
   createIntercompanyTx,
@@ -198,7 +200,7 @@ import {
   IC_STATUS_LABELS,
   intercompanyAction,
   listIntercompanyDisputes,
-  listIntercompanyTxs,
+  listIntercompanyTxsPage,
   reviewIntercompanyDispute,
   type DisputeCase,
   type IntercompanyTx,
@@ -210,9 +212,11 @@ const $q = useQuasar();
 const acl = useAclStore();
 const ctx = useContextStore();
 
-const { rows, loading, reload } = useListado<IntercompanyTx>(() => listIntercompanyTxs(), {
-  errorMessage: 'No se pudieron cargar los cruces.',
-});
+// Paginación server-side: los cruces intercompañía crecen sin límite.
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<IntercompanyTx>(
+  (page) => listIntercompanyTxsPage(page),
+  { errorMessage: 'No se pudieron cargar los cruces.' },
+);
 
 function puede(code: string): boolean {
   const companyId = ctx.activeCompanyId;
@@ -226,11 +230,11 @@ const opcionesEmpresa = computed(() =>
 );
 
 const columns: QTableColumn<IntercompanyTx>[] = [
-  { name: 'id', label: '#', field: 'id', align: 'left' },
+  { name: 'tx_id', label: 'Cruce', field: 'tx_id', align: 'left' },
   { name: 'descripcion', label: 'Descripción', field: (r) => (r.description as string) || (r.reference_code as string) || '—', align: 'left' },
   { name: 'monto', label: 'Monto', field: 'amount', align: 'right' },
   { name: 'estado', label: 'Estado', field: 'status', align: 'left' },
-  { name: 'acciones', label: '', field: 'id', align: 'right' },
+  { name: 'acciones', label: '', field: 'tx_id', align: 'right' },
 ];
 
 const dlgCrear = ref(false);
@@ -276,7 +280,7 @@ async function crear() {
 
 async function accion(tx: IntercompanyTx, a: 'confirm' | 'reconcile' | 'settle' | 'close') {
   try {
-    await intercompanyAction(tx.id, a);
+    await intercompanyAction(tx.tx_id, a);
     $q.notify({ type: 'positive', message: 'Listo.' });
     await reload();
   } catch (e) {
@@ -355,7 +359,7 @@ onMounted(cargarDisputas);
 
 function disputar(tx: IntercompanyTx) {
   $q.dialog({
-    title: `Disputar cruce #${tx.id}`,
+    title: `Disputar cruce ${tx.tx_id}`,
     message: 'Motivo de la disputa:',
     prompt: { model: '', type: 'text', isValid: (v: string) => v.trim().length >= 5 },
     cancel: { flat: true, noCaps: true, label: 'Cancelar' },
@@ -364,7 +368,7 @@ function disputar(tx: IntercompanyTx) {
   }).onOk((motivo: string) => {
     void (async () => {
       try {
-        await disputeIntercompanyTx(tx.id, motivo.trim());
+        await disputeIntercompanyTx(tx.tx_id, motivo.trim());
         $q.notify({ type: 'warning', message: 'Cruce en disputa.' });
         await reload();
         await cargarDisputas();
