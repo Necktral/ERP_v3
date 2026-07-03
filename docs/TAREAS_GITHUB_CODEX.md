@@ -19,7 +19,7 @@ privado** (pendiente global del ROADMAP).
 | `main` | `5c3a205` | base | Baseline v3 + paso 1 validado + auditoría U1/U8/U12 parcial |
 | `oleada-0/infra-transversal` | `7fe535e` | lista para PR | Memo RBAC por-request, CACHES, red assertNumQueries, paginación server-side (useListadoServer + pilotos), guard L4 (`qa/api_frontend_drift_guard.py`), fix 403 background (BUG-006) |
 | `oleada-1/venta-fact-inv` | `ae1d5ec` | lista para PR | bulk_create líneas venta/pedido + golden tests, filtro sargable, remisiones/conteo sin N+1, U8 HECHO (BUG-007), UI pedido-con-crédito SoD, Existencias/Kardex server-side |
-| `oleada-2/venta-pay-acct` | _(pendiente de commit)_ | en verificación | post_journal_drafts optimizado, GL totales en BD + tope, suggest_matches batch, U10/U11 HECHAS (BUG-008), UI reconciliación operativa + summary consolidación |
+| `oleada-2/venta-pay-acct` | `efeed07` | lista para PR | post_journal_drafts optimizado, GL totales en BD + tope, suggest_matches batch, U10/U11 HECHAS (BUG-008, BUG-009), UI reconciliación operativa + summary consolidación, tablas intents/intercompany server-side |
 
 ## Tareas para Codex (en orden)
 
