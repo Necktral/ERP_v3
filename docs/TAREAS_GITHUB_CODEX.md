@@ -24,7 +24,7 @@ privado** (pendiente global del ROADMAP).
 | `oleada-4/asistencia-campo` | `03d9e75` | lista para PR | UI completa del flujo field/* (5 páginas, 15 huérfanos L4 cerrados), U15 HECHO con tests de idempotencia (PR-5, después de PR-4) |
 | `oleada-5/portfolio` | `bbf604e` | lista para PR | cartera sargable en BD, doble-CxC blindado (advisory lock bigint), U12 HECHO, UI intereses/settings + fixes de permiso fantasma y tipo Credit (PR-6) |
 | `oleada-6/reporting` | `944c8df` | lista para PR | adaptadores hr/inventory en BD, cache CACHE_ALLOWED TTL 45s, módulo frontend de reportes completo (7 huérfanos cerrados) (PR-7) |
-| `oleada-7/sync-y-cierre` | _(último commit de la rama)_ | lista para PR | riel POS con chunking + savepoints, diccionario de códigos L4b, barrido final de tablas (26 server-side), guard L4 BLOQUEANTE en CI (PR-8, cierra el programa) |
+| `oleada-7/sync-y-cierre` | `2a74101` | lista para PR | riel POS con chunking + savepoints, diccionario de códigos L4b, barrido final de tablas (26 server-side), guard L4 BLOQUEANTE en CI (PR-8, cierra el programa) |
 
 ## Tareas para Codex (en orden)
 
