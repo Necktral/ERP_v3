@@ -116,5 +116,12 @@ inventarios → **O2** payments+accounting → **O3** nómina núcleo → **O4**
   planilla de 3 y de 12 entradas cuesta las MISMAS queries. U13/U14 EN-CURSO. UI: entradas de
   planilla y marcas biométricas con paginación server-side (las no migradas quedaron documentadas
   con razón: pay-summary no pagina y es offline-first; asistencia/hoy acotada al día).
-- O4-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
+- **O4 — asistencia de campo (`oleada-4/asistencia-campo`): HECHA.** UI completa del flujo field/*
+  — el hueco de cableado más grande: JornadasCampoPage, JornadaDetallePage (pase de lista, cuadrillas,
+  eventos, traslados, consolidación), AprobacionesCampoPage (checker SoD + aplicar a planilla),
+  ReporteCuadrillaPage y CapturaCampoPage (flujo lineal PR#17, móvil-first). 15 huérfanos L4 cerrados
+  (baseline 39 → 24). **U15 HECHO**: SoD certificado + 2 tests nuevos de idempotencia (re-consolidar
+  no duplica y se bloquea tras aprobar; re-aplicar no mueve días ni neto). MEJORA anotada: faltan GET
+  de solicitudes SoD y de cuadrillas/rollcall del día (la UI degrada a bitácora/localStorage).
+- O5-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
   están enumerados con su oleada en `qa/contracts/api_frontend_drift_baseline.json`).

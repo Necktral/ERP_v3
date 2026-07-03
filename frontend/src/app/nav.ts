@@ -315,6 +315,32 @@ export const NAV: NavItem[] = [
     mobile: true,
   },
   {
+    module: 'payroll',
+    label: 'Jornadas de campo',
+    icon: 'agriculture',
+    to: '/asistencia/campo',
+    perm: 'nomina.field.read',
+    section: 'Personal y Nómina',
+    mobile: true, // el capataz arma la jornada desde el cel
+  },
+  {
+    module: 'payroll',
+    label: 'Captura de cuadrillas',
+    icon: 'grass',
+    to: '/asistencia/campo/captura',
+    perm: 'nomina.field.read',
+    section: 'Personal y Nómina',
+    mobile: true, // flujo simplificado de captura, pensado para el cel
+  },
+  {
+    module: 'payroll',
+    label: 'Aprobaciones de campo',
+    icon: 'how_to_vote',
+    to: '/asistencia/campo/aprobaciones',
+    perm: 'nomina.field.approve',
+    section: 'Personal y Nómina',
+  },
+  {
     module: 'human_resources',
     label: 'Recursos Humanos',
     icon: 'groups',

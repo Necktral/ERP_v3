@@ -124,6 +124,41 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['nomina.field.read'] },
       },
       {
+        path: 'asistencia/campo',
+        name: 'asistencia-campo',
+        component: () => import('src/modules/asistencia/pages/JornadasCampoPage.vue'),
+        // read = ver jornadas; abrir jornada/capturar exige nomina.field.capture (la página lo controla)
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['nomina.field.read'] },
+      },
+      {
+        path: 'asistencia/campo/aprobaciones',
+        name: 'asistencia-campo-aprobaciones',
+        component: () => import('src/modules/asistencia/pages/AprobacionesCampoPage.vue'),
+        // Bandeja del checker: aprobar exige nomina.field.approve y aplicar a planilla
+        // nomina.field.apply (la página gatea cada acción por separado).
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['nomina.field.read'] },
+      },
+      {
+        path: 'asistencia/campo/captura',
+        name: 'asistencia-campo-captura',
+        component: () => import('src/modules/asistencia/pages/CapturaCampoPage.vue'),
+        // Flujo de captura por cuadrilla (PR#17); capturar/revisar/aprobar/construir
+        // se gatean en la página (nomina.field.capture / nomina.attendance.*).
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['nomina.field.read'] },
+      },
+      {
+        path: 'asistencia/campo/cuadrillas/:crewId(\\d+)/reporte',
+        name: 'asistencia-campo-reporte-cuadrilla',
+        component: () => import('src/modules/asistencia/pages/ReporteCuadrillaPage.vue'),
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['nomina.field.capture'] },
+      },
+      {
+        path: 'asistencia/campo/:id(\\d+)',
+        name: 'asistencia-campo-jornada',
+        component: () => import('src/modules/asistencia/pages/JornadaDetallePage.vue'),
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['nomina.field.read'] },
+      },
+      {
         path: 'recursos-humanos',
         name: 'rrhh-home',
         component: () => import('src/modules/hr/pages/HrHomePage.vue'),

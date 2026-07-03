@@ -212,3 +212,88 @@ def test_apply_to_sheet_applies_only_entries_with_attendance():
     assert e2.id in result["skipped"]
     e1.refresh_from_db()
     assert e1.days_worked == Decimal("1.00")
+
+
+# ---------------------------------------------------------------------------
+# U15 (oleada 4) — idempotencia del puente campo → planilla
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_consolidar_dos_veces_no_duplica_y_tras_aprobar_se_bloquea():
+    """U15: re-consolidar ANTES de aprobar reconstruye (1 fila por empleado/día,
+    sin duplicar); DESPUÉS de aprobar, la consolidación está sellada y el
+    recálculo directo se rechaza."""
+    company, branch = _mk_scope()
+    actor = _actor()
+    create_default_nicaragua_config(
+        request=_request(actor, company=company), actor=actor, company=company, fiscal_year=2026
+    )
+    period = _period(company)
+    worker = _employee(company, "Idem")
+
+    work_day = open_field_work_day(
+        request=_request(actor, company=company, branch=branch), actor=actor,
+        company=company, branch=branch, payroll_period=period, work_date=date(2026, 6, 2),
+    )
+    submit_rollcall(
+        request=_request(actor, company=company, branch=branch), actor=actor,
+        work_day=work_day, lines=[{"employee": worker, "status": "PRESENT"}],
+    )
+
+    consolidate_field_attendance(
+        request=_request(actor, company=company, branch=branch), actor=actor, work_day=work_day
+    )
+    consolidate_field_attendance(
+        request=_request(actor, company=company, branch=branch), actor=actor, work_day=work_day
+    )
+    filas = FieldAttendanceConsolidation.objects.filter(work_day=work_day, employee=worker)
+    assert filas.count() == 1, "re-consolidar duplicó la consolidación del empleado"
+
+    approve_field_attendance(
+        request=_request(actor, company=company, branch=branch), actor=actor, work_day=work_day
+    )
+    with pytest.raises(FieldAttendanceError):
+        consolidate_field_attendance(
+            request=_request(actor, company=company, branch=branch), actor=actor, work_day=work_day
+        )
+
+
+@pytest.mark.django_db
+def test_aplicar_asistencia_dos_veces_no_duplica_dias():
+    """U15: apply-to-sheet es SET desde la asistencia aprobada/bloqueada, no
+    suma — re-aplicar deja los mismos días (2.00, no 4.00) y el mismo neto."""
+    company, branch = _mk_scope()
+    actor = _actor()
+    create_default_nicaragua_config(
+        request=_request(actor, company=company), actor=actor, company=company, fiscal_year=2026
+    )
+    period = _period(company)
+    worker = _employee(company, "Doble")
+    _approve_present_day(company, branch, actor, period, worker, work_date=date(2026, 6, 2))
+    _approve_present_day(company, branch, actor, period, worker, work_date=date(2026, 6, 3))
+
+    sheet = PayrollSheet.objects.create(period=period, branch=branch, sheet_name="Finca", has_inss=True)
+    entry = _entry(sheet, worker)
+
+    apply_field_attendance_to_entry(
+        request=_request(actor, company=company, branch=branch), actor=actor, entry=entry
+    )
+    entry.refresh_from_db()
+    neto_primera = entry.net_to_pay
+    assert entry.days_worked == Decimal("2.00")
+
+    apply_field_attendance_to_entry(
+        request=_request(actor, company=company, branch=branch), actor=actor, entry=entry
+    )
+    entry.refresh_from_db()
+    assert entry.days_worked == Decimal("2.00"), "re-aplicar duplicó los días trabajados"
+    assert entry.net_to_pay == neto_primera, "re-aplicar movió el neto del trabajador"
+    # Las consolidaciones quedan selladas para planilla (no re-calculables).
+    assert not FieldAttendanceConsolidation.objects.filter(
+        payroll_period=period, employee=worker,
+        status=FieldAttendanceConsolidationStatus.APPROVED,
+    ).exists()
+    assert FieldAttendanceConsolidation.objects.filter(
+        payroll_period=period, employee=worker,
+        status=FieldAttendanceConsolidationStatus.LOCKED_FOR_PAYROLL,
+    ).count() == 2
