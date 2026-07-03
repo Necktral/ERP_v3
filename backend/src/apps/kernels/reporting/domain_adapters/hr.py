@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import date, datetime, time
 from typing import Any
 
-from django.db.models import Q
+from django.db.models import Count, Max, Q
 from django.utils import timezone
 
 from apps.modulos.hr.models import EmploymentAssignment
@@ -31,7 +30,7 @@ def _headcount_payload(*, company, branch, filters: dict[str, Any]) -> dict[str,
     if timezone.is_naive(as_of_dt):
         as_of_dt = timezone.make_aware(as_of_dt, timezone.get_current_timezone())
 
-    assignments = EmploymentAssignment.objects.select_related("employee", "position").filter(
+    assignments = EmploymentAssignment.objects.filter(
         employee__company=company,
         started_at__lte=as_of_dt,
     ).filter(
@@ -40,43 +39,32 @@ def _headcount_payload(*, company, branch, filters: dict[str, Any]) -> dict[str,
     if branch is not None:
         assignments = assignments.filter(branch=branch)
 
-    agg: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {
-            "position_name": "",
-            "position_code": "",
-            "active_assignments": 0,
-            "unique_employees": set(),
-        }
-    )
-
-    for assign in assignments:
-        pos = assign.position
-        key = str(pos.name)
-        row = agg[key]
-        row["position_name"] = str(pos.name)
-        row["position_code"] = str(pos.code or "")
-        row["active_assignments"] += 1
-        row["unique_employees"].add(int(assign.employee_id))
-
-    rows: list[dict[str, Any]] = []
-    total_assignments = 0
-    total_unique = set()
-
-    for key in sorted(agg.keys()):
-        row = agg[key]
-        emp_count = len(row["unique_employees"])
-        total_assignments += int(row["active_assignments"])
-        total_unique.update(row["unique_employees"])
-        rows.append(
-            {
-                "position_name": row["position_name"],
-                "position_code": row["position_code"],
-                "active_assignments": int(row["active_assignments"]),
-                "unique_employees": emp_count,
-            }
+    # Agregación EN la BD (oleada 6): antes iteraba todas las asignaciones en
+    # Python. Un GROUP BY por puesto + un aggregate para los totales. Se agrupa
+    # por NOMBRE (igual que antes); el código es informativo (Max = determinista
+    # donde el viejo "último gana" era orden de iteración).
+    por_puesto = (
+        assignments.values("position__name")
+        .annotate(
+            position_code=Max("position__code"),
+            active_assignments=Count("id"),
+            unique_employees=Count("employee_id", distinct=True),
         )
-
-    total_active_employees = len(total_unique)
+        .order_by("position__name")
+    )
+    rows: list[dict[str, Any]] = [
+        {
+            "position_name": str(r["position__name"]),
+            "position_code": str(r["position_code"] or ""),
+            "active_assignments": int(r["active_assignments"]),
+            "unique_employees": int(r["unique_employees"]),
+        }
+        for r in por_puesto
+    ]
+    totales = assignments.aggregate(
+        active_assignments=Count("id"),
+        unique_employees=Count("employee_id", distinct=True),
+    )
 
     return {
         "grain": "position",
@@ -84,9 +72,9 @@ def _headcount_payload(*, company, branch, filters: dict[str, Any]) -> dict[str,
         "measures": ["active_assignments", "unique_employees", "total_active_employees"],
         "rows": rows,
         "totals": {
-            "active_assignments": total_assignments,
-            "unique_employees": len(total_unique),
-            "total_active_employees": total_active_employees,
+            "active_assignments": int(totales["active_assignments"]),
+            "unique_employees": int(totales["unique_employees"]),
+            "total_active_employees": int(totales["unique_employees"]),
         },
         "warnings": [],
         "source_summary": {"source_modules": ["HR"]},

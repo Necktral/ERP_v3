@@ -134,6 +134,46 @@ def serialize_filters_for_storage(filters: dict[str, Any]) -> dict[str, Any]:
     return _serialize_filters_for_storage(filters)
 
 
+# TTL corto para datasets CACHE_ALLOWED (oleada 6): near-realtime tolera esta
+# staleness por contrato. LocMem per-process a propósito (decisión O0, sin Redis).
+NEAR_REALTIME_CACHE_TTL_SECONDS = 45
+
+
+def _adapter_cache_key(*, spec: DatasetSpec, scope: ResolvedReportScope, filters: dict[str, Any]) -> str:
+    filtros = json.dumps(_serialize_filters_for_storage(filters), sort_keys=True, ensure_ascii=False)
+    firma = hashlib.sha256(filtros.encode()).hexdigest()[:16]
+    return (
+        f"reporting:adapter:{spec.dataset_key}:{spec.schema_version}:"
+        f"{getattr(scope.company, 'id', '')}:{getattr(scope.branch, 'id', '') or ''}:{firma}"
+    )
+
+
+def _adapter_run_cached(*, spec: DatasetSpec, scope: ResolvedReportScope, filters: dict[str, Any], force_refresh: bool) -> dict[str, Any]:
+    """Corre el adaptador con cache TTL SOLO para freshness CACHE_ALLOWED.
+
+    LIVE_ONLY nunca cachea; SNAPSHOT_REQUIRED va por snapshots. Se guardan y
+    devuelven copias profundas: el pipeline muta el payload río abajo y no debe
+    contaminar la entrada cacheada.
+    """
+    import copy
+
+    from django.core.cache import caches
+
+    from .enums import FreshnessMode
+
+    if spec.freshness_mode != FreshnessMode.CACHE_ALLOWED or force_refresh:
+        return _adapter_run(spec=spec, scope=scope, filters=filters)
+
+    cache = caches["catalogs"]
+    key = _adapter_cache_key(spec=spec, scope=scope, filters=filters)
+    payload = cache.get(key)
+    if payload is None:
+        payload = _adapter_run(spec=spec, scope=scope, filters=filters)
+        cache.set(key, copy.deepcopy(payload), timeout=NEAR_REALTIME_CACHE_TTL_SECONDS)
+        return payload
+    return copy.deepcopy(payload)
+
+
 def _adapter_run(*, spec: DatasetSpec, scope: ResolvedReportScope, filters: dict[str, Any]) -> dict[str, Any]:
     if spec.domain_owner == "ACCOUNTING":
         return accounting_adapter.run_dataset(
@@ -285,7 +325,9 @@ def execute_dataset(
             )
             return envelope, run
 
-        adapter_payload = _adapter_run(spec=spec, scope=scope, filters=normalized_filters)
+        adapter_payload = _adapter_run_cached(
+            spec=spec, scope=scope, filters=normalized_filters, force_refresh=force_refresh
+        )
         lineage = build_lineage(
             run_id=str(run.run_id),
             dataset_key=spec.dataset_key,

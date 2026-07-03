@@ -1,5 +1,9 @@
 /**
  * Analítica / Dashboard — workspaces de tableros y tokens de embed temporales.
+ *
+ * El consumo del kernel `reporting` (runDataset, exports, snapshots, saved
+ * views) vive en src/modules/reportes/api.ts — módulo de Reportes — para no
+ * duplicar rutas; Analítica importa de ahí.
  */
 import { api } from 'src/boot/axios';
 
@@ -21,85 +25,6 @@ export async function createEmbedToken(workspaceKey: string): Promise<Record<str
   const { data } = await api.post<Record<string, unknown>>('/backend/dashboard/embed-token/', {
     workspace_key: workspaceKey,
   });
-  return data;
-}
-
-/**
- * Visor de reportes EN LA APP — corre un dataset del kernel `reporting` y devuelve el
- * envelope con dimensiones/medidas/filas/totales. Reemplaza el viejo flujo de "embed
- * token" (que requería un visor de BI externo inexistente). Permiso: report.dataset.read
- * + el del dominio del dataset (p. ej. accounting.report.read). Algunos datasets son
- * SNAPSHOT_REQUIRED: el kernel los corre en vivo y persiste el snapshot, no hay que
- * pre-generarlo.
- */
-export interface DatasetEnvelope {
-  dataset_key: string;
-  title: string;
-  description?: string;
-  dimensions: string[];
-  measures: string[];
-  rows: Record<string, unknown>[];
-  totals: Record<string, unknown>;
-  quality_status: string;
-  render_hints?: { numeric_format?: string; default_chart?: string };
-  run_id?: string;
-}
-
-export async function runDataset(
-  datasetKey: string,
-  filters?: Record<string, unknown>,
-): Promise<DatasetEnvelope> {
-  const { data } = await api.post<DatasetEnvelope>(`/reporting/datasets/${datasetKey}/run/`, {
-    filters: filters ?? {},
-  });
-  return data;
-}
-
-// --- Reporting avanzado: exportar / snapshot / vistas guardadas (cierra #4 del audit) ---
-export interface ExportResult {
-  export_id: string;
-  format: string;
-  status: string;
-  file_size: number;
-}
-
-export async function createRunExport(runId: string, format: 'csv' | 'xlsx'): Promise<ExportResult> {
-  const { data } = await api.post<ExportResult>(`/reporting/runs/${runId}/export/`, { format });
-  return data;
-}
-
-export async function generateSnapshot(
-  datasetKey: string,
-  filters?: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const { data } = await api.post<Record<string, unknown>>('/reporting/snapshots/generate/', {
-    dataset_key: datasetKey,
-    filters: filters ?? {},
-  });
-  return data;
-}
-
-export interface SavedView {
-  view_id: string;
-  name: string;
-  dataset_key: string;
-  filters: Record<string, unknown>;
-  [k: string]: unknown;
-}
-
-export async function listSavedViews(datasetKey: string): Promise<SavedView[]> {
-  const { data } = await api.get<{ results: SavedView[] }>('/reporting/saved-views/', {
-    params: { dataset_key: datasetKey },
-  });
-  return data.results;
-}
-
-export async function createSavedView(input: {
-  name: string;
-  dataset_key: string;
-  filters: Record<string, unknown>;
-}): Promise<SavedView> {
-  const { data } = await api.post<SavedView>('/reporting/saved-views/', input);
   return data;
 }
 

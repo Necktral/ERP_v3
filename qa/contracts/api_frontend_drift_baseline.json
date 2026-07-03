@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-07-03T03:38:16.494484+00:00",
+  "generated_at": "2026-07-03T06:49:49.098607+00:00",
   "orphans": {
     "accounting/health": {
       "route": "/accounting/health/",
@@ -73,48 +73,6 @@
       "module": "apps.kernels.portfolio.urls",
       "reason": "retrieve del ViewSet con el mismo serializer que el listado (sin campos extra); la fila de CxC ya trae todo y las acciones adjust/writeoff salen del listado; sin UI de detalle por decisión (O5)",
       "planned_wave": null
-    },
-    "reporting/catalog": {
-      "route": "/reporting/catalog/",
-      "module": "apps.kernels.reporting.urls",
-      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
-      "planned_wave": "O6"
-    },
-    "reporting/catalog/<p>": {
-      "route": "/reporting/catalog/<p>/",
-      "module": "apps.kernels.reporting.urls",
-      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
-      "planned_wave": "O6"
-    },
-    "reporting/exports/<p>": {
-      "route": "/reporting/exports/<p>/",
-      "module": "apps.kernels.reporting.urls",
-      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
-      "planned_wave": "O6"
-    },
-    "reporting/runs": {
-      "route": "/reporting/runs/",
-      "module": "apps.kernels.reporting.urls",
-      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
-      "planned_wave": "O6"
-    },
-    "reporting/runs/<p>": {
-      "route": "/reporting/runs/<p>/",
-      "module": "apps.kernels.reporting.urls",
-      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
-      "planned_wave": "O6"
-    },
-    "reporting/saved-views/<p>": {
-      "route": "/reporting/saved-views/<p>/",
-      "module": "apps.kernels.reporting.urls",
-      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
-      "planned_wave": "O6"
-    },
-    "reporting/snapshots": {
-      "route": "/reporting/snapshots/",
-      "module": "apps.kernels.reporting.urls",
-      "reason": "catálogo/runs/exports/snapshots/saved-views detalle sin UI",
-      "planned_wave": "O6"
     }
   },
   "notes": [

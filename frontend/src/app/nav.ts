@@ -457,6 +457,30 @@ export const NAV: NavItem[] = [
     perm: 'cec.close_run.read',
     section: 'Contador',
   },
+  {
+    module: 'analytics',
+    label: 'Catálogo de reportes',
+    icon: 'summarize',
+    to: '/reportes',
+    perm: 'report.catalog.read',
+    section: 'Contador',
+  },
+  {
+    module: 'analytics',
+    label: 'Ejecuciones de reportes',
+    icon: 'history',
+    to: '/reportes/ejecuciones',
+    perm: 'report.run.read',
+    section: 'Contador',
+  },
+  {
+    module: 'analytics',
+    label: 'Snapshots de reportes',
+    icon: 'photo_camera',
+    to: '/reportes/snapshots',
+    perm: 'report.run.read',
+    section: 'Contador',
+  },
 
   // ===== Sistema =====
   {

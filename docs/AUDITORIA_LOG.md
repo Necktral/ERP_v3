@@ -35,7 +35,7 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U18 — ventas | PENDIENTE | |
 | U19 — retail_pos + sync_engine | PENDIENTE | |
 | U20 — comisariato + intercompany + parties | PENDIENTE | |
-| U21 — reporting kernel | PENDIENTE | |
+| U21 — reporting kernel | EN-CURSO | Oleada 6: adaptadores hr (headcount GROUP BY en BD, antes iteraba todo en Python) e inventory (stock/movimientos: totales agregados en BD + detalle values() con tope 5000 y warning) = VERIFICADO-OK con la suite reporting verde; cache TTL 45s SOLO para freshness CACHE_ALLOWED (LIVE_ONLY nunca cachea, SNAPSHOT_REQUIRED va por snapshots; copias profundas para no contaminar el cache); `reporting_registry_contract_guard` verde. DIFERIDO con razón: fuel.py (módulo dormido todo el demo — convertir cuando despierte, U27). Falta: certificación profunda de la unidad (quality/lineage/exports) |
 | U22 — frontend core (boot/stores/router) | EN-CURSO | Oleada 0: hot-spot U22-3 (interceptor expulsaba a /403 ante CUALQUIER 403, incluidos polls) CERRADO — flag `background` en axios + polling del tablero marcado (**BUG-006**). Infra de paginación server-side (`useListadoServer` + `PageReq`/`toPageParams`) con pilotos en billing (FacturacionPage) y accounting (DiarioPage). Falta: resto de la unidad |
 | U23 — frontend auth/org/rbac/devices | PENDIENTE | |
 | U24 — frontend hr/nomina/pagador | PENDIENTE | |
