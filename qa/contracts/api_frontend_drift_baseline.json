@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-07-03T00:36:21.942252+00:00",
+  "generated_at": "2026-07-03T02:44:05.660198+00:00",
   "orphans": {
     "accounting/health": {
       "route": "/accounting/health/",
@@ -49,96 +49,6 @@
       "module": "apps.kernels.nomina.urls",
       "reason": "detalle/patch de NominaConfig sin UI (la UI usa el listado)",
       "planned_wave": "O3"
-    },
-    "nomina/field/approvals/<p>/approve": {
-      "route": "/nomina/field/approvals/<p>/approve/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/capture/work-days": {
-      "route": "/nomina/field/capture/work-days/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/crews": {
-      "route": "/nomina/field/crews/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/crews/<p>/report": {
-      "route": "/nomina/field/crews/<p>/report/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/reports/<p>/approve": {
-      "route": "/nomina/field/reports/<p>/approve/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/reports/<p>/approve/request": {
-      "route": "/nomina/field/reports/<p>/approve/request/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/reports/<p>/build-attendance": {
-      "route": "/nomina/field/reports/<p>/build-attendance/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/reports/<p>/events": {
-      "route": "/nomina/field/reports/<p>/events/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/work-days": {
-      "route": "/nomina/field/work-days/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/work-days/<p>": {
-      "route": "/nomina/field/work-days/<p>/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/work-days/<p>/consolidations": {
-      "route": "/nomina/field/work-days/<p>/consolidations/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/work-days/<p>/crews": {
-      "route": "/nomina/field/work-days/<p>/crews/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/work-days/<p>/events": {
-      "route": "/nomina/field/work-days/<p>/events/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/work-days/<p>/rollcall": {
-      "route": "/nomina/field/work-days/<p>/rollcall/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
-    },
-    "nomina/field/work-days/<p>/transfers": {
-      "route": "/nomina/field/work-days/<p>/transfers/",
-      "module": "apps.kernels.nomina.urls",
-      "reason": "UI de asistencia de campo pendiente",
-      "planned_wave": "O4"
     },
     "payments/health": {
       "route": "/payments/health/",
