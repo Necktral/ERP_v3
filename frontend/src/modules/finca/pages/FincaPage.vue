@@ -55,6 +55,7 @@
         <div class="text-caption text-muted q-mb-sm">
           Cada finca es una sucursal de la empresa con su perfil agrícola (zona, manzanas, GPS).
         </div>
+        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="fincas"
@@ -95,6 +96,7 @@
             @click="abrirLote(null)"
           />
         </div>
+        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="lotes"
@@ -141,6 +143,7 @@
             Catálogo de labores (fertilización, poda, corte…). Las globales vienen del sistema.
           </span>
         </div>
+        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="labores"

@@ -29,14 +29,16 @@
     </PageHeader>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="rate_date"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="Sin tasas registradas."
+      @request="onRequest"
     >
       <template #body-cell-fecha="props">
         <q-td :props="props">{{ formatDate(props.row.rate_date) }}</q-td>
@@ -89,10 +91,10 @@ import { reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate } from 'src/core/format';
 import {
-  listFxRates,
+  listFxRatesPage,
   runRevaluation,
   upsertFxRate,
   type FxRateRow,
@@ -104,17 +106,20 @@ const $q = useQuasar();
 const acl = useAclStore();
 const ctx = useContextStore();
 
-const { rows, loading, reload } = useListado<FxRateRow>(() => listFxRates(), {
-  errorMessage: 'No se pudieron cargar las tasas.',
-});
+// Paginación server-side: las tasas acumulan a diario y superan 200 en menos de un año.
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<FxRateRow>(
+  (page) => listFxRatesPage(page),
+  { errorMessage: 'No se pudieron cargar las tasas.' },
+);
 
 function puede(code: string): boolean {
   const companyId = ctx.activeCompanyId;
   return companyId ? acl.hasPermission(companyId, code) : false;
 }
 
+// Sin columnas `sortable`: el endpoint ordena fijo por -rate_date y no acepta `ordering`.
 const columns: QTableColumn<FxRateRow>[] = [
-  { name: 'fecha', label: 'Fecha', field: 'rate_date', align: 'left', sortable: true },
+  { name: 'fecha', label: 'Fecha', field: 'rate_date', align: 'left' },
   { name: 'from_currency', label: 'De', field: 'from_currency', align: 'left' },
   { name: 'to_currency', label: 'A', field: 'to_currency', align: 'left' },
   { name: 'rate', label: 'Tasa', field: 'rate', align: 'right' },

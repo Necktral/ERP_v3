@@ -50,15 +50,17 @@
         </div>
         <q-table
           v-model:selected="seleccionEtiquetas"
+          v-model:pagination="paginacionItems"
           class="app-table"
           :rows="items"
           :columns="columnasItem"
           row-key="id"
           flat
           selection="multiple"
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="cargandoItems"
+          :rows-per-page-options="[10, 25, 50, 100]"
           no-data-label="Aún no hay artículos."
+          @request="onRequestItems"
         >
           <template #body-cell-uom="props">
             <q-td :props="props">{{ UOM_LABELS[props.row.uom] ?? props.row.uom }}</q-td>
@@ -411,6 +413,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { code128Svg } from 'src/core/barcode';
 import { formatDate, formatMoney, formatQty } from 'src/core/format';
 import {
@@ -418,6 +421,7 @@ import {
   createLot,
   createWarehouse,
   listItems,
+  listItemsPage,
   listLots,
   listWarehouses,
   updateItem,
@@ -438,7 +442,22 @@ const tab = ref('articulos');
 const cargando = ref(false);
 const guardando = ref(false);
 
-const items = ref<InventoryItem[]>([]);
+// Artículos de la tabla: paginación server-side (el catálogo de SKUs crece sin
+// límite; antes truncaba a 200). auto:false porque recargarTodo() carga al montar.
+const {
+  rows: items,
+  loading: cargandoItems,
+  pagination: paginacionItems,
+  onRequest: onRequestItems,
+  reload: recargarItems,
+} = useListadoServer<InventoryItem>((page) => listItemsPage({}, page), {
+  errorMessage: 'No se pudieron cargar los artículos.',
+  auto: false,
+});
+
+// Catálogo para el selector de lotes (carga completa a propósito, tope 200 del
+// backend: solo alimenta las opciones de artículos con lote).
+const itemsLotes = ref<InventoryItem[]>([]);
 const bodegas = ref<Warehouse[]>([]);
 
 function puede(code: string): boolean {
@@ -452,12 +471,13 @@ const opcionesTipoBodega = Object.entries(WAREHOUSE_TYPE_LABELS).map(([value, la
   label,
 }));
 
+// Sin columnas `sortable`: el endpoint ordena fijo por sku y no acepta `ordering`.
 const columnasItem: QTableColumn<InventoryItem>[] = [
-  { name: 'sku', label: 'SKU', field: 'sku', align: 'left', sortable: true },
-  { name: 'name', label: 'Nombre', field: 'name', align: 'left', sortable: true },
+  { name: 'sku', label: 'SKU', field: 'sku', align: 'left' },
+  { name: 'name', label: 'Nombre', field: 'name', align: 'left' },
   { name: 'category', label: 'Categoría', field: 'category', align: 'left' },
   { name: 'barcode', label: 'Cód. barras', field: 'barcode', align: 'left' },
-  { name: 'precio', label: 'Precio venta', field: 'sale_price', align: 'right', sortable: true },
+  { name: 'precio', label: 'Precio venta', field: 'sale_price', align: 'right' },
   {
     name: 'iva',
     label: 'IVA',
@@ -495,7 +515,9 @@ const columnasLote: QTableColumn<ItemLot>[] = [
 async function recargarTodo() {
   cargando.value = true;
   try {
-    [items.value, bodegas.value] = await Promise.all([listItems(), listWarehouses()]);
+    const [lotes, whs] = await Promise.all([listItems(), listWarehouses(), recargarItems()] as const);
+    itemsLotes.value = lotes;
+    bodegas.value = whs;
   } catch (e) {
     $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar el catálogo.') });
   } finally {
@@ -657,7 +679,7 @@ const formLote = reactive({
 });
 
 const opcionesItemLotes = computed(() =>
-  items.value.filter((i) => i.track_lots).map((i) => ({ value: i.id, label: `${i.sku} — ${i.name}` })),
+  itemsLotes.value.filter((i) => i.track_lots).map((i) => ({ value: i.id, label: `${i.sku} — ${i.name}` })),
 );
 
 async function cargarLotes() {

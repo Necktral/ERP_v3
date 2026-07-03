@@ -20,6 +20,7 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva solicitud" @click="abrirAlta" />
       </div>
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="apps"
         :columns="appCols"
@@ -48,6 +49,7 @@
 
     <!-- ===== PRÉSTAMOS ===== -->
     <div v-else>
+      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="loans"
         :columns="loanCols"

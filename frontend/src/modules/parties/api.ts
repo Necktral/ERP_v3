@@ -3,7 +3,7 @@
  * empresa activa. Lo consumen compras, facturación, cartera y comisariato.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export type PartyType = 'NATURAL' | 'JURIDICAL' | 'INTERNAL';
 export type PartyStatus = 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
@@ -78,6 +78,20 @@ export async function listParties(filters: PartyFilters = {}): Promise<Party[]> 
   if (filters.party_type) params.party_type = filters.party_type;
   const { data } = await api.get<Paginated<Party>>('/parties/', { params });
   return data.results;
+}
+
+/**
+ * Página de terceros con envelope completo (para useListadoServer).
+ * El backend ordena fijo por display_name; no acepta `ordering`.
+ */
+export async function listPartiesPage(filters: PartyFilters, page: PageReq): Promise<Paginated<Party>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (filters.q) params.q = filters.q;
+  if (filters.role) params.role = filters.role;
+  if (filters.status) params.status = filters.status;
+  if (filters.party_type) params.party_type = filters.party_type;
+  const { data } = await api.get<Paginated<Party>>('/parties/', { params });
+  return data;
 }
 
 export async function createParty(input: PartyInput & { roles?: PartyRoleCode[] }): Promise<Party> {

@@ -61,6 +61,14 @@ export async function listCashSessions(): Promise<CashSessionRow[]> {
   return data.results;
 }
 
+/** Página de sesiones de caja con envelope completo (para useListadoServer). */
+export async function listCashSessionsPage(page: PageReq): Promise<Paginated<CashSessionRow>> {
+  const { data } = await api.get<Paginated<CashSessionRow>>('/payments/cash-sessions/', {
+    params: { limit: page.limit, offset: page.offset },
+  });
+  return data;
+}
+
 export async function openCashSession(input: {
   opening_amount?: string;
   notes?: string;

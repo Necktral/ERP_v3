@@ -3,6 +3,8 @@
  * importan de aquí; ninguna define las suyas propias).
  */
 
+import { CODIGOS, esCodigoBackend } from 'src/core/codigos';
+
 /** Envelope de paginación estándar del backend ({count, limit, offset, results}). */
 export interface Paginated<T> {
   count: number;
@@ -54,18 +56,36 @@ export function toPageParams(p: QTablePagination): PageReq {
 }
 
 /**
+ * Traducción del diccionario central si `valor` es un código crudo del backend
+ * (CODIGO_EN_MAYUSCULAS) con entrada conocida; null si no aplica.
+ */
+function traduccionDeCodigo(valor: string): string | null {
+  const v = valor.trim();
+  return esCodigoBackend(v) ? (CODIGOS[v] ?? null) : null;
+}
+
+/**
  * Extrae un mensaje legible del envelope de error de DRF:
  * `detail` si existe; si no, el primer error de campo como "campo: mensaje".
+ * Si el valor es un código crudo del backend (p. ej. SALES_INSUFFICIENT_STOCK)
+ * y está en el diccionario central (src/core/codigos), devuelve su traducción.
  */
 export function apiErrorMessage(e: unknown, fallback = ''): string {
   const err = e as { response?: { data?: Record<string, unknown> } };
   const data = err.response?.data;
   if (data && typeof data === 'object') {
-    if (typeof data.detail === 'string') return data.detail;
+    if (typeof data.detail === 'string') {
+      return traduccionDeCodigo(data.detail) ?? data.detail;
+    }
     for (const k of Object.keys(data)) {
       const v = data[k];
-      if (Array.isArray(v) && v.length) return `${k}: ${String(v[0])}`;
-      if (typeof v === 'string') return `${k}: ${v}`;
+      if (Array.isArray(v) && v.length) {
+        const s = String(v[0]);
+        return traduccionDeCodigo(s) ?? `${k}: ${s}`;
+      }
+      if (typeof v === 'string') {
+        return traduccionDeCodigo(v) ?? `${k}: ${v}`;
+      }
     }
   }
   return fallback;

@@ -54,7 +54,7 @@
         </div>
       </div>
 
-      <!-- Detalle por préstamo -->
+      <!-- Detalle por préstamo (módulo dormido: carga completa client-side a propósito) -->
       <q-table
         :rows="paquete.detalle"
         :columns="cols"

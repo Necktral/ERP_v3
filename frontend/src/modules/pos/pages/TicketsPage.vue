@@ -12,14 +12,16 @@
     </PageHeader>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="Aún no hay tickets."
+      @request="onRequest"
     >
       <template #body-cell-estado="props">
         <q-td :props="props">
@@ -58,10 +60,10 @@ import { computed } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { FUEL_PAYMENT_LABELS, FUEL_SALE_TYPE_LABELS } from 'src/modules/fuel/api';
 import {
-  listPosTickets,
+  listPosTicketsPage,
   POS_TICKET_STATUS_LABELS,
   retryPosCompensation,
   type PosTicket,
@@ -73,9 +75,11 @@ const $q = useQuasar();
 const acl = useAclStore();
 const ctx = useContextStore();
 
-const { rows, loading, reload } = useListado<PosTicket>(() => listPosTickets(), {
-  errorMessage: 'No se pudieron cargar los tickets.',
-});
+// Paginación server-side: el histórico de tickets crece sin límite (antes truncaba a 200).
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<PosTicket>(
+  (page) => listPosTicketsPage(page),
+  { errorMessage: 'No se pudieron cargar los tickets.' },
+);
 
 const puedeCheckout = computed(() => {
   const companyId = ctx.activeCompanyId;

@@ -40,6 +40,7 @@
         <div class="text-caption text-muted q-mb-sm">
           Usuarios que HOY tienen pares de permisos incompatibles (ej. crear factura y aprobar pago).
         </div>
+        <!-- cálculo en vivo acotado (usuarios × reglas en conflicto): carga completa a propósito -->
         <q-table
           class="app-table"
           :rows="violaciones"
@@ -65,14 +66,16 @@
 
       <q-tab-panel name="hallazgos" class="q-pa-none">
         <q-table
+          v-model:pagination="paginacionHallazgos"
           class="app-table"
           :rows="hallazgos"
           :columns="columnasHallazgo"
           row-key="id"
           flat
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="cargandoHallazgos"
+          :rows-per-page-options="[10, 25, 50, 100]"
           no-data-label="Sin hallazgos. Corré un escaneo para detectar."
+          @request="onRequestHallazgos"
         >
           <template #body-cell-estado="props">
             <q-td :props="props">{{ FINDING_STATUS_LABELS[props.row.status] ?? props.row.status }}</q-td>
@@ -94,6 +97,7 @@
       </q-tab-panel>
 
       <q-tab-panel name="reglas" class="q-pa-none">
+        <!-- catálogo corto de configuración (pares de permisos): carga completa a propósito -->
         <q-table
           class="app-table"
           :rows="reglas"
@@ -114,9 +118,10 @@ import { onMounted, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import {
   FINDING_STATUS_LABELS,
-  listFindings,
+  listFindingsPage,
   listSodRules,
   listSodViolations,
   resolveFinding,
@@ -138,7 +143,19 @@ const cargando = ref(false);
 const escaneando = ref(false);
 const reglas = ref<SodRule[]>([]);
 const violaciones = ref<SodViolation[]>([]);
-const hallazgos = ref<ControlFinding[]>([]);
+
+// Hallazgos: paginación server-side (se acumulan con cada escaneo; antes
+// truncaba a 200). auto:false porque recargar() los carga al montar.
+const {
+  rows: hallazgos,
+  loading: cargandoHallazgos,
+  pagination: paginacionHallazgos,
+  onRequest: onRequestHallazgos,
+  reload: recargarHallazgos,
+} = useListadoServer<ControlFinding>((page) => listFindingsPage(undefined, page), {
+  errorMessage: 'No se pudieron cargar los hallazgos.',
+  auto: false,
+});
 
 function puede(code: string): boolean {
   const companyId = ctx.activeCompanyId;
@@ -171,10 +188,9 @@ const columnasRegla: QTableColumn<SodRule>[] = [
 async function recargar() {
   cargando.value = true;
   try {
-    const [r, v, h] = await Promise.all([listSodRules(), listSodViolations(), listFindings()]);
+    const [r, v] = await Promise.all([listSodRules(), listSodViolations(), recargarHallazgos()] as const);
     reglas.value = r;
     violaciones.value = v;
-    hallazgos.value = h;
   } catch (e) {
     $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudieron cargar los controles.') });
   } finally {

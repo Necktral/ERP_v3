@@ -4,7 +4,7 @@
  * movimiento de caja). Compensación automática si algo falla a medio camino.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 export const POS_TICKET_STATUS_LABELS: Record<string, string> = {
   CART_OPEN: 'Carrito abierto',
@@ -67,6 +67,14 @@ export async function closePosSession(sessionId: number, counted_amount: string)
 export async function listPosTickets(): Promise<PosTicket[]> {
   const { data } = await api.get<Paginated<PosTicket>>('/retail/pos/tickets/', { params: PAGE });
   return data.results;
+}
+
+/** Página de tickets con envelope completo (para useListadoServer). */
+export async function listPosTicketsPage(page: PageReq): Promise<Paginated<PosTicket>> {
+  const { data } = await api.get<Paginated<PosTicket>>('/retail/pos/tickets/', {
+    params: { limit: page.limit, offset: page.offset },
+  });
+  return data;
 }
 
 export async function openPosTicket(input: {

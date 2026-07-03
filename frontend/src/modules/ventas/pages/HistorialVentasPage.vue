@@ -41,14 +41,15 @@
     </div>
 
     <q-table
+      v-model:pagination="pagination"
       :rows="ventas"
       :columns="columnas"
       row-key="id"
       flat
       :loading="cargando"
-      :pagination="{ rowsPerPage: 0 }"
-      hide-pagination
+      :rows-per-page-options="[10, 25, 50, 100]"
       class="app-table"
+      @request="onRequest"
     >
       <template #body-cell-doc="props">
         <q-td :props="props">
@@ -230,10 +231,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatMoney, formatQty } from 'src/core/format';
 import {
   BILLING_DOC_TYPE_LABELS,
@@ -242,7 +244,7 @@ import {
   PAYMENT_STATUS_LABELS,
   getBillingDoc,
   issueCreditNote,
-  listBillingDocs,
+  listBillingDocsPage,
   printBillingDoc,
   voidBillingDoc,
   type BillingDoc,
@@ -311,24 +313,28 @@ const desde = ref(hoy);
 const hasta = ref(hoy);
 const estado = ref('ISSUED');
 const busqueda = ref('');
-const ventas = ref<BillingDocRow[]>([]);
-const cargando = ref(false);
 
-async function cargar() {
-  cargando.value = true;
-  try {
-    const filtros: BillingFilters = { doc_type: 'INVOICE' };
-    if (estado.value) filtros.status = estado.value as BillingDocStatus;
-    if (busqueda.value?.trim()) filtros.q = busqueda.value.trim();
-    if (desde.value) filtros.date_from = desde.value;
-    if (hasta.value) filtros.date_to = hasta.value;
-    ventas.value = await listBillingDocs(filtros);
-  } catch (e) {
-    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar el historial.') });
-  } finally {
-    cargando.value = false;
-  }
+/** Filtros actuales para la consulta paginada. */
+function filtros(): BillingFilters {
+  const f: BillingFilters = { doc_type: 'INVOICE' };
+  if (estado.value) f.status = estado.value as BillingDocStatus;
+  if (busqueda.value?.trim()) f.q = busqueda.value.trim();
+  if (desde.value) f.date_from = desde.value;
+  if (hasta.value) f.date_to = hasta.value;
+  return f;
 }
+
+// Paginación server-side: el historial crece sin límite (antes truncaba a 200
+// y pintaba todo lo cargado con rowsPerPage: 0).
+const {
+  rows: ventas,
+  loading: cargando,
+  pagination,
+  onRequest,
+  reload: cargar,
+} = useListadoServer<BillingDocRow>((page) => listBillingDocsPage(filtros(), page), {
+  errorMessage: 'No se pudo cargar el historial.',
+});
 
 function fechaCorta(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('es-NI', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -481,8 +487,6 @@ async function confirmarAnulacion() {
     enviando.value = false;
   }
 }
-
-onMounted(cargar);
 </script>
 
 <style scoped>

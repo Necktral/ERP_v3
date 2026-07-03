@@ -172,45 +172,58 @@ def process_batch(
         metadata={"batch_id": str(batch_id), "received_count": len(commands)},
     )
 
-    for c in commands:
-        try:
-            r = process_command(
-                request=request,
-                actor_user=actor_user,
-                device=device,
-                cmd=c,
-                policy=policy,
-                enforce_command_signature=enforce_command_signature,
-            )
-        except Exception as e:
-            # 1) auditar
-            write_event(
-                request=request,
-                event_type="SYNC_COMMAND_REJECTED",
-                reason_code="SYNC_INTERNAL_ERROR",
-                actor_user=actor_user if getattr(actor_user, "is_authenticated", False) else None,
-                subject_type="DEVICE",
-                subject_id=str(device.id),
-                device_id=str(device.id),
-                offline_mode=True,
-                metadata={
-                    "error": str(e),
-                    "command_type": c.get("command_type"),
-                    "command_id": str(c.get("command_id")),
-                },
-            )
-            # 2) responder REJECTED para ese comando, sin tumbar el batch
-            r = {"command_id": str(c.get("command_id")), "status": "REJECTED", "reason": "SYNC_INTERNAL_ERROR"}
-        results.append(r)
-        st = r.get("status")
-        if st == "APPLIED":
-            applied += 1
-        elif st == "DUPLICATE":
-            duplicate += 1
-        else:
-            rejected += 1
-            reason = str(r.get("reason", "SYNC_INTERNAL_ERROR"))
-            errors_summary[reason] = errors_summary.get(reason, 0) + 1
+    # Oleada 7: UNA transacción por CHUNK con savepoint por comando (antes:
+    # una transacción — y un commit/fsync — por comando). El savepoint
+    # explícito aísla CUALQUIER error de BD del comando (incluso fuera del
+    # atomic interno de process_command): su rollback deja la transacción
+    # del chunk usable y el resto de comandos procesa igual que antes. La
+    # respuesta por comando y la semántica de fallo no cambian.
+    SYNC_BATCH_CHUNK_SIZE = 20
+
+    for inicio in range(0, len(commands), SYNC_BATCH_CHUNK_SIZE):
+        chunk = commands[inicio : inicio + SYNC_BATCH_CHUNK_SIZE]
+        with transaction.atomic():
+            for c in chunk:
+                try:
+                    with transaction.atomic():  # savepoint del comando
+                        r = process_command(
+                            request=request,
+                            actor_user=actor_user,
+                            device=device,
+                            cmd=c,
+                            policy=policy,
+                            enforce_command_signature=enforce_command_signature,
+                        )
+                except Exception as e:
+                    # 1) auditar (el savepoint fallido ya se revirtió; la
+                    #    transacción del chunk sigue sana)
+                    write_event(
+                        request=request,
+                        event_type="SYNC_COMMAND_REJECTED",
+                        reason_code="SYNC_INTERNAL_ERROR",
+                        actor_user=actor_user if getattr(actor_user, "is_authenticated", False) else None,
+                        subject_type="DEVICE",
+                        subject_id=str(device.id),
+                        device_id=str(device.id),
+                        offline_mode=True,
+                        metadata={
+                            "error": str(e),
+                            "command_type": c.get("command_type"),
+                            "command_id": str(c.get("command_id")),
+                        },
+                    )
+                    # 2) responder REJECTED para ese comando, sin tumbar el batch
+                    r = {"command_id": str(c.get("command_id")), "status": "REJECTED", "reason": "SYNC_INTERNAL_ERROR"}
+                results.append(r)
+                st = r.get("status")
+                if st == "APPLIED":
+                    applied += 1
+                elif st == "DUPLICATE":
+                    duplicate += 1
+                else:
+                    rejected += 1
+                    reason = str(r.get("reason", "SYNC_INTERNAL_ERROR"))
+                    errors_summary[reason] = errors_summary.get(reason, 0) + 1
 
     SyncReceipt.objects.update_or_create(
         batch_id=batch_id,

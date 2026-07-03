@@ -59,14 +59,16 @@
     </div>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="No hay terceros. Creá el primero con «Nuevo tercero»."
+      @request="onRequest"
     >
       <template #body-cell-tipo="props">
         <q-td :props="props">{{ PARTY_TYPE_LABELS[props.row.party_type as PartyType] }}</q-td>
@@ -235,12 +237,12 @@
 import { computed, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import PageHeader from 'src/components/PageHeader.vue';
 import {
   assignPartyRole,
   createParty,
-  listParties,
+  listPartiesPage,
   PARTY_ROLE_LABELS,
   PARTY_STATUS_LABELS,
   PARTY_TYPE_LABELS,
@@ -262,13 +264,17 @@ const filtroQ = ref('');
 const filtroRol = ref<PartyRoleCode | null>(null);
 const filtroEstado = ref<PartyStatus | null>(null);
 
-const { rows, loading, reload } = useListado<Party>(
-  () =>
-    listParties({
-      q: filtroQ.value?.trim() ?? '',
-      role: filtroRol.value ?? '',
-      status: filtroEstado.value ?? '',
-    }),
+// Paginación server-side: el directorio crece sin límite (antes truncaba a 200).
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<Party>(
+  (page) =>
+    listPartiesPage(
+      {
+        q: filtroQ.value?.trim() ?? '',
+        role: filtroRol.value ?? '',
+        status: filtroEstado.value ?? '',
+      },
+      page,
+    ),
   { errorMessage: 'No se pudieron cargar los terceros.' },
 );
 
@@ -288,10 +294,11 @@ const opcionesEstado = Object.entries(PARTY_STATUS_LABELS).map(([value, label]) 
   label,
 }));
 
+// Sin columnas `sortable`: el endpoint ordena fijo por display_name y no acepta `ordering`.
 const columns: QTableColumn<Party>[] = [
-  { name: 'display_name', label: 'Nombre', field: 'display_name', align: 'left', sortable: true },
+  { name: 'display_name', label: 'Nombre', field: 'display_name', align: 'left' },
   { name: 'tipo', label: 'Tipo', field: 'party_type', align: 'left' },
-  { name: 'worker_code', label: 'Carnet', field: 'worker_code', align: 'left', sortable: true },
+  { name: 'worker_code', label: 'Carnet', field: 'worker_code', align: 'left' },
   { name: 'tax_id', label: 'RUC', field: 'tax_id', align: 'left' },
   { name: 'national_id', label: 'Cédula', field: 'national_id', align: 'left' },
   { name: 'phone', label: 'Teléfono', field: 'phone', align: 'left' },
