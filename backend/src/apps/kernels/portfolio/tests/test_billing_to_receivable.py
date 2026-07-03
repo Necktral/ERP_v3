@@ -130,3 +130,54 @@ def test_receivable_link_is_idempotent():
     result = link_billing_document_to_receivable(outbox_event=issued, actor_user=actor)
     assert result["status"] == "EXISTS"
     assert _receivables_for(company, draft.doc_id).count() == 1
+
+
+# ---------------------------------------------------------------------------
+# U12 (oleada 5) — doble-CxC bajo CONCURRENCIA
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db(transaction=True)
+def test_link_concurrente_del_mismo_evento_no_crea_doble_cxc():
+    """U12: dos consumidores del MISMO evento de venta a crédito, a la vez,
+    deben producir UNA sola CxC (el chequeo filter-first tiene ventana de
+    carrera; el árbitro debe serializar)."""
+    import threading
+
+    from django.db import connection as db_conn
+
+    company, branch = _scope()
+    actor = _user()
+    req = _request(company, branch, actor)
+    party = _party(company)
+    draft = _draft(req, actor, customer_party_id=party.id)
+    _make_credit(draft.doc_id)
+    _issue(req, actor, draft.doc_id)
+
+    event = (
+        OutboxEvent.objects.filter(source_module="BILLING", event_type="DocumentIssued", company=company)
+        .order_by("-id").first()
+    )
+    assert event is not None
+
+    barrier = threading.Barrier(2, timeout=10)
+    errores: list[str] = []
+    lock = threading.Lock()
+
+    def consumir():
+        try:
+            barrier.wait()
+            link_billing_document_to_receivable(outbox_event=event, actor_user=actor)
+        except Exception as exc:  # noqa: BLE001 — un error de dominio limpio es aceptable; el doble-CxC no
+            with lock:
+                errores.append(repr(exc))
+        finally:
+            db_conn.close()
+
+    threads = [threading.Thread(target=consumir) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    cxc = _receivables_for(company, draft.doc_id).count()
+    assert cxc == 1, f"doble-CxC bajo concurrencia: {cxc} receivables para el mismo doc (errores: {errores})"

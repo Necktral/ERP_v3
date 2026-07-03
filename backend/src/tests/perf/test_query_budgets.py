@@ -258,6 +258,49 @@ def test_budget_computo_planilla_queries_constantes_en_entradas():
 
 @pytest.mark.query_budget
 @pytest.mark.django_db
+def test_budget_workbench_cobranza_queries_constantes_en_cartera():
+    """Oleada 5: la mesa de cobranza cuesta las mismas queries con 2 clientes
+    vencidos que con 8 (outstanding filtrado en BD + último recordatorio por
+    grupo en un DISTINCT ON — nada por-cliente)."""
+    from datetime import timedelta
+
+    from django.utils import timezone as dj_tz
+
+    from apps.kernels.portfolio.collections import collections_workbench
+    from apps.kernels.portfolio.models import Receivable
+    from apps.modulos.parties.models import Party
+
+    def montar(n_clientes: int):
+        _, company, _branch = _mk_org()
+        vencida = dj_tz.localdate() - timedelta(days=40)
+        for i in range(n_clientes):
+            party = Party.objects.create(
+                company=company, party_type=Party.PartyType.JURIDICAL,
+                display_name=f"Cliente {i}-{uuid.uuid4().hex[:4]}", tax_id=f"R-{uuid.uuid4().hex[:8]}",
+            )
+            Receivable.objects.create(
+                company=company, party=party, status="OVERDUE",
+                reference_type="MANUAL", reference_id=i + 1,
+                principal_amount=Decimal("500.00"), currency="NIO",
+                issue_date=vencida - timedelta(days=30), due_date=vencida,
+            )
+        return company
+
+    def medir(company) -> int:
+        with CaptureQueriesContext(connection) as ctx:
+            collections_workbench(company=company)
+        return len(ctx.captured_queries)
+
+    c_chica, c_grande = montar(2), montar(8)
+    medir(c_chica)  # warmup
+    q_chico, q_grande = medir(c_chica), medir(c_grande)
+    assert q_grande == q_chico, (
+        f"collections_workbench escala en queries con los clientes: {q_chico} con 2 vs {q_grande} con 8"
+    )
+
+
+@pytest.mark.query_budget
+@pytest.mark.django_db
 def test_budget_listado_inventario_items(settings):
     _, company, branch = _mk_org()
     client, _user = create_operational_api_actor(

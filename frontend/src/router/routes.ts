@@ -389,6 +389,18 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['portfolio.credit.read'] },
       },
       {
+        path: 'cartera/intereses',
+        name: 'cartera-intereses',
+        component: () => import('src/modules/portfolio/pages/InteresesPage.vue'),
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['portfolio.interest.read'] },
+      },
+      {
+        path: 'cartera/configuracion',
+        name: 'cartera-configuracion',
+        component: () => import('src/modules/portfolio/pages/ConfiguracionCarteraPage.vue'),
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['portfolio.settings.read'] },
+      },
+      {
         path: 'comisariato',
         name: 'comisariato',
         component: () => import('src/modules/comisariato/pages/ComisariatoPage.vue'),
