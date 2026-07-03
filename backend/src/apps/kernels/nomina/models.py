@@ -359,8 +359,16 @@ class IRBracket(models.Model):
 
     @classmethod
     def calculate_annual_ir(cls, *, config: "NominaConfig", annual_income: Decimal) -> Decimal:
-        """Calcula el IR anual dado un ingreso anual bruto."""
-        brackets = cls.objects.filter(config=config).order_by("order")
+        """Calcula el IR anual dado un ingreso anual bruto.
+
+        Los tramos se cachean en la INSTANCIA de config (oleada 3): computar una
+        planilla completa leía los mismos tramos una vez por entrada. El cache
+        muere con el objeto config — sin estado cross-request.
+        """
+        brackets = getattr(config, "_ir_brackets_cache", None)
+        if brackets is None:
+            brackets = list(cls.objects.filter(config=config).order_by("order"))
+            config._ir_brackets_cache = brackets
         ir = Decimal("0.00")
         for bracket in brackets:
             if annual_income <= bracket.min_income:

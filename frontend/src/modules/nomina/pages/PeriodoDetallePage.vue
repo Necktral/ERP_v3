@@ -89,7 +89,7 @@
       <div class="per-section__head">
         <div class="per-section__title">
           Trabajadores en «{{ sheetActiva.sheet_name }}»
-          <span class="per-muted">({{ entries.length }})</span>
+          <span class="per-muted">({{ paginacionEntradas.rowsNumber }})</span>
         </div>
         <div class="row items-center q-gutter-sm">
           <q-input v-model="busqueda" outlined dense clearable debounce="250" placeholder="Buscar…" style="width: 220px" @update:model-value="cargarEntradas">
@@ -100,6 +100,7 @@
       </div>
 
       <q-table
+        v-model:pagination="paginacionEntradas"
         class="app-table"
         :rows="entries"
         :columns="entryCols"
@@ -107,11 +108,15 @@
         flat
         dense
         :loading="loadingEntries"
-        :pagination="{ rowsPerPage: 50 }"
+        :rows-per-page-options="[10, 25, 50, 100]"
         no-data-label="Sin trabajadores: aplicá la asistencia de campo o agregalos manualmente."
+        @request="onRequestEntradas"
       >
         <template #body-cell-no="props">
-          <q-td :props="props" class="text-center per-muted">{{ props.rowIndex + 1 }}</q-td>
+          <!-- Numeración corrida entre páginas (offset + posición en la página) -->
+          <q-td :props="props" class="text-center per-muted">
+            {{ (paginacionEntradas.page - 1) * paginacionEntradas.rowsPerPage + props.rowIndex + 1 }}
+          </q-td>
         </template>
         <template #body-cell-acciones="props">
           <q-td :props="props" class="per-row-actions">
@@ -349,13 +354,14 @@ import BackButton from 'src/components/BackButton.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useQuasar, type QTableColumn } from 'quasar';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import {
   applyFieldAttendance,
   createEntry,
   createSheet,
   deleteEntry,
   downloadPlanilla,
-  listEntries,
+  listEntriesPage,
   listPeriods,
   listSheets,
   setDailyAttendance,
@@ -373,15 +379,34 @@ const route = useRoute();
 const periodId = computed(() => Number(route.params.id));
 
 const loading = ref(false);
-const loadingEntries = ref(false);
 const saving = ref(false);
 const acting = ref<string | null>(null);
 
 const periodo = ref<PayrollPeriod | null>(null);
 const sheets = ref<PayrollSheet[]>([]);
 const sheetActiva = ref<PayrollSheet | null>(null);
-const entries = ref<PayrollEntry[]>([]);
 const busqueda = ref('');
+
+// Trabajadores de la planilla: paginación server-side (la cuadrilla crece sin
+// límite en temporada). auto:false — solo se consulta cuando hay planilla
+// seleccionada (mismo patrón que KardexPage).
+const {
+  rows: entries,
+  loading: loadingEntries,
+  pagination: paginacionEntradas,
+  onRequest: onRequestEntradas,
+  reload: recargarEntradas,
+} = useListadoServer<PayrollEntry>(
+  (page) =>
+    listEntriesPage(periodId.value, sheetActiva.value?.id as number, busqueda.value || '', page),
+  { errorMessage: 'No se pudieron cargar los trabajadores.', auto: false, rowsPerPage: 50 },
+);
+
+/** Re-consulta desde la página 1; no hace nada si aún no hay planilla elegida. */
+async function cargarEntradas() {
+  if (!sheetActiva.value) return;
+  await recargarEntradas();
+}
 
 // --- Captura de asistencia DÍA-POR-DÍA (planilla fiel al Excel) ---
 const MARK_OPTS = [
@@ -522,9 +547,11 @@ function totalDevengadoNeto(r: PayrollEntry): string {
 // días y SIN columnas de INSS/IR ni costos patronales (en SIN INSS el INSS es 0 y la patronal no
 // aplica); con ALIMENTACIÓN (suma al neto) y Recibí Conforme. Números legales (el IR se resta aunque
 // no tenga columna). NO lleva Cédula/No.INSS ni cobros internos (eso es lógica del CO-PA).
+// Sin `sortable`: con paginación server-side el orden lo fija el backend
+// (siempre por nombre; el endpoint no acepta `ordering`).
 const entryColsSin: QTableColumn<PayrollEntry>[] = [
   { name: 'no', label: 'No.', field: () => '', align: 'center' },
-  { name: 'full_name', label: 'Nombres y Apellidos', field: 'full_name', align: 'left', sortable: true },
+  { name: 'full_name', label: 'Nombres y Apellidos', field: 'full_name', align: 'left' },
   { name: 'gender', label: 'Género', field: 'gender', align: 'center' },
   { name: 'cargo', label: 'Cargo', field: 'cargo', align: 'left' },
   { name: 'daily_rate_nio', label: 'Salario Diario', field: (r) => money(r.daily_rate_nio), align: 'right' },
@@ -536,7 +563,7 @@ const entryColsSin: QTableColumn<PayrollEntry>[] = [
   { name: 'thirteenth_month_provision', label: '13vo Mes', field: (r) => money(r.thirteenth_month_provision), align: 'right' },
   { name: 'total_income', label: 'Total Ingresos', field: (r) => money(r.total_income), align: 'right' },
   { name: 'alimentacion_amount', label: 'Alimentación', field: (r) => money(r.alimentacion_amount), align: 'right' },
-  { name: 'net_to_pay', label: 'Total a Pagar', field: (r) => money(r.net_to_pay), align: 'right', sortable: true },
+  { name: 'net_to_pay', label: 'Total a Pagar', field: (r) => money(r.net_to_pay), align: 'right' },
   { name: 'recibi_conforme', label: 'Recibí Conforme', field: () => '', align: 'center' },
   { name: 'acciones', label: '', field: () => '', align: 'center' },
 ];
@@ -547,7 +574,7 @@ const entryColsSin: QTableColumn<PayrollEntry>[] = [
 const entryColsCon = computed<QTableColumn<PayrollEntry>[]>(() => [
   { name: 'no', label: 'No.', field: () => '', align: 'center' },
   { name: 'base_salary_nio', label: 'Salario', field: (r) => money(r.base_salary_nio), align: 'right' },
-  { name: 'full_name', label: 'Nombres y Apellidos', field: 'full_name', align: 'left', sortable: true },
+  { name: 'full_name', label: 'Nombres y Apellidos', field: 'full_name', align: 'left' },
   { name: 'gender', label: 'Género', field: 'gender', align: 'center' },
   { name: 'daily_rate_nio', label: 'Salario Diario', field: (r) => money(r.daily_rate_nio), align: 'right' },
   { name: 'cargo', label: 'Actividad', field: 'cargo', align: 'left' },
@@ -571,7 +598,7 @@ const entryColsCon = computed<QTableColumn<PayrollEntry>[]>(() => [
   { name: 'ir_amount', label: 'IR', field: (r) => money(r.ir_amount), align: 'right' },
   { name: 'total_devengado_neto', label: 'Total Devengado', field: totalDevengadoNeto, align: 'right' },
   { name: 'alimentacion_amount', label: 'Alimentos', field: (r) => money(r.alimentacion_amount), align: 'right' },
-  { name: 'net_to_pay', label: 'Total a Pagar', field: (r) => money(r.net_to_pay), align: 'right', sortable: true },
+  { name: 'net_to_pay', label: 'Total a Pagar', field: (r) => money(r.net_to_pay), align: 'right' },
   { name: 'recibi_conforme', label: 'Recibe Conforme', field: () => '', align: 'center' },
   { name: 'acciones', label: '', field: () => '', align: 'center' },
 ]);
@@ -599,18 +626,6 @@ async function reload() {
     $q.notify({ type: 'negative', message: 'No se pudo cargar el período.' });
   } finally {
     loading.value = false;
-  }
-}
-
-async function cargarEntradas() {
-  if (!sheetActiva.value) return;
-  loadingEntries.value = true;
-  try {
-    entries.value = await listEntries(periodId.value, sheetActiva.value.id, busqueda.value || '');
-  } catch {
-    $q.notify({ type: 'negative', message: 'No se pudieron cargar los trabajadores.' });
-  } finally {
-    loadingEntries.value = false;
   }
 }
 

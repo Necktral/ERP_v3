@@ -6,7 +6,7 @@
  * enviar/aprobar → exportar XLSX/PDF legal.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, type PageReq, type Paginated } from 'src/core/api';
 
 // --- Configuración (tasas + IR) ---------------------------------------------
 export interface NominaConfig {
@@ -260,6 +260,27 @@ export async function listEntries(
     { params: { ...PAGE, ...(search ? { search } : {}) } },
   );
   return data.results;
+}
+
+/**
+ * Variante paginada server-side (envelope completo con `count`) para la tabla
+ * de trabajadores de la planilla, que crece con la cuadrilla. El backend
+ * ordena fijo por nombre y filtra por `search` (nombre, No. INSS o cédula);
+ * no acepta `ordering`.
+ */
+export async function listEntriesPage(
+  periodId: number,
+  sheetId: number,
+  search: string,
+  page: PageReq,
+): Promise<Paginated<PayrollEntry>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (search) params.search = search;
+  const { data } = await api.get<Paginated<PayrollEntry>>(
+    `/nomina/periods/${periodId}/sheets/${sheetId}/entries/`,
+    { params },
+  );
+  return data;
 }
 
 export interface EntryInput {

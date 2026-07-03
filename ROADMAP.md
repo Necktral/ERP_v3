@@ -108,5 +108,13 @@ inventarios → **O2** payments+accounting → **O3** nómina núcleo → **O4**
   Índice GL **diferido con razón** (BD dev sin datos: EXPLAIN no valida; retomar con volumen).
   UI: ReconciliacionOperativaPage + resumen de consolidación por corrida; tablas de intents e
   intercompany a paginación server-side. Baseline L4: 40 → 39 huérfanos.
-- O3-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
+- **O3 — nómina núcleo (`oleada-3/nomina-perf`): HECHA.** `compute_all_entries_in_sheet` con UN
+  bulk_update atómico (antes: un UPDATE completo por entrada; `updated_at` fijado explícito) —
+  equivalencia garantizada por golden campo-por-campo masivo==individual + punto fijo; tramos IR
+  cacheados por instancia de config (antes: 1 query de tramos POR entrada — N+1 real no previsto en
+  el plan); ingesta biométrica con dedupe por lote (1 query de keys + bulk_create). Budget: recalcular
+  planilla de 3 y de 12 entradas cuesta las MISMAS queries. U13/U14 EN-CURSO. UI: entradas de
+  planilla y marcas biométricas con paginación server-side (las no migradas quedaron documentadas
+  con razón: pay-summary no pagina y es offline-first; asistencia/hoy acotada al día).
+- O4-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
   están enumerados con su oleada en `qa/contracts/api_frontend_drift_baseline.json`).

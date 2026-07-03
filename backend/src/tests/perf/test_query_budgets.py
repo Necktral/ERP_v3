@@ -12,6 +12,7 @@ evaluación de permisos del mismo request no debe tocar la BD.
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -198,6 +199,60 @@ def test_budget_create_remision_queries_constantes_en_lineas():
     q_chico, q_grande = crear(2), crear(40)
     assert q_grande == q_chico, (
         f"create_remision escala en queries con las líneas: {q_chico} con 2 vs {q_grande} con 40"
+    )
+
+
+@pytest.mark.query_budget
+@pytest.mark.django_db
+def test_budget_computo_planilla_queries_constantes_en_entradas():
+    """Oleada 3: recalcular una planilla cuesta las mismas queries con 3
+    entradas que con 12 (cómputo en memoria + un bulk_update, no un UPDATE
+    por entrada)."""
+    from datetime import date as _d
+    from types import SimpleNamespace
+
+    from apps.kernels.nomina.models import (
+        PayrollEntry, PayrollPeriod, PayrollSheet, PeriodStatus, PeriodType, SalaryType,
+    )
+    from apps.kernels.nomina.services import compute_all_entries_in_sheet, create_default_nicaragua_config
+    from apps.modulos.hr.models import Employee
+
+    def montar(n_entradas: int):
+        _, company, branch = _mk_org()
+        u = f"pn_{uuid.uuid4().hex[:8]}"
+        actor = User.objects.create_user(username=u, email=f"{u}@test.local", password="x")
+        req = SimpleNamespace(user=actor, META={}, company=company, branch=None, _request=None,
+                              ctx=None, request_id="r", path="", method="POST")
+        create_default_nicaragua_config(request=req, actor=actor, company=company, fiscal_year=2026)
+        period = PayrollPeriod.objects.create(
+            company=company, year=2026, month=6, period_type=PeriodType.SECOND_HALF,
+            start_date=_d(2026, 6, 16), end_date=_d(2026, 6, 30), working_days=15,
+            status=PeriodStatus.APPROVED,
+        )
+        sheet = PayrollSheet.objects.create(period=period, branch=branch, sheet_name="PERF", has_inss=True)
+        for i in range(n_entradas):
+            emp = Employee.objects.create(
+                company=company, employee_code=f"P-{i}", first_name=f"E{i}", last_name="Perf",
+                cedula=f"{i:03d}-PRF-{uuid.uuid4().hex[:4]}", inss_number=f"7{i}0", is_active=True,
+            )
+            PayrollEntry.objects.create(
+                sheet=sheet, employee=emp, full_name=f"E{i} Perf", cedula=emp.cedula,
+                inss_number=emp.inss_number, has_inss=True, salary_type=SalaryType.MONTHLY,
+                base_salary_nio=Decimal("10000.00"), days_in_period=15, days_worked=Decimal("15.00"),
+            )
+        return sheet
+
+    def medir(sheet) -> int:
+        with CaptureQueriesContext(connection) as ctx:
+            compute_all_entries_in_sheet(sheet=sheet)
+        return len(ctx.captured_queries)
+
+    sheet_chica, sheet_grande = montar(3), montar(12)
+    medir(sheet_chica)  # warmup (content types, caches one-time)
+    q_chico, q_grande = medir(sheet_chica), medir(sheet_grande)
+    assert q_grande == q_chico, (
+        f"compute_all_entries_in_sheet escala en queries con las entradas: "
+        f"{q_chico} con 3 vs {q_grande} con 12"
     )
 
 
