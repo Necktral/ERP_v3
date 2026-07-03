@@ -67,14 +67,16 @@
     </div>
 
     <q-table
+      v-model:pagination="pagination"
       class="app-table"
       :rows="rows"
       :columns="columns"
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="[10, 25, 50, 100]"
       no-data-label="No hay documentos con esos filtros."
+      @request="onRequest"
       @row-click="(_, row) => abrirDetalle(row as BillingDocRow)"
     >
       <template #body-cell-numero="props">
@@ -93,7 +95,7 @@
       <template #body-cell-total="props">
         <q-td :props="props">{{ formatMoney(props.row.total) }}</q-td>
       </template>
-      <template #body-cell-fecha="props">
+      <template #body-cell-created_at="props">
         <q-td :props="props">{{ formatDate(props.row.created_at) }}</q-td>
       </template>
       <template #body-cell-estado="props">
@@ -220,14 +222,14 @@ import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import EstadoChip, { type EstadoEstilo } from 'src/components/EstadoChip.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatMoney } from 'src/core/format';
 import PartySelect from 'src/modules/parties/components/PartySelect.vue';
 import {
   BILLING_DOC_TYPE_LABELS,
   createBillingDoc,
   FISCAL_STATUS_LABELS,
-  listBillingDocs,
+  listBillingDocsPage,
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS,
   type BillingDocRow,
@@ -270,13 +272,16 @@ const filtroQ = ref('');
 const filtroEstado = ref<BillingDocStatus | null>(null);
 const filtroTipo = ref<BillingDocType | null>(null);
 
-const { rows, loading, reload } = useListado<BillingDocRow>(
-  () =>
-    listBillingDocs({
-      q: filtroQ.value?.trim() ?? '',
-      status: filtroEstado.value ?? '',
-      doc_type: filtroTipo.value ?? '',
-    }),
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<BillingDocRow>(
+  (page) =>
+    listBillingDocsPage(
+      {
+        q: filtroQ.value?.trim() ?? '',
+        status: filtroEstado.value ?? '',
+        doc_type: filtroTipo.value ?? '',
+      },
+      page,
+    ),
   { errorMessage: 'No se pudieron cargar los documentos.' },
 );
 
@@ -293,12 +298,14 @@ const opcionesEstado = [
 const opcionesTipo = Object.entries(BILLING_DOC_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 const opcionesPago = Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => ({ value, label }));
 
+// `name` de las columnas ordenables = campo de `ordering` que acepta el backend
+// (created_at, id, total): q-table manda sortBy con el name de la columna.
 const columns: QTableColumn<BillingDocRow>[] = [
   { name: 'numero', label: 'Número', field: 'number', align: 'left' },
   { name: 'tipo', label: 'Tipo', field: 'doc_type', align: 'left' },
   { name: 'cliente', label: 'Cliente', field: 'customer_name', align: 'left' },
-  { name: 'total', label: 'Total', field: 'total', align: 'right' },
-  { name: 'fecha', label: 'Fecha', field: 'created_at', align: 'left' },
+  { name: 'total', label: 'Total', field: 'total', align: 'right', sortable: true },
+  { name: 'created_at', label: 'Fecha', field: 'created_at', align: 'left', sortable: true },
   { name: 'estado', label: 'Estado', field: 'status', align: 'left' },
   { name: 'pago', label: 'Pago', field: 'payment_status', align: 'left' },
 ];

@@ -411,6 +411,23 @@ DATABASES = {
     }
 }
 
+# Cache in-process a propósito (decisión O0: sin Redis/Celery por ahora).
+# - "default": lo que Django ya usaba implícito (throttling, etc.).
+# - "catalogs": alias para catálogos/lecturas con TTL corto (reporting near-realtime,
+#   configs por empresa). Es per-process: cada worker tiene su copia y la
+#   staleness máxima es el TIMEOUT; solo apto para datos de lectura tolerantes.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "erp-default",
+    },
+    "catalogs": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "erp-catalogs",
+        "TIMEOUT": 300,
+    },
+}
+
 AUTH_USER_MODEL = "accounts.User"
 
 # Axes: backend primero (recomendación oficial)

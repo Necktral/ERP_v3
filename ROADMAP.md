@@ -71,3 +71,24 @@ Todo está documentado como runbook auto-contenido para ejecutarlo en frío:
 **[`docs/ESCANEO_PROFUNDO_OPUS.md`](docs/ESCANEO_PROFUNDO_OPUS.md)** — catálogo de unidades/lentes,
 comandos del arnés, protocolo de hallazgos (BUGS.md primero), restricciones, y hallazgos preliminares
 ya verificados a mano. Recomendación: correr en lotes chicos / inline para no repetir el tope de cuota.
+
+---
+
+## Programa de oleadas — rendimiento de kernels + cableado (2026-07-02, en curso)
+
+Programa en 8 oleadas para mejorar **perf de ejecución + cableado backend↔frontend + robustez** de
+los 7 kernels. Una rama mergeable por oleada; cache **in-process** (sin Redis/Celery); los huecos de
+cableado se cierran TODOS en su oleada. Secuencia: **O0** infra transversal → **O1** facturación+
+inventarios → **O2** payments+accounting → **O3** nómina núcleo → **O4** nómina field/* (UI) →
+**O5** portfolio → **O6** reporting → **O7** sync_engine + cierre frontend.
+
+- **O0 — infra transversal (`oleada-0/infra-transversal`): HECHA.** Memo RBAC por-request (la 2ª
+  evaluación de permisos del mismo request = 0 queries, con tests); `CACHES` explícito (default +
+  alias `catalogs` TTL 300); red de budgets de queries (`backend/src/tests/perf/`, ratchet);
+  paginación server-side (`useListadoServer` + pilotos FacturacionPage/DiarioPage); fix del
+  interceptor 403 para requests background (BUG-006); guard L4 `qa/api_frontend_drift_guard.py`
+  (0 cableado roto, 43 huérfanos kernel baselineados con razón/oleada) — `make qa-l4-drift`,
+  report-only en CI (bloqueante desde O1). Unidades tocadas: U3, U22, L4 (EN-CURSO en
+  `docs/AUDITORIA_LOG.md`).
+- O1-O7: pendientes (el detalle de cada oleada vive en el plan de trabajo; los huérfanos por cerrar
+  están enumerados con su oleada en `qa/contracts/api_frontend_drift_baseline.json`).

@@ -105,12 +105,13 @@ function iconFor(skill: string): string {
   return key ? ICONS[key]! : 'insights';
 }
 
-async function reload() {
+async function reload(background = false) {
   loading.value = true;
   const activeId = ctx.activeCompanyId ?? '';
   const list = empresas.value;
   try {
-    const results = await Promise.allSettled(list.map((c) => getDailySummary(c.company_id)));
+    // El refresco del timer es background: un 403 no debe expulsar del tablero.
+    const results = await Promise.allSettled(list.map((c) => getDailySummary(c.company_id, { background })));
     boards.value = list.map((c, i) => {
       const r = results[i];
       const isActive = String(c.company_id) === activeId;
@@ -143,7 +144,7 @@ async function reload() {
 
 onMounted(() => {
   void reload();
-  timer = setInterval(() => void reload(), REFRESH_MS);
+  timer = setInterval(() => void reload(true), REFRESH_MS);
 });
 
 onBeforeUnmount(() => {

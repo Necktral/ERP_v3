@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.modulos.audit.service_audit import emit_service_event
 from apps.modulos.iam.models import OrgUnit, UserMembership
-from apps.modulos.rbac.selectors import get_effective_permissions_for_scope
+from apps.modulos.rbac.selectors import get_effective_permissions_for_scope_cached
 
 from .models import DashboardEmbedGrant
 
@@ -114,10 +114,11 @@ def _resolved_branch_for_scope(*, user, company: OrgUnit, branch_id: int | None,
     return branch
 
 
-def _effective_permissions(*, user, company: OrgUnit, branch: OrgUnit | None) -> set[str]:
+def _effective_permissions(*, user, company: OrgUnit, branch: OrgUnit | None, request=None) -> set[str]:
     include_global = bool(getattr(settings, "RBAC_INCLUDE_GLOBAL_USERROLES", False))
-    perms = get_effective_permissions_for_scope(
-        user,
+    perms = get_effective_permissions_for_scope_cached(
+        request=request,
+        user=user,
         company=company,
         branch=branch,
         include_global=include_global,
@@ -149,7 +150,7 @@ def list_workspaces_for_request(*, request) -> list[dict[str, Any]]:
     if company is None:
         raise DashboardValidationError("X-Company-Id requerido.")
 
-    effective = _effective_permissions(user=user, company=company, branch=branch)
+    effective = _effective_permissions(user=user, company=company, branch=branch, request=request)
     can_compose = "report.dashboard.compose" in effective or "*" in effective
 
     rows: list[dict[str, Any]] = []
@@ -182,7 +183,7 @@ def create_embed_token_for_request(
     )
     if branch is None:
         raise DashboardValidationError("X-Branch-Id requerido para analytics en esta fase.")
-    effective = _effective_permissions(user=user, company=company, branch=branch)
+    effective = _effective_permissions(user=user, company=company, branch=branch, request=request)
     required = set(spec.required_permissions)
     if require_compose:
         required.add("report.dashboard.compose")

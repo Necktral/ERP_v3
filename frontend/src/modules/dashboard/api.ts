@@ -121,10 +121,17 @@ export interface DailySummary {
   secciones: SummarySection[];
 }
 
-export async function getDailySummary(companyId?: string | number): Promise<DailySummary> {
+export async function getDailySummary(
+  companyId?: string | number,
+  opts: { background?: boolean } = {},
+): Promise<DailySummary> {
   // Con companyId se consulta OTRA empresa del holding (override de X-Company-Id,
   // a nivel empresa, sin sucursal). Sin él, la empresa/sucursal activa.
-  const config = companyId != null ? { headers: { 'X-Company-Id': String(companyId) } } : undefined;
+  // background:true en el polling del tablero: un 403 no debe navegar a /403.
+  const config = {
+    ...(companyId != null ? { headers: { 'X-Company-Id': String(companyId) } } : {}),
+    ...(opts.background ? { background: true } : {}),
+  };
   const { data } = await api.get<{ data: DailySummary }>('/knowledge/summary/', config);
   return data.data;
 }

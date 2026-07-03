@@ -239,6 +239,7 @@ def create_saved_view_from_request(
         branch=branch,
         required_permissions=spec.required_permissions,
         effective_permissions_override=getattr(request, "reporting_effective_permissions", None),
+        request=request,
     )
 
     normalized_filters = normalize_filters_for_dataset(dataset_key=spec.dataset_key, filters=filters or {})

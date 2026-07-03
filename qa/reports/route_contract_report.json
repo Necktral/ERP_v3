@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "generated_at": "2026-06-06T00:19:01.559734+00:00",
+  "generated_at": "2026-07-02T22:16:44.718562+00:00",
   "top_level_routes": [
     {
       "prefix": "/admin/",
@@ -9,6 +9,10 @@
     {
       "prefix": "/api/accounting/",
       "module": "apps.kernels.accounting.urls"
+    },
+    {
+      "prefix": "/api/alertas/",
+      "module": "apps.modulos.alertas.urls"
     },
     {
       "prefix": "/api/audit/",
@@ -31,12 +35,48 @@
       "module": "apps.modulos.estacion_servicios.urls"
     },
     {
+      "prefix": "/api/beneficio/",
+      "module": "apps.modulos.beneficio.urls"
+    },
+    {
       "prefix": "/api/billing/",
       "module": "apps.kernels.facturacion.urls"
     },
     {
       "prefix": "/api/cec/",
       "module": "apps.modulos.cec.urls"
+    },
+    {
+      "prefix": "/api/chatter/",
+      "module": "apps.modulos.chatter.urls"
+    },
+    {
+      "prefix": "/api/comisariato/",
+      "module": "apps.modulos.comisariato.urls"
+    },
+    {
+      "prefix": "/api/controls/",
+      "module": "apps.modulos.controls.urls"
+    },
+    {
+      "prefix": "/api/diagnostics/",
+      "module": "apps.modulos.diagnostics.urls"
+    },
+    {
+      "prefix": "/api/documents/",
+      "module": "apps.modulos.documents.urls"
+    },
+    {
+      "prefix": "/api/financiamiento/",
+      "module": "apps.modulos.financiamiento.urls"
+    },
+    {
+      "prefix": "/api/finca/",
+      "module": "apps.modulos.finca.urls"
+    },
+    {
+      "prefix": "/api/fleet/",
+      "module": "apps.modulos.fleet.urls"
     },
     {
       "prefix": "/api/fuel/",
@@ -55,8 +95,16 @@
       "module": "apps.modulos.integration.urls"
     },
     {
+      "prefix": "/api/intercompany/",
+      "module": "apps.modulos.intercompany.urls"
+    },
+    {
       "prefix": "/api/inventory/",
       "module": "apps.kernels.inventarios.urls"
+    },
+    {
+      "prefix": "/api/knowledge/",
+      "module": "apps.modulos.knowledge.urls"
     },
     {
       "prefix": "/api/legacy/billing/",
@@ -71,8 +119,16 @@
       "module": "apps.kernels.nomina.urls"
     },
     {
+      "prefix": "/api/notifications/",
+      "module": "apps.modulos.notifications.urls"
+    },
+    {
       "prefix": "/api/org/",
       "module": "apps.modulos.org.urls"
+    },
+    {
+      "prefix": "/api/parties/",
+      "module": "apps.modulos.parties.urls"
     },
     {
       "prefix": "/api/payments/",
@@ -97,6 +153,10 @@
     {
       "prefix": "/api/retail/pos/",
       "module": "apps.modulos.retail_pos.urls"
+    },
+    {
+      "prefix": "/api/sales/",
+      "module": "apps.modulos.ventas.urls"
     },
     {
       "prefix": "/api/sync/",

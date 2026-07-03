@@ -4,12 +4,14 @@ from collections.abc import Iterable
 
 from django.conf import settings
 
-from apps.modulos.rbac.selectors import get_effective_permissions_for_scope
+from apps.modulos.rbac.selectors import get_effective_permissions_for_scope_cached
 
 from .exceptions import DatasetPermissionDenied, DatasetScopeError
 
 
-def resolve_effective_permissions(*, user, company, branch, effective_permissions_override: Iterable[str] | None = None) -> set[str]:
+def resolve_effective_permissions(
+    *, user, company, branch, effective_permissions_override: Iterable[str] | None = None, request=None
+) -> set[str]:
     if effective_permissions_override is not None:
         return {str(code).strip() for code in list(effective_permissions_override) if str(code).strip()}
     if user is None or not getattr(user, "is_authenticated", False):
@@ -19,8 +21,9 @@ def resolve_effective_permissions(*, user, company, branch, effective_permission
 
     include_global = bool(getattr(settings, "RBAC_INCLUDE_GLOBAL_USERROLES", False))
     return set(
-        get_effective_permissions_for_scope(
-            user,
+        get_effective_permissions_for_scope_cached(
+            request=request,
+            user=user,
             company=company,
             branch=branch,
             include_global=include_global,
@@ -35,12 +38,14 @@ def ensure_permissions(
     branch,
     required_permissions: Iterable[str],
     effective_permissions_override: Iterable[str] | None = None,
+    request=None,
 ) -> None:
     effective = resolve_effective_permissions(
         user=user,
         company=company,
         branch=branch,
         effective_permissions_override=effective_permissions_override,
+        request=request,
     )
     required = {str(code).strip() for code in required_permissions if str(code).strip()}
     if "*" in effective:

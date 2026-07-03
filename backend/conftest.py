@@ -61,13 +61,19 @@ def _clear_throttle_cache():
         except Exception:
             pass
 
-    cache = caches["default"]
-    try:
-        cache.clear()
-    except Exception:
-        pass
+    # "catalogs" (O0) también se limpia por test: es LocMem con TTL y no debe
+    # filtrar datos entre tests.
+    targets = ["default"]
+    if "catalogs" in settings.CACHES:
+        targets.append("catalogs")
+    for alias in targets:
+        try:
+            caches[alias].clear()
+        except Exception:
+            pass
     yield
-    try:
-        cache.clear()
-    except Exception:
-        pass
+    for alias in targets:
+        try:
+            caches[alias].clear()
+        except Exception:
+            pass

@@ -18,6 +18,11 @@ declare module 'axios' {
   export interface AxiosRequestConfig {
     _retry?: boolean;
     _skipAuthRefresh?: boolean;
+    /**
+     * Request en segundo plano (polling, refetch silencioso): un 403 NO debe
+     * navegar a /403 ni sacar al usuario de donde está (hot-spot U22-3).
+     */
+    background?: boolean;
   }
 }
 
@@ -268,8 +273,9 @@ export default boot(({ app, router }) => {
         return Promise.reject(error);
       }
 
-      // 403: mandamos a /403 (sin romper sesión)
-      if (status === 403) {
+      // 403: mandamos a /403 (sin romper sesión). Los requests en segundo plano
+      // (background:true) no navegan: el caller decide qué hacer con el error.
+      if (status === 403 && !original.background) {
         await router.replace('/403');
       }
 
