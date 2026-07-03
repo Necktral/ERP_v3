@@ -198,6 +198,22 @@ export const NAV: NavItem[] = [
     section: 'Caja',
   },
   {
+    module: 'billing',
+    label: 'Pedidos',
+    icon: 'assignment',
+    to: '/facturacion/pedidos',
+    perm: 'billing.order.read',
+    section: 'Caja',
+  },
+  {
+    module: 'billing',
+    label: 'Aprobaciones de crédito',
+    icon: 'rule',
+    to: '/facturacion/aprobaciones-credito',
+    perm: 'billing.order.approve',
+    section: 'Caja',
+  },
+  {
     module: 'payments',
     label: 'Sesiones de caja',
     icon: 'inventory_2',

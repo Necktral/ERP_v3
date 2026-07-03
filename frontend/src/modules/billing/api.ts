@@ -278,6 +278,136 @@ export async function convertQuoteToInvoice(docId: number): Promise<number> {
   return data.doc_id;
 }
 
+// --- Pedidos (SalesOrder) con aprobación de crédito SoD (maker → checker) ---
+
+export type SalesOrderStatus =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'IN_REVIEW'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'PURCHASE_ORDERED'
+  | 'PURCHASE_RECEIVED'
+  | 'READY'
+  | 'FULFILLED'
+  | 'CANCELLED';
+
+export const SALES_ORDER_STATUS_LABELS: Record<SalesOrderStatus, string> = {
+  DRAFT: 'Borrador',
+  PENDING_APPROVAL: 'Pendiente de aprobación',
+  IN_REVIEW: 'En revisión',
+  APPROVED: 'Aprobado',
+  REJECTED: 'Rechazado',
+  PURCHASE_ORDERED: 'Orden de compra emitida',
+  PURCHASE_RECEIVED: 'Mercancía recibida',
+  READY: 'Listo para despachar',
+  FULFILLED: 'Despachado y facturado',
+  CANCELLED: 'Cancelado',
+};
+
+export const CREDIT_STATUS_LABELS: Record<string, string> = {
+  NONE: 'No requiere crédito',
+  PENDING_REVIEW: 'Pendiente de revisión',
+  IN_REVIEW: 'En revisión',
+  APPROVED: 'Aprobado',
+  REJECTED: 'Rechazado',
+  ESCALATED: 'Escalado a gerencia',
+};
+
+export interface SalesOrderRow {
+  id: number;
+  status: SalesOrderStatus;
+  credit_status: string;
+  customer_name: string;
+  customer_ref: string;
+  customer_party_id: number | null;
+  currency: string;
+  subtotal: string;
+  tax_total: string;
+  total: string;
+  expected_delivery_date: string | null;
+  notes: string;
+  billing_doc_id: number | null;
+  created_at: string;
+  /** Solicitud de crédito PENDING del pedido (para resolverla sin buscarla). */
+  pending_approval_id: number | null;
+}
+
+export interface SalesOrderFilters {
+  /** El backend solo filtra por `status` (no soporta búsqueda libre ni ordering). */
+  status?: SalesOrderStatus | '';
+}
+
+/** Listado server-side de pedidos (envelope {count,limit,offset,results}). */
+export async function listSalesOrdersPage(
+  filters: SalesOrderFilters,
+  page: PageReq,
+): Promise<Paginated<SalesOrderRow>> {
+  const params: Record<string, string | number> = { limit: page.limit, offset: page.offset };
+  if (filters.status) params.status = filters.status;
+  const { data } = await api.get<Paginated<SalesOrderRow>>('/billing/orders/', { params });
+  return data;
+}
+
+/**
+ * Crea un pedido (encargo) en borrador. Requiere sucursal activa (X-Branch-Id).
+ * `customer_name` es obligatorio aunque se mande `customer_party_id`.
+ */
+export async function createSalesOrder(input: {
+  customer_name: string;
+  customer_ref?: string;
+  customer_party_id?: number;
+  currency?: string;
+  lines: BillingLineInput[];
+  expected_delivery_date?: string;
+  notes?: string;
+}): Promise<{ order_id: number; status: SalesOrderStatus }> {
+  const { data } = await api.post<{ order_id: number; status: SalesOrderStatus }>(
+    '/billing/orders/',
+    input,
+  );
+  return data;
+}
+
+/**
+ * Maker: somete el pedido a aprobación de crédito (DRAFT|APPROVED → PENDING_APPROVAL).
+ * Devuelve el `approval_id` de la solicitud creada — el checker lo usa para resolver.
+ */
+export async function submitOrderCredit(
+  orderId: number,
+  requestNotes = '',
+): Promise<{ ok: boolean; approval_id: number; order_id: number; status: SalesOrderStatus }> {
+  const { data } = await api.post<{
+    ok: boolean;
+    approval_id: number;
+    order_id: number;
+    status: SalesOrderStatus;
+  }>(`/billing/orders/${orderId}/submit-credit/`, { request_notes: requestNotes });
+  return data;
+}
+
+/**
+ * Checker (SoD: distinto usuario que el solicitante): aprueba o rechaza la
+ * solicitud de crédito. Al aprobar, `approved_amount` default = monto solicitado.
+ */
+export async function resolveCreditApproval(
+  approvalId: number,
+  input: {
+    approved: boolean;
+    resolution_notes?: string;
+    approved_amount?: string;
+    approved_terms_days?: number;
+  },
+): Promise<{ ok: boolean; approval_id: number; status: string; order_id: number | null }> {
+  const { data } = await api.post<{
+    ok: boolean;
+    approval_id: number;
+    status: string;
+    order_id: number | null;
+  }>(`/billing/credit-approvals/${approvalId}/resolve/`, input);
+  return data;
+}
+
 // --- Configuración fiscal de la sucursal ---
 export interface FiscalConfig {
   fiscal_mode: string;

@@ -47,6 +47,20 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs cerrados
 
+### BUG-007 — La idempotencia de movimientos de inventario NO comparaba el lote (falso match silencioso)
+
+- **Módulo / paso del ROADMAP:** inventarios kernel (paso 5) / unidad U8 de la auditoría — oleada 1
+- **Fecha:** 2026-07-02
+- **Severidad:** alta (integridad de inventario por lote: un reintento con lote distinto se "traga" en silencio)
+- **Estado:** CERRADO
+- **Pasos para reproducir:**
+  1. Ítem con `track_lots=True`. `post_receive` con `idempotency_key=K` y `lot_number="L1"`.
+  2. Repetir `post_receive` con el MISMO `K` pero `lot_number="L2"`.
+- **Esperado:** `InventoryConflictError` ("Idempotency key reutilizada con payload distinto"), como ya pasa con warehouse/qty/costo.
+- **Actual:** la segunda llamada devolvía el movimiento del lote L1 como si fuera un replay legítimo — el caller cree que recibió en L2 y el kardex por lote queda mentiroso.
+- **Impacto:** cualquier caller directo que reintente con idempotency_key y lote corregido cree que aplicó el cambio y no fue así; trazabilidad de lotes (FEFO/vencimientos) comprometida. (Nota de alcance: los handlers actuales del riel sync NO propagan lote, así que hoy el riel no ejercita este camino — el fix protege a los callers directos con lote y a cualquier handler futuro que lo propague.)
+- **Causa raíz / fix:** `_assert_receive_idempotency_match` / `_assert_issue_idempotency_match` (`kernels/inventarios/services.py`) validaban warehouse/item/qty/costo/source pero **no el lote**. **Fix:** ambas reciben el lote solicitado (`lot_id`/`lot_number`) y conflictúan si difiere del `existing.lot` (incluido el caso "antes con lote, ahora sin lote" y viceversa). **Test de regresión:** `kernels/inventarios/tests/test_u8_idempotencia_y_transferencias.py::test_receive_key_reusada_con_otro_lote_conflictua` (encontrado por este test: se escribió ANTES del fix y falló contra el código viejo).
+
 ### BUG-006 — Un 403 en un poll de fondo expulsaba al usuario a /403 (interceptor global sin distinción)
 
 - **Módulo / paso del ROADMAP:** frontend core (boot/axios) / hot-spot U22-3 de la auditoría — oleada 0

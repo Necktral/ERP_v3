@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-07-02T22:11:37.100374+00:00",
+  "generated_at": "2026-07-02T23:10:28.920191+00:00",
   "orphans": {
     "accounting/consolidation/runs/<p>/summary": {
       "route": "/accounting/consolidation/runs/<p>/summary/",
@@ -14,29 +14,11 @@
       "reason": "endpoint de salud para monitoreo, sin UI por diseño",
       "planned_wave": null
     },
-    "billing/credit-approvals/<p>/resolve": {
-      "route": "/billing/credit-approvals/<p>/resolve/",
-      "module": "apps.kernels.facturacion.urls",
-      "reason": "flujo pedido-con-crédito SoD sin UI (lado checker)",
-      "planned_wave": "O1"
-    },
     "billing/health": {
       "route": "/billing/health/",
       "module": "apps.kernels.facturacion.urls",
       "reason": "endpoint de salud para monitoreo, sin UI por diseño",
       "planned_wave": null
-    },
-    "billing/orders": {
-      "route": "/billing/orders/",
-      "module": "apps.kernels.facturacion.urls",
-      "reason": "flujo pedido-con-crédito SoD sin UI",
-      "planned_wave": "O1"
-    },
-    "billing/orders/<p>/submit-credit": {
-      "route": "/billing/orders/<p>/submit-credit/",
-      "module": "apps.kernels.facturacion.urls",
-      "reason": "flujo pedido-con-crédito SoD sin UI",
-      "planned_wave": "O1"
     },
     "inventory/balances": {
       "route": "/inventory/balances/",

@@ -296,6 +296,22 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['billing.fiscal.config.read'] },
       },
       {
+        path: 'facturacion/pedidos',
+        name: 'facturacion-pedidos',
+        component: () => import('src/modules/billing/pages/PedidosPage.vue'),
+        meta: { requiresAuth: true, requiresContext: true, requiredPermissions: ['billing.order.read'] },
+      },
+      {
+        path: 'facturacion/aprobaciones-credito',
+        name: 'facturacion-aprobaciones-credito',
+        component: () => import('src/modules/billing/pages/AprobacionesCreditoPage.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresContext: true,
+          requiredPermissions: ['billing.order.read', 'billing.order.approve'],
+        },
+      },
+      {
         path: 'facturacion/:id(\\d+)',
         name: 'factura-detalle',
         component: () => import('src/modules/billing/pages/FacturaDetallePage.vue'),

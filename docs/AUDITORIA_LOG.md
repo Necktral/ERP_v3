@@ -22,8 +22,8 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U5 — accounting: posteo | PENDIENTE | |
 | U6 — accounting: períodos/FX | PENDIENTE | |
 | U7 — accounting: API | PENDIENTE | |
-| U8 — inventarios kernel | EN-CURSO | Guard `InsufficientStockError` = VERIFICADO-OK (corre DENTRO del lock del balance). Falta: idempotency match (warehouse/lot), post_transfer deadlock, costing, reversal, link contable |
-| U9 — facturacion kernel | PENDIENTE | |
+| U8 — inventarios kernel | HECHO | Oleada 1: **BUG-007** (idempotencia no comparaba el LOTE → falso match silencioso) encontrado por test y CERRADO con fix. Idempotency match warehouse/qty/lote = VERIFICADO-OK; `post_transfer` cruzado concurrente sin deadlock (lock ordenado) = VERIFICADO-OK — `tests/test_u8_idempotencia_y_transferencias.py` (6 tests). Costing/reversal/link contable cubiertos por suites existentes verdes (`test_cost_policy`, `test_movement_reversal`, `test_inventory_accounting_integration`). Guard `InsufficientStockError` = VERIFICADO-OK (previo) |
+| U9 — facturacion kernel | EN-CURSO | Oleada 1: golden tests de fidelidad de líneas/totales byte-a-byte (`tests/test_golden_lineas_bulk.py`) escritos ANTES del refactor a bulk_create (create_draft/create_order) = VERIFICADO-OK; filtro de fechas sargable en listado de docs; budgets O(1)-en-líneas en `src/tests/perf/`. Falta: resto de la unidad (void SoD profundo, contingencia fiscal, secuencias) |
 | U10 — payments: intents/caja/arqueo | PENDIENTE | |
 | U11 — payments: conciliación | PENDIENTE | |
 | U12 — portfolio kernel | EN-CURSO | **BUG-005** (over-allocation → outstanding negativo en `allocate_payment_to_obligation`) CERRADO con fix+test. `apply_payroll_abono`/`reverse_payroll_abono` = lock correcto (VERIFICADO-OK). Falta: link_billing doble-CxC, accrue_interest idempotencia, write_off |

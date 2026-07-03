@@ -346,8 +346,10 @@ def create_draft(
         if customer_party is not None:
             _ensure_customer_party_role(party=customer_party, request=request, actor=actor)
 
-        for c in computed:
-            BillingLine.objects.create(
+        # Un solo INSERT para todas las líneas (bulk_create preserva el orden de
+        # la lista y aplica los defaults de Syncable: sync_uid/origin_node).
+        BillingLine.objects.bulk_create(
+            BillingLine(
                 doc=doc,
                 description=c["description"],
                 quantity=c["quantity"],
@@ -365,6 +367,8 @@ def create_draft(
                 uom=c.get("uom", "") or "",
                 uom_factor=c.get("uom_factor", Decimal("1.000000")),
             )
+            for c in computed
+        )
 
         write_event(
             request=request,
@@ -1576,8 +1580,10 @@ def create_order(
             notes=notes or "",
             requested_by=actor,
         )
-        for c in computed:
-            SalesOrderLine.objects.create(
+        # Un solo INSERT para todas las líneas del pedido (mismo criterio que
+        # BillingLine: bulk_create preserva orden y defaults de Syncable).
+        SalesOrderLine.objects.bulk_create(
+            SalesOrderLine(
                 order=order,
                 item_id=c.get("inventory_item_id"),
                 description=c["description"],
@@ -1591,6 +1597,8 @@ def create_order(
                 preferred_warehouse_id=c.get("warehouse_id"),
                 notes=c.get("notes", "") or "",
             )
+            for c in computed
+        )
 
         write_event(
             request=request,

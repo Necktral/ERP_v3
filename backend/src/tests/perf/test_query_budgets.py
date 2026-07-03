@@ -124,6 +124,83 @@ def test_rbac_override_no_pasa_por_memo():
 # Budgets de endpoints (ratchet)
 # ---------------------------------------------------------------------------
 
+def _mk_request(company, branch, user):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        company=company, branch=branch, user=user, META={}, headers={},
+        path="/perf/", method="POST", request_id=f"req-{uuid.uuid4().hex[:8]}",
+    )
+
+
+@pytest.mark.query_budget
+@pytest.mark.django_db
+def test_budget_create_draft_queries_constantes_en_lineas():
+    """Oleada 1: crear un documento de venta cuesta las mismas queries con 2
+    líneas que con 40 (bulk_create — sin INSERT por línea)."""
+    from apps.kernels.facturacion.services import create_draft
+
+    _, company, branch = _mk_org()
+    user = _mk_user_with_perm(company, f"perf.bill_{uuid.uuid4().hex[:6]}")
+    request = _mk_request(company, branch, user)
+
+    def crear(n_lineas: int) -> int:
+        lines = [
+            {"description": f"L{i}", "quantity": "1", "unit_price": "10.00", "tax_rate": "0.15"}
+            for i in range(n_lineas)
+        ]
+        with CaptureQueriesContext(connection) as ctx:
+            create_draft(
+                request=request, actor=user, doc_type="INVOICE", series="A",
+                currency="NIO", customer_name="Perf", customer_ref="P-1",
+                is_fiscal=False, lines=lines, idempotency_key=f"perf-{uuid.uuid4().hex}",
+            )
+        return len(ctx.captured_queries)
+
+    crear(1)  # warmup: paga las queries one-time (content types, caches de sesión)
+    q_chico, q_grande = crear(2), crear(40)
+    assert q_grande == q_chico, (
+        f"create_draft escala en queries con las líneas: {q_chico} con 2 vs {q_grande} con 40"
+    )
+
+
+@pytest.mark.query_budget
+@pytest.mark.django_db
+def test_budget_create_remision_queries_constantes_en_lineas():
+    """Oleada 1: crear una remisión cuesta las mismas queries con 2 líneas que
+    con 40 (carga de ítems en 1 query + bulk_create de líneas)."""
+    from apps.kernels.inventarios.models import InventoryItem, RemisionOriginType, Warehouse
+    from apps.kernels.inventarios.remisiones import create_remision
+
+    _, company, branch = _mk_org()
+    user = _mk_user_with_perm(company, f"perf.rem_{uuid.uuid4().hex[:6]}")
+    request = _mk_request(company, branch, user)
+    wh = Warehouse.objects.create(company=company, branch=branch, name="WH", code=f"W{uuid.uuid4().hex[:4]}")
+    items = [
+        InventoryItem.objects.create(company=company, sku=f"S-{uuid.uuid4().hex[:6]}", name=f"I{i}")
+        for i in range(40)
+    ]
+
+    def crear(n_lineas: int) -> int:
+        lines = [
+            {"item_id": items[i].id, "qty_dispatched": "5", "unit_cost": "1.25"}
+            for i in range(n_lineas)
+        ]
+        with CaptureQueriesContext(connection) as ctx:
+            create_remision(
+                request=request, actor=user, origin_type=RemisionOriginType.PURCHASE,
+                dest_warehouse_id=wh.id, source_module="BILLING", source_type="INVOICE",
+                source_id="perf", lines=lines,
+            )
+        return len(ctx.captured_queries)
+
+    crear(1)  # warmup: paga las queries one-time (content types, caches de sesión)
+    q_chico, q_grande = crear(2), crear(40)
+    assert q_grande == q_chico, (
+        f"create_remision escala en queries con las líneas: {q_chico} con 2 vs {q_grande} con 40"
+    )
+
+
 @pytest.mark.query_budget
 @pytest.mark.django_db
 def test_budget_listado_inventario_items(settings):
