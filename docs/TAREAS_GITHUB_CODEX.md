@@ -59,3 +59,23 @@ privado** (pendiente global del ROADMAP).
   `qa-github-master-ruleset-apply` del Makefile existen para gobernanza de GitHub:
   correrlos/configurarlos es tarea de Codex cuando el repo remoto exista.
 - Las oleadas futuras (O3-O7) añadirán filas a la tabla; mismo flujo de PR apilado.
+
+---
+
+## Ramas de fixes post-programa (AL DÍA — usar esta sección)
+
+> La tabla de oleadas de arriba quedó vieja (era pre-merge). Estado real: **el programa O0–O7
+> ya está MERGEADO a `main`** (PR #1–#8). Quedan dos ramas de fixes por subir/mergear, en orden:
+
+| Rama | Commit | PR | Contenido |
+|------|--------|----|-----------|
+| `fix/aislamiento-copa-nomina` | `c94b137` | **PR-9** | Mezcla de cuentas cobros/pagos + CO-PA offline + endurecer planilla (BUG-010..013). Migración `nomina/0020`. |
+| `fix/integridad-inventario-facturacion-intercompany` | `daae3ed` | **PR-10** | Bug-hunt de integridad (BUG-014..020): costo de transferencia, void con efectos, LotBalance en ajuste, cobro ISSUED+idempotencia, intercompany (doble cargo / período cerrado / FX), portfolio ViewSets read-only, comisariato gate CXC. Migraciones `accounting/0016` + `facturacion/0011`. |
+
+### Pasos para Codex
+1. **PR-9 primero** (`fix/aislamiento-copa-nomina` → `main`). Ya descrito arriba en versiones previas del doc; correr `qa-migration-safety-guard` (migración 0020).
+2. **PR-10 después** (`fix/integridad-...` → `main`). Título: `fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio`. Cuerpo = mensaje del commit `daae3ed`.
+   - **Checks:** suite backend canónica verde; `make qa-migration-safety-guard` (baseline ya regenerado en la rama, +2 migraciones); guards de rutas/authz.
+   - **⚠️ Overlap PR-9 ↔ PR-10 en `backend/src/apps/kernels/portfolio/views.py`:** ambos vuelven `PaymentAllocationViewSet` a `ReadOnlyModelViewSet` (PR-9 por BUG-011, PR-10 por BUG-019 lo incluye para ser autónomo). Si PR-9 se mergea primero, el merge de PR-10 mostrará esa línea ya aplicada → resolver el conflicto trivial **conservando `ReadOnlyModelViewSet`** (ambos quieren lo mismo). El resto de PR-10 (Receivable/Payable/Credit) no está en PR-9, no colisiona.
+   - **Numeración de bugs:** PR-9 usa BUG-010..013, PR-10 usa BUG-014..020 — sin colisión en `BUGS.md`.
+3. Merge con **merge commit** (no squash). Actualizar esta tabla tras cada merge.
