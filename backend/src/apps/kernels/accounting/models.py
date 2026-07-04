@@ -664,6 +664,14 @@ class IntercompanyTransaction(models.Model):
         constraints = [
             models.CheckConstraint(condition=~models.Q(source_company=models.F("target_company")), name="ck_acc_ic_tx_company_distinct"),
             models.CheckConstraint(condition=models.Q(amount__gt=0), name="ck_acc_ic_tx_amount_positive"),
+            # IC-1: backstop de idempotencia — un mismo cargo (source, target,
+            # reference_code) no puede duplicarse bajo concurrencia. Parcial:
+            # solo aplica cuando hay reference_code (los flujos sin ref no chocan).
+            models.UniqueConstraint(
+                fields=["source_company", "target_company", "reference_code"],
+                condition=~models.Q(reference_code=""),
+                name="uq_acc_ic_tx_ref",
+            ),
         ]
         indexes = [
             models.Index(fields=["source_company", "target_company", "status", "created_at"]),

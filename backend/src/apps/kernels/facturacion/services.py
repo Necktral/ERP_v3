@@ -1112,6 +1112,38 @@ def retry_fiscal_print_job(
         return job
 
 
+def _void_side_effects(*, doc: BillingDocument, company: OrgUnit) -> list[str]:
+    """Efectos ya materializados que una anulación NO revierte (BUG-T2).
+
+    Devuelve la lista de efectos presentes (vacía si el doc es anulable): despacho
+    de inventario, CxC generada, o abonos recibidos. La vía correcta cuando hay
+    efectos es la Nota de Crédito.
+    """
+    efectos: list[str] = []
+
+    # Abonos (campo del propio doc, sin import).
+    if doc.amount_paid and doc.amount_paid > Decimal("0.00"):
+        efectos.append("abonos recibidos")
+
+    # Inventario despachado por la emisión (post_issue con source_id = doc.id).
+    from apps.kernels.inventarios.models import StockMovement
+
+    if StockMovement.objects.filter(
+        company=company, source_module="BILLING", source_type="DOC_ISSUE", source_id=str(doc.id)
+    ).exists():
+        efectos.append("inventario despachado")
+
+    # CxC generada por venta a crédito.
+    from apps.kernels.portfolio.models import Receivable
+
+    if Receivable.objects.filter(
+        company=company, reference_type="BILLING_DOC", reference_id=doc.id
+    ).exists():
+        efectos.append("cuenta por cobrar")
+
+    return efectos
+
+
 def void_doc(
     *,
     request,
@@ -1134,6 +1166,18 @@ def void_doc(
             return {"ok": True, "already_voided": True}
         if doc.status == DocStatus.DRAFT:
             raise BillingError("cannot void a draft document")
+
+        # BUG-T2: anular solo revierte el asiento GL — NO reingresa inventario ni
+        # cancela la CxC. Si el documento ya produjo esos efectos, anular dejaría
+        # el kardex y la cartera divergentes de la contabilidad. Se bloquea y se
+        # obliga a usar Nota de Crédito (que sí reingresa stock y ajusta cartera).
+        efectos = _void_side_effects(doc=doc, company=company)
+        if efectos:
+            raise BillingError(
+                "No se puede anular: el documento ya tiene efectos ("
+                + ", ".join(efectos)
+                + "). Emití una Nota de Crédito, que reingresa el inventario y ajusta la cartera."
+            )
 
         before = {
             "status": doc.status,
@@ -1410,6 +1454,7 @@ def create_payment(
     coffee_lot_ref: str = "",
     payment_intent_id: int | None = None,
     auto_confirm: bool = True,
+    idempotency_key: str = "",
 ) -> PaymentResult:
     company: OrgUnit = request.company
 
@@ -1418,6 +1463,7 @@ def create_payment(
         raise BillingError("payment amount must be > 0")
 
     normalized_method = _normalize_payment_method(payment_method)
+    idem = str(idempotency_key or "").strip()
 
     with transaction.atomic():
         try:
@@ -1425,10 +1471,25 @@ def create_payment(
         except BillingDocument.DoesNotExist as exc:
             raise BillingNotFoundError("documento no encontrado") from exc
 
-        if doc.status == DocStatus.VOIDED:
-            raise BillingError("no se puede pagar un documento anulado")
+        # BILL-1: replay idempotente — un doble-submit con la misma clave devuelve
+        # el pago ya registrado en vez de duplicar el abono (bajo el lock del doc).
+        if idem:
+            prev = BillingPayment.objects.filter(doc=doc, idempotency_key=idem).first()
+            if prev is not None:
+                return PaymentResult(
+                    payment_id=prev.id, doc_id=doc.id,
+                    amount_paid=doc.amount_paid, payment_status=doc.payment_status,
+                )
+
+        # BUG-T5: solo se cobran FACTURAS EMITIDAS. Antes solo bloqueaba VOIDED,
+        # así que se podía registrar un pago sobre un borrador o una cotización.
+        if doc.status != DocStatus.ISSUED:
+            raise BillingError("solo se puede cobrar una factura emitida (ISSUED)")
+        if doc.doc_type != DocType.INVOICE:
+            raise BillingError("solo las facturas admiten cobros")
 
         payment = BillingPayment.objects.create(
+            idempotency_key=idem,
             doc=doc,
             company=company,
             payment_method=normalized_method,

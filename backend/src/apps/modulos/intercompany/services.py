@@ -134,6 +134,12 @@ def _post_balanced_entry(*, company, branch, when: datetime, lines, description,
         company=company, year=when.year, month=when.month,
         defaults={"status": FiscalPeriod.Status.OPEN},
     )
+    # IC-2: el posteo intercompany creaba el asiento aunque el período estuviera
+    # CERRADO, violando su inmutabilidad (los otros 3 posteos sí lo bloquean).
+    if period.status == FiscalPeriod.Status.CLOSED:
+        raise ValueError(
+            f"Periodo cerrado {company.id} {when.year}-{when.month:02d}: no se puede postear intercompany."
+        )
     event = EconomicEvent.objects.create(
         source_module="INTERCOMPANY",
         event_type="IntercompanyCharge",
@@ -222,6 +228,24 @@ def record_intercompany_charge(
     money = _q(amount)
     if money <= Decimal("0.00"):
         raise ValueError("amount debe ser > 0.")
+
+    # IC-3: el asiento GL hardcodea NIO/fx_rate=1.0. Aceptar otra moneda registraba
+    # la CxC/CxP/tx en esa moneda pero el GL en NIO al monto crudo (subvaluado). Se
+    # rechaza hasta soportar FX real (la moneda funcional del sistema es NIO).
+    if str(currency or "NIO").upper() != "NIO":
+        raise ValueError("INTERCOMPANY_FX_UNSUPPORTED: el cargo intercompany solo admite moneda funcional (NIO).")
+
+    # IC-1: cerrar la ventana de carrera del chequeo de idempotencia. El .filter()
+    # va sin lock y no había constraint; dos POST simultáneos con el mismo
+    # reference_code duplicaban CxC/CxP/asientos. Advisory lock por (source, target,
+    # ref) serializa; el UniqueConstraint uq_acc_ic_tx_ref es el backstop de BD.
+    from django.db import connection
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            [f"ic_charge:{source.id}:{target.id}:{reference_code}"],
+        )
 
     existing = IntercompanyTransaction.objects.filter(
         source_company=source, target_company=target, reference_code=reference_code

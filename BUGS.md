@@ -47,6 +47,72 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs cerrados
 
+> **Nota de numeración:** BUG-010..013 viven en la rama `fix/aislamiento-copa-nomina` (PR-9, sin
+> mergear). Este lote de bug-hunt de integridad (rama `fix/integridad-inventario-facturacion-intercompany`,
+> off `main`) usa **BUG-014..020** para no colisionar.
+
+### BUG-020 — Comisariato: `collecting_company` cross-company sin relación CXC declarada
+
+- **Módulo:** comisariato / cobro por planilla — lente L1 (IDOR/authz)
+- **Fecha:** 2026-07-04 · **Severidad:** media · **Estado:** CERRADO
+- **Reproducir:** `AccountUpsert` (o `get_or_create_account`) con `collecting_company` = una empresa cualquiera.
+- **Esperado:** el cobro cross-company solo procede con relación `IntercompanyRelationship` tipo CXC activa.
+- **Actual:** resolvía `collecting_company` de cualquier `OrgUnit` COMPANY sin verificar el vínculo → una empresa podía apuntar el cobro de su cuenta a la planilla de otra sin relación.
+- **Causa raíz / fix:** faltaba el gate. **Fix:** `get_or_create_account` exige `_has_active_cxc_relationship(finca=collecting, comisariato=company)` cuando `collecting != company` (mismo gate del cobro por planilla). Test: `comisariato/tests/test_comisariato.py::test_collecting_company_sin_relacion_cxc_rechazada`.
+
+### BUG-019 — Portfolio: Receivable/Payable/Credit/Allocation ViewSets con FKs escribibles sin scope (IDOR de escritura)
+
+- **Módulo:** portfolio (kernels) — lente L1. Mismo patrón que BUG-011 (que solo cerró Allocation).
+- **Fecha:** 2026-07-04 · **Severidad:** media · **Estado:** CERRADO
+- **Reproducir:** `POST /portfolio/receivables|payables|credits|allocations/` con un FK (`party`, `restructured_from`, `payment_intent`, obligación) de OTRA empresa.
+- **Esperado:** no se puede crear una obligación de la empresa A que referencie datos de B.
+- **Actual:** eran `ModelViewSet` con FKs escribibles y queryset sin scope; solo `company` se forzaba. Se creaba una CxC/CxP/crédito/aplicación con datos de otra empresa, saltándose los servicios.
+- **Impacto:** contamina los libros de A con maestros de B y filtra IDs de otra empresa. Es un vector concreto de "mezcla de cuentas".
+- **Causa raíz / fix:** las obligaciones se crean EXCLUSIVAMENTE por servicios scopeados (ventas/compras/financiamiento/intercompany). **Fix:** los cuatro ViewSets pasan a `ReadOnlyModelViewSet` (conservando las `@action` de servicio adjust/writeoff/disburse). Test: `portfolio/tests/test_viewsets_readonly.py`. (Nota: incluye Allocation, ya cerrado por BUG-011 en la rama aislamiento; al mergear ambos PRs la línea coincide.)
+
+### BUG-018 — Intercompany: posteo directo se salta las 3 defensas del motor (doble cargo, período cerrado, FX)
+
+- **Módulo:** modulos/intercompany — lentes L2 (concurrencia) + L3 (integridad contable)
+- **Fecha:** 2026-07-04 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir / Actual (3 fallos):**
+  - **IC-1:** dos `POST /intercompany/charge` simultáneos con el mismo `reference_code` → idempotencia por `.filter().first()` sin lock ni constraint → DOBLE CxC/CxP + doble asiento en cada empresa + descuadra la consolidación.
+  - **IC-2:** `_post_balanced_entry` posteaba en un período CERRADO (los otros 3 posteos sí lo bloquean).
+  - **IC-3:** el asiento GL hardcodeaba `NIO`/`fx_rate=1.0` sin importar la moneda → GL subvaluado para moneda ≠ NIO.
+- **Causa raíz / fix:** era un camino de posteo directo (I-01) que nunca ganó los guards del motor. **Fix:** (IC-1) `UniqueConstraint(source, target, reference_code)` parcial + `pg_advisory_xact_lock` + re-chequeo; (IC-2) `raise` si el período está CLOSED; (IC-3) rechaza moneda ≠ funcional (NIO) hasta soportar FX real. Migración `accounting/0016`. Tests: `intercompany/tests/test_intercompany_ops.py::test_ic{1,2,3}_*`.
+
+### BUG-017 — Facturación: `create_payment` cobraba borradores/cotizaciones y no era idempotente
+
+- **Módulo:** facturacion — U9 · L2
+- **Fecha:** 2026-07-04 · **Severidad:** media-baja · **Estado:** CERRADO
+- **Reproducir:** cobrar un DRAFT/QUOTE (solo bloqueaba VOIDED); o doble-submit del mismo cobro.
+- **Actual:** se registraba un pago sobre un doc no emitido; un doble-clic creaba dos `BillingPayment` e inflaba `amount_paid`.
+- **Causa raíz / fix:** faltaban el gate de estado y el backstop de idempotencia. **Fix (BUG-T5):** exige `status==ISSUED` y `doc_type==INVOICE`. **Fix (BILL-1):** campo `idempotency_key` + `UniqueConstraint(doc, idempotency_key)` parcial + replay bajo el lock del doc. Migración `facturacion/0011`. Tests: `test_cobro_idempotente.py`.
+
+### BUG-016 — Inventario: ajuste / conteo físico no tocaban `LotBalance` (Σ lotes ≠ saldo)
+
+- **Módulo:** inventarios (kernel) — U8
+- **Fecha:** 2026-07-04 · **Severidad:** media · **Estado:** CERRADO
+- **Reproducir:** ítem con `track_lots`; `post_adjust`/`approve_physical_count` a una cantidad distinta.
+- **Actual:** movía `StockBalance` pero dejaba los `LotBalance` intactos → `Σ LotBalance ≠ StockBalance` → rompe FEFO/FIFO y el costeo por lote.
+- **Causa raíz / fix:** `post_adjust` no era consciente de lotes. **Fix:** acepta `lot_id` opcional y reconcilia los `LotBalance` en orden de consumo (baja de los más antiguos primero; alza al primero del orden) manteniendo el invariante. Test: `inventarios/tests/test_adjust_lotes.py`.
+
+### BUG-015 — Facturación: anular una factura con efectos dejaba kardex y cartera desalineados de la contabilidad
+
+- **Módulo:** facturacion — U9
+- **Fecha:** 2026-07-04 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** emitir factura que despacha inventario y/o genera CxC; anularla (`void_doc`).
+- **Actual:** `void_doc` solo revertía el asiento GL; el stock despachado NO volvía al kardex y el `Receivable` quedaba OPEN → subledgers divergentes de la contabilidad.
+- **Causa raíz / fix (decisión del usuario):** anular es solo para documentos SIN efectos. **Fix:** `void_doc` bloquea (con mensaje que remite a Nota de Crédito) si el doc tiene inventario despachado, CxC generada o abonos. La Nota de Crédito ya reingresa stock y ajusta cartera. Test: `test_void_bloquea_con_efectos.py`.
+
+### BUG-014 — Inventario: transferencia entre bodegas no mezclaba el costo promedio del destino
+
+- **Módulo:** inventarios (kernel) — U8
+- **Fecha:** 2026-07-04 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** `post_transfer` de A→B; luego despachar de B.
+- **Actual:** el destino solo actualizaba `avg_cost` si la cantidad final era 0 (imposible en una entrada) → a bodega vacía quedaba `avg_cost=0` (COGS=0 y valorización 0); a bodega con stock a otro costo, no promediaba (subvaluación).
+- **Impacto:** COGS y valorización de inventario erróneos en operación normal (transferencias entre bodegas son cotidianas).
+- **Causa raíz / fix:** faltaba la mezcla ponderada. **Fix:** el destino promedia `avg_cost` como `post_receive` (con el reinicio INV-02 sobre base cero/negativa). Test: `inventarios/tests/test_transfer_costeo.py`.
+
 ### BUG-009 — Intercompañía: el frontend usaba `id` pero el backend manda `tx_id` — todas las acciones pegaban a /transactions/undefined/
 
 - **Módulo / paso del ROADMAP:** frontend accounting (IntercompaniaPage) / hito intercompany — detectado en oleada 2 (preexistente, venía así de v2)

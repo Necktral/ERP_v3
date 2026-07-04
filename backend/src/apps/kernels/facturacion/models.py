@@ -495,6 +495,9 @@ class BillingPayment(Syncable):
     reference = models.CharField(max_length=96, blank=True, default="")
     notes = models.CharField(max_length=255, blank=True, default="")
     payment_date = models.DateField(default=timezone.localdate)
+    # BILL-1: clave de idempotencia del cobro. Un doble-submit (doble clic) con la
+    # misma clave devuelve el pago existente en vez de duplicar el abono.
+    idempotency_key = models.CharField(max_length=64, blank=True, default="")
 
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True)
     reversal_reason = models.CharField(max_length=255, blank=True, default="")
@@ -522,6 +525,12 @@ class BillingPayment(Syncable):
         app_label = "facturacion"
         constraints = [
             models.CheckConstraint(condition=models.Q(amount__gt=0), name="ck_billpay_amount_positive"),
+            # BILL-1: backstop de idempotencia del cobro (parcial: solo con clave).
+            models.UniqueConstraint(
+                fields=["doc", "idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="uq_billpay_doc_idem",
+            ),
         ]
         indexes = [
             models.Index(fields=["doc", "status"], name="ix_billpay_doc_st"),

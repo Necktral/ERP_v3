@@ -58,6 +58,16 @@ def get_or_create_account(
     """Crea o actualiza la cuenta de crédito (límite + segmento) de un cliente."""
     if segment not in CustomerSegment.values:
         raise ComisariatoError("COMISARIATO_INVALID_SEGMENT")
+
+    # BUG-C1: `collecting_company` es la empresa cuya planilla cobra esta cuenta.
+    # Si es OTRA empresa, el cobro cruza compañías y SOLO procede con la relación
+    # CXC declarada (mismo gate que usa el cobro por planilla). Antes se aceptaba
+    # cualquier empresa sin verificar el vínculo.
+    if collecting_company is not None and collecting_company.id != company.id:
+        from apps.modulos.comisariato.payroll_link import _has_active_cxc_relationship
+
+        if not _has_active_cxc_relationship(finca=collecting_company, comisariato=company):
+            raise ComisariatoError("COMISARIATO_COLLECTING_COMPANY_SIN_RELACION_CXC")
     # C-01: None = sin tope (ilimitado, explícito); un valor numérico se normaliza a 2 dec.
     credit_limit = None if credit_limit is None else _q2(credit_limit)
 
