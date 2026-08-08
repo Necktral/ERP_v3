@@ -31,6 +31,138 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-034 — El plan de cuentas permite ciclos entre cuentas padre
+
+- **Módulo / paso del ROADMAP:** accounting / Paso 2
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** crear A con padre B y B con padre A mediante el upsert de CoA.
+- **Esperado:** la jerarquía debe ser un grafo acíclico.
+- **Actual:** sólo se rechaza que una cuenta sea su propio padre; los ciclos de dos o más nodos se guardan.
+- **Impacto:** recorridos, reportes y cierres que consuman la jerarquía pueden entrar en ciclos o producir agregados inválidos.
+- **Causa raíz / fix:** pendiente; validar el grafo completo dentro de la transacción y agregar regresión.
+
+### BUG-030 — El canje concurrente de un token embebido puede emitir dos tokens
+
+- **Módulo / paso del ROADMAP:** dashboard/reporting / seguridad
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** canjear simultáneamente el mismo grant en estado `ISSUED` desde dos conexiones.
+- **Esperado:** exactamente un canje exitoso y una sola transición a `REDEEMED`.
+- **Actual:** la verificación y transición no tienen lock/CAS; ambas solicitudes pueden emitir credenciales.
+- **Impacto:** replay de una capability de reporting.
+- **Causa raíz / fix:** pendiente; transición atómica con `select_for_update` y prueba PostgreSQL de dos hilos.
+
+### BUG-029 — Bootstrap organizacional concurrente puede crear dos árboles
+
+- **Módulo / paso del ROADMAP:** accounts/iam / bootstrap
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** enviar dos `POST` simultáneos al bootstrap organizacional antes de que exista un holding.
+- **Esperado:** un solo holding/empresa/sucursal; la segunda solicitud recibe conflicto controlado.
+- **Actual:** el chequeo de holding ocurre antes del bloque atómico y no existe constraint singleton.
+- **Impacto:** duplica la raíz organizacional y rompe el contexto inicial.
+- **Causa raíz / fix:** pendiente; serializar con advisory lock y re-chequeo interno.
+
+### BUG-028 — Rotación concurrente de refresh token puede generar dos hijos válidos
+
+- **Módulo / paso del ROADMAP:** accounts/auth / seguridad
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** refrescar simultáneamente la misma sesión/token desde dos conexiones.
+- **Esperado:** un 200, un 401 y un único descendiente activo.
+- **Actual:** la sesión padre se lee sin lock; ambos requests pueden crear un hijo antes de revocarla.
+- **Impacto:** debilita rotación y detección de replay de credenciales.
+- **Causa raíz / fix:** pendiente; transacción, lock de sesión y re-chequeo.
+
+### BUG-027 — Diagnostics mezcla y expone incidentes entre empresas
+
+- **Módulo / paso del ROADMAP:** diagnostics / aislamiento multiempresa
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** con permiso scoped en empresa A, listar/detallar/triagear un `ErrorEvent` de B; generar el mismo stack en A y B.
+- **Esperado:** eventos y deduplicación aislados por empresa.
+- **Actual:** las vistas consultan globalmente y el dedupe usa sólo `stack_hash`, conservando el scope del primer incidente.
+- **Impacto:** fuga de stack/rutas y mutación cross-tenant; métricas mezcladas.
+- **Causa raíz / fix:** pendiente; scope por `request.company` y dedupe `(company, stack_hash)`.
+
+### BUG-026 — Integration Inbox es global y mutable desde otro tenant
+
+- **Módulo / paso del ROADMAP:** integration / aislamiento multiempresa
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** con permisos de integración en A, listar o hacer ACK por ID a un evento originado en B.
+- **Esperado:** eventos tenant-scoped; acceso global sólo con permiso de plataforma.
+- **Actual:** `InboxEvent` no materializa company/branch y list/ACK operan sobre el conjunto global.
+- **Impacto:** fuga de metadatos y cambio de estado cross-tenant.
+- **Causa raíz / fix:** pendiente; expansión/backfill de scope, constraints y filtros de API.
+
+### BUG-025 — Documents acepta una sucursal perteneciente a otra empresa
+
+- **Módulo / paso del ROADMAP:** documents / aislamiento multiempresa
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** autenticado en empresa A, subir un documento con `branch_id` de B.
+- **Esperado:** 404/422 y cero filas creadas.
+- **Actual:** la rama se resuelve por ID/tipo sin exigir `parent=company` y se persiste A+B.
+- **Impacto:** corrupción de scope y acceso cruzado a documentos.
+- **Causa raíz / fix:** pendiente; resolver la sucursal dentro de la empresa y agregar defensa de modelo.
+
+### BUG-024 — Cobros de facturación mezclan importes nominales de monedas distintas
+
+- **Módulo / paso del ROADMAP:** facturación/contabilidad / dinero
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** registrar un pago USD sobre una factura NIO.
+- **Esperado:** rechazo hasta que exista conversión FX contablemente completa.
+- **Actual:** el pago acepta moneda arbitraria y `amount_paid` suma importes nominales.
+- **Impacto:** saldos, cartera y estado PAID incorrectos.
+- **Causa raíz / fix:** pendiente; exigir moneda igual a la factura y probar rechazo 422.
+
+### BUG-023 — La idempotencia de cobros existe en servicio pero no está cableada a la API
+
+- **Módulo / paso del ROADMAP:** facturación / dinero
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** repetir el mismo POST HTTP de cobro o hacer doble clic.
+- **Esperado:** el segundo request devuelve el mismo pago sin volver a sumar.
+- **Actual:** el serializer/vista no aceptan ni propagan `idempotency_key`; cada request crea un pago.
+- **Impacto:** doble cobro y factura inflada por retries normales.
+- **Causa raíz / fix:** pendiente; contrato API obligatorio de 96 caracteres, replay explícito y test E2E.
+
+### BUG-022 — Pagos de facturación no respetan el scope de sucursal ni el doc_id al revertir
+
+- **Módulo / paso del ROADMAP:** facturación / aislamiento por sucursal
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** desde sucursal B usar IDs de una factura/pago de sucursal A para listar, cobrar o revertir.
+- **Esperado:** 404 y cero mutaciones fuera de la sucursal activa.
+- **Actual:** pagos filtran sólo por empresa y la reversa ignora el `doc_id` de la URL.
+- **Impacto:** lectura y movimiento de dinero cross-branch.
+- **Causa raíz / fix:** pendiente; scope estricto `company+branch+doc+payment` y matriz adversarial A/B.
+
+### BUG-021 — El gate frontend da falsos verdes mientras la SPA no compila
+
+- **Módulo / paso del ROADMAP:** frontend/QA / transversal
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** ejecutar los CLI reales de ESLint, vue-tsc y Quasar en vez de los binarios locales vacíos.
+- **Esperado:** el gate ejecuta herramientas reales y el build termina verde.
+- **Actual:** ejecutables de `node_modules/.bin` de 0 bytes retornan éxito; el build real falla en Intereses, Conteo físico y Captura de campo.
+- **Impacto:** CI/certificaciones no detectan una SPA que no construye y pantallas rotas.
+- **Causa raíz / fix:** pendiente; reconstruir instalación desde lockfile, corregir errores y blindar el runner contra bins inválidos.
+
 ### BUG-002 — El admin del bootstrap es superusuario permanente (divergencia con la constitución)
 
 - **Módulo / paso del ROADMAP:** 1 (estructura organizacional) / arranque
