@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-035 — Reanudar una venta en espera pierde identidad y crédito del cliente
+
+- **Módulo / paso del ROADMAP:** frontend POS / Paso 7
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** preparar venta para cliente con crédito, dejarla en espera, operar otro cliente y reanudar la primera.
+- **Esperado:** restaurar nombre/ID, reconsultar la cuenta y habilitar crédito según el estado vigente.
+- **Actual:** sólo se restaura `clienteId`; `cuenta` queda nula y `clienteNombre` puede conservar un valor stale.
+- **Impacto:** deshabilita crédito legítimo y puede mostrar/imprimir la identidad equivocada.
+- **Causa raíz / fix:** pendiente; persistir identidad mínima, limpiar estado completo y rehidratar crédito al reanudar.
+
 ### BUG-033 — Errores al consultar crédito se interpretan como “cliente sin cuenta”
 
 - **Módulo / paso del ROADMAP:** frontend ventas/POS / Paso 7
