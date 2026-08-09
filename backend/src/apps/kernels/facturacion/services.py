@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -85,6 +85,10 @@ class BillingNotFoundError(BillingError):
 
 class BillingSoDError(BillingError):
     """Violación de segregación de funciones (maker ≠ checker) — HTTP 409."""
+
+
+class BillingConflictError(BillingError):
+    """Conflicto de estado o idempotencia — HTTP 409."""
 
 
 @dataclass(frozen=True)
@@ -1437,6 +1441,7 @@ class PaymentResult:
     doc_id: int
     amount_paid: Decimal
     payment_status: str
+    idempotent: bool = False
 
 
 def create_payment(
@@ -1457,6 +1462,7 @@ def create_payment(
     idempotency_key: str = "",
 ) -> PaymentResult:
     company: OrgUnit = request.company
+    branch: OrgUnit = request.branch
 
     amount = _q_money(Decimal(str(amount)))
     if amount <= 0:
@@ -1464,22 +1470,78 @@ def create_payment(
 
     normalized_method = _normalize_payment_method(payment_method)
     idem = str(idempotency_key or "").strip()
+    if not idem:
+        raise BillingError("idempotency_key requerido")
+    if len(idem) > 96:
+        raise BillingError("idempotency_key excede 96 caracteres")
 
     with transaction.atomic():
         try:
-            doc = BillingDocument.objects.select_for_update().get(id=doc_id, company=company)
+            doc = BillingDocument.objects.select_for_update().get(
+                id=doc_id,
+                company=company,
+                branch=branch,
+            )
         except BillingDocument.DoesNotExist as exc:
             raise BillingNotFoundError("documento no encontrado") from exc
 
-        # BILL-1: replay idempotente — un doble-submit con la misma clave devuelve
-        # el pago ya registrado en vez de duplicar el abono (bajo el lock del doc).
-        if idem:
-            prev = BillingPayment.objects.filter(doc=doc, idempotency_key=idem).first()
-            if prev is not None:
-                return PaymentResult(
-                    payment_id=prev.id, doc_id=doc.id,
-                    amount_paid=doc.amount_paid, payment_status=doc.payment_status,
+        # BUG-032: la clave representa una operación canónica en toda la empresa.
+        # El advisory lock cierra la carrera entre dos documentos distintos antes
+        # de que el constraint único de BD tenga que arbitrarla.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                [f"billing-payment:{company.id}:{idem}"],
+            )
+
+        payment_currency = str(currency or doc.currency or "").strip().upper()
+        document_currency = str(doc.currency or "").strip().upper()
+        reference_clean = str(reference or "")
+        notes_clean = str(notes or "")
+        payroll_ref_clean = str(payroll_period_ref or "")
+        coffee_ref_clean = str(coffee_lot_ref or "")
+
+        prev = (
+            BillingPayment.objects.select_for_update()
+            .filter(company=company, idempotency_key=idem)
+            .first()
+        )
+        if prev is not None:
+            requested_date = payment_date or prev.payment_date
+            previous_initial_status = (
+                BillingPayment.Status.CONFIRMED
+                if prev.status == BillingPayment.Status.REVERSED
+                else prev.status
+            )
+            expected_initial_status = (
+                BillingPayment.Status.CONFIRMED if auto_confirm else BillingPayment.Status.PENDING
+            )
+            same_payload = all(
+                (
+                    prev.doc_id == int(doc.id),
+                    Decimal(prev.amount) == amount,
+                    str(prev.currency or "").strip().upper() == payment_currency,
+                    str(prev.payment_method or "") == normalized_method,
+                    str(prev.reference or "") == reference_clean,
+                    str(prev.notes or "") == notes_clean,
+                    prev.payment_date == requested_date,
+                    str(prev.payroll_period_ref or "") == payroll_ref_clean,
+                    str(prev.coffee_lot_ref or "") == coffee_ref_clean,
+                    prev.payment_intent_id == payment_intent_id,
+                    previous_initial_status == expected_initial_status,
                 )
+            )
+            if not same_payload:
+                raise BillingConflictError(
+                    "idempotency_key ya fue usada con un payload de cobro distinto"
+                )
+            return PaymentResult(
+                payment_id=prev.id,
+                doc_id=doc.id,
+                amount_paid=doc.amount_paid,
+                payment_status=doc.payment_status,
+                idempotent=True,
+            )
 
         # BUG-T5: solo se cobran FACTURAS EMITIDAS. Antes solo bloqueaba VOIDED,
         # así que se podía registrar un pago sobre un borrador o una cotización.
@@ -1488,19 +1550,24 @@ def create_payment(
         if doc.doc_type != DocType.INVOICE:
             raise BillingError("solo las facturas admiten cobros")
 
+        if payment_currency != document_currency:
+            raise BillingError(
+                f"moneda del pago ({payment_currency}) debe coincidir con la factura ({document_currency})"
+            )
+
         payment = BillingPayment.objects.create(
             idempotency_key=idem,
             doc=doc,
             company=company,
             payment_method=normalized_method,
             amount=amount,
-            currency=currency or "NIO",
-            reference=reference or "",
-            notes=notes or "",
+            currency=payment_currency,
+            reference=reference_clean,
+            notes=notes_clean,
             payment_date=payment_date or timezone.localdate(),
             status=BillingPayment.Status.CONFIRMED if auto_confirm else BillingPayment.Status.PENDING,
-            payroll_period_ref=payroll_period_ref or "",
-            coffee_lot_ref=coffee_lot_ref or "",
+            payroll_period_ref=payroll_ref_clean,
+            coffee_lot_ref=coffee_ref_clean,
             payment_intent_id=payment_intent_id,
             created_by=actor,
         )
@@ -1526,7 +1593,7 @@ def create_payment(
                 "doc_id": doc_id,
                 "payment_method": normalized_method,
                 "amount": str(amount),
-                "currency": currency,
+                "currency": payment_currency,
                 "auto_confirm": auto_confirm,
                 "doc_payment_status": doc.payment_status,
                 "doc_amount_paid": str(doc.amount_paid),
@@ -1545,14 +1612,21 @@ def reverse_payment(
     *,
     request,
     actor,
+    doc_id: int,
     payment_id: int,
     reason: str,
 ) -> dict:
     company: OrgUnit = request.company
+    branch: OrgUnit = request.branch
 
     with transaction.atomic():
         try:
-            payment = BillingPayment.objects.select_for_update().get(id=payment_id, company=company)
+            payment = BillingPayment.objects.select_for_update().get(
+                id=payment_id,
+                doc_id=doc_id,
+                company=company,
+                doc__branch=branch,
+            )
         except BillingPayment.DoesNotExist as exc:
             raise BillingNotFoundError("pago no encontrado") from exc
 

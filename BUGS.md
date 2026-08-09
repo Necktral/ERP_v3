@@ -60,12 +60,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** facturación / idempotencia de dinero
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** cobrar con clave K y luego repetir K cambiando monto, moneda, método o documento.
 - **Esperado:** conflicto de idempotencia; una clave sólo puede representar un payload canónico.
 - **Actual:** el servicio devuelve el pago previo apenas encuentra K, sin comparar el payload solicitado.
 - **Impacto:** el cliente puede creer que aplicó un cobro corregido cuando en realidad se conservó otro monto/método.
-- **Causa raíz / fix:** pendiente; comparar los campos monetarios y de identidad antes de declarar replay, y probar cada divergencia.
+- **Causa raíz / fix:** el fast-path comparaba sólo la clave. **Fix:** clave única por empresa, advisory lock por empresa+clave y comparación del payload canónico completo; cualquier divergencia devuelve 409.
 
 ### BUG-031 — Completar 2FA o cambio obligatorio navega a `/dashboard` inexistente
 
@@ -84,12 +84,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** accounting / Paso 2
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** crear A con padre B y B con padre A mediante el upsert de CoA.
 - **Esperado:** la jerarquía debe ser un grafo acíclico.
 - **Actual:** sólo se rechaza que una cuenta sea su propio padre; los ciclos de dos o más nodos se guardan.
 - **Impacto:** recorridos, reportes y cierres que consuman la jerarquía pueden entrar en ciclos o producir agregados inválidos.
-- **Causa raíz / fix:** pendiente; validar el grafo completo dentro de la transacción y agregar regresión.
+- **Causa raíz / fix:** sólo existía el guard de autorreferencia. **Fix:** mutex por empresa, lock de cuentas y validación DFS dentro de la transacción. La prueba concurrente certifica un ganador, un rechazo y cero ciclos.
 
 ### BUG-030 — El canje concurrente de un token embebido puede emitir dos tokens
 
@@ -168,36 +168,36 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** facturación/contabilidad / dinero
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** registrar un pago USD sobre una factura NIO.
 - **Esperado:** rechazo hasta que exista conversión FX contablemente completa.
 - **Actual:** el pago acepta moneda arbitraria y `amount_paid` suma importes nominales.
 - **Impacto:** saldos, cartera y estado PAID incorrectos.
-- **Causa raíz / fix:** pendiente; exigir moneda igual a la factura y probar rechazo 422.
+- **Causa raíz / fix:** faltaba política de moneda. **Fix:** normaliza y exige moneda igual a la factura; una distinta devuelve 422 y no crea pago.
 
 ### BUG-023 — La idempotencia de cobros existe en servicio pero no está cableada a la API
 
 - **Módulo / paso del ROADMAP:** facturación / dinero
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** repetir el mismo POST HTTP de cobro o hacer doble clic.
 - **Esperado:** el segundo request devuelve el mismo pago sin volver a sumar.
 - **Actual:** el serializer/vista no aceptan ni propagan `idempotency_key`; cada request crea un pago.
 - **Impacto:** doble cobro y factura inflada por retries normales.
-- **Causa raíz / fix:** pendiente; contrato API obligatorio de 96 caracteres, replay explícito y test E2E.
+- **Causa raíz / fix:** serializer/vista omitían la clave. **Fix:** clave obligatoria de 96 caracteres, constraint por empresa, 201 nuevo y 200 `idempotent=true` en replay; consumidores adaptados.
 
 ### BUG-022 — Pagos de facturación no respetan el scope de sucursal ni el doc_id al revertir
 
 - **Módulo / paso del ROADMAP:** facturación / aislamiento por sucursal
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** desde sucursal B usar IDs de una factura/pago de sucursal A para listar, cobrar o revertir.
 - **Esperado:** 404 y cero mutaciones fuera de la sucursal activa.
 - **Actual:** pagos filtran sólo por empresa y la reversa ignora el `doc_id` de la URL.
 - **Impacto:** lectura y movimiento de dinero cross-branch.
-- **Causa raíz / fix:** pendiente; scope estricto `company+branch+doc+payment` y matriz adversarial A/B.
+- **Causa raíz / fix:** pagos filtraban sólo empresa y reversa ignoraba el documento de la URL. **Fix:** scope `company+branch+doc+payment` y matriz adversarial A/B.
 
 ### BUG-021 — El gate frontend da falsos verdes mientras la SPA no compila
 

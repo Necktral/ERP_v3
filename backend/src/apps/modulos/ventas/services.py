@@ -379,6 +379,7 @@ def pos_sale(
                 request=request, actor=actor, doc_id=doc.id,
                 payment_method=str(p["method"]), amount=Decimal(str(p["amount"])),
                 currency=currency, reference=f"pos-sale:{idempotency_key}:{i}",
+                idempotency_key=f"pos-payment:{company.id}:{idempotency_key}:{i}",
             )
             last_payment_status = pay.payment_status
 
@@ -720,6 +721,7 @@ def collect_receivable(
                     request=request, actor=actor, doc_id=int(rec.reference_id),
                     payment_method=method, amount=amount, currency=rec.currency,
                     reference=f"cobro-cxc:{rec.obligation_id}",
+                    idempotency_key=f"cobro-cxc:{company.id}:{idempotency_key}",
                 )
             except BillingError:
                 # La CxC manda; si el doc ya no admite pagos (p. ej. anulado), el cobro

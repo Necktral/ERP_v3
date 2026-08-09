@@ -85,6 +85,7 @@ class PaymentCreateIn(serializers.Serializer):
     payment_method = serializers.ChoiceField(choices=TENDER_PAYMENT_METHOD_CHOICES)
     amount = serializers.DecimalField(max_digits=18, decimal_places=2)
     currency = serializers.CharField(max_length=8, required=False, default="NIO")
+    idempotency_key = serializers.CharField(max_length=96, allow_blank=False, trim_whitespace=True)
     reference = serializers.CharField(max_length=96, required=False, allow_blank=True, default="")
     notes = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
     payment_date = serializers.DateField(required=False, allow_null=True)

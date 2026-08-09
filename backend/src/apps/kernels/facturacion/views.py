@@ -37,6 +37,7 @@ from .serializers import (
 )
 from .services import (
     BillingError,
+    BillingConflictError,
     BillingNotFoundError,
     BillingSoDError,
     convert_quote_to_invoice,
@@ -470,7 +471,8 @@ class DocPaymentsView(APIView):
 
     def get(self, request, doc_id: int):
         company: OrgUnit = request.company
-        doc = get_object_or_404(BillingDocument, id=doc_id, company=company)
+        branch: OrgUnit = request.branch
+        doc = get_object_or_404(BillingDocument, id=doc_id, company=company, branch=branch)
         payments = doc.payments.order_by("-created_at")
         return Response(
             {
@@ -499,9 +501,12 @@ class DocPaymentsView(APIView):
                 reference=v.get("reference") or "",
                 notes=v.get("notes") or "",
                 payment_date=v.get("payment_date"),
+                idempotency_key=v["idempotency_key"],
             )
         except BillingNotFoundError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except BillingConflictError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
         except BillingError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         return Response(
@@ -510,8 +515,9 @@ class DocPaymentsView(APIView):
                 "doc_id": out.doc_id,
                 "amount_paid": str(out.amount_paid),
                 "payment_status": out.payment_status,
+                "idempotent": out.idempotent,
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_200_OK if out.idempotent else status.HTTP_201_CREATED,
         )
 
 
@@ -526,6 +532,7 @@ class PaymentReverseView(APIView):
             out = reverse_payment(
                 request=request,
                 actor=request.user,
+                doc_id=doc_id,
                 payment_id=payment_id,
                 reason=s.validated_data["reason"],
             )
