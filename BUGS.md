@@ -156,24 +156,24 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** nómina/biometría / plataforma y uploads
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** enviar al endpoint de importación un XLSX comprimido grande, con alta razón de expansión ZIP o con un número masivo de filas/celdas.
 - **Esperado:** rechazo temprano y controlado por límites explícitos de bytes comprimidos/descomprimidos, miembros ZIP, filas y celdas.
 - **Actual:** el endpoint ejecuta `upload.read()` completo y el lector descomprime/materializa el libro sin presupuestos de recursos.
 - **Impacto:** un usuario autorizado puede agotar RAM/CPU del worker y degradar o derribar el servicio.
-- **Causa raíz / fix:** pendiente; validar tamaño antes de leer, inspeccionar de forma segura el contenedor ZIP y aplicar límites durante el parseo con pruebas de archivos adversariales pequeños.
+- **Causa raíz / fix:** lectura y parseo sin presupuestos. **Fix:** 8 MB de upload, 100 miembros ZIP, 16 MB por miembro, 32 MB total, ratio 100:1, 50 mil filas, 500 mil celdas, 256 columnas y 200 mil shared strings; ZIP cifrado se rechaza y los topes se vuelven a comprobar durante lectura.
 
 ### BUG-036 — El secreto de dispositivos biométricos se persiste en texto claro
 
 - **Módulo / paso del ROADMAP:** nómina/biometría / credenciales de dispositivos
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** enrolar un dispositivo y consultar directamente la columna `BiometricDevice.api_token` en la DB o un backup.
 - **Esperado:** persistir sólo un hash no reversible; revelar el secreto una única vez al crear o rotar y autenticar por comparación segura.
 - **Actual:** el token completo se guarda como valor `unique` y el endpoint público hace lookup directo por ese valor.
 - **Impacto:** una lectura de DB/backup permite suplantar todos los dispositivos cuyos tokens sean extraídos.
-- **Causa raíz / fix:** pendiente; migrar a hash versionado, agregar creación/rotación con revelación única y mantener una transición compatible y auditable.
+- **Causa raíz / fix:** lookup directo por secreto persistido. **Fix:** SHA-256 indexado de tokens aleatorios, comparación segura, revelación única al crear/rotar, revocación del anterior y constraint que impide plaintext. Migraciones 0020/0021 separan expansión/backfill y retiro; 0021 bloquea rollback legacy inseguro explícitamente.
 
 ### BUG-035 — Reanudar una venta en espera pierde identidad y crédito del cliente
 

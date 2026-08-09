@@ -14,6 +14,8 @@ AttendanceReport(source=BIOMETRIC) por período para el cruce de 3 controles.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import secrets
 import uuid
 
@@ -24,6 +26,10 @@ from django.utils import timezone
 
 def new_device_token() -> str:
     return secrets.token_hex(24)
+
+
+def hash_device_token(token: str) -> str:
+    return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
 
 
 class BiometricDevice(models.Model):
@@ -43,7 +49,10 @@ class BiometricDevice(models.Model):
     name = models.CharField(max_length=160)
     vendor = models.CharField(max_length=120, blank=True, default="")  # marca/modelo
     serial = models.CharField(max_length=120, blank=True, default="")
-    api_token = models.CharField(max_length=64, unique=True, default=new_device_token, editable=False)
+    # Campo legacy retirado: se conserva vacío durante una ventana de compatibilidad
+    # de esquema, pero un constraint impide volver a persistir secretos en claro.
+    api_token = models.CharField(max_length=64, blank=True, default="", editable=False)
+    api_token_hash = models.CharField(max_length=64, unique=True, editable=False)
     is_active = models.BooleanField(default=True, db_index=True)
     last_seen_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
@@ -59,9 +68,41 @@ class BiometricDevice(models.Model):
     class Meta:
         app_label = "nomina"
         indexes = [models.Index(fields=["company", "is_active"])]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(api_token=""), name="ck_biometric_token_plaintext_empty")
+        ]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.company_id})"
+
+    def save(self, *args, **kwargs):
+        if not self.api_token_hash:
+            self.api_token_hash = hash_device_token(new_device_token())
+        self.api_token = ""
+        return super().save(*args, **kwargs)
+
+    def rotate_api_token(self) -> str:
+        raw_token = new_device_token()
+        self.api_token = ""
+        self.api_token_hash = hash_device_token(raw_token)
+        self.save(update_fields=["api_token", "api_token_hash", "updated_at"])
+        return raw_token
+
+    @classmethod
+    def authenticate_token(cls, token: str):
+        raw_token = str(token or "").strip()
+        if not raw_token:
+            return None
+        candidate_hash = hash_device_token(raw_token)
+        device = cls.objects.filter(api_token_hash=candidate_hash, is_active=True).select_related("company").first()
+        if device is None:
+            # Comparación dummy para que el camino de token inexistente también ejecute
+            # compare_digest; la respuesta HTTP nunca distingue el motivo.
+            hmac.compare_digest(candidate_hash, "0" * 64)
+            return None
+        if not hmac.compare_digest(candidate_hash, device.api_token_hash):
+            return None
+        return device
 
 
 class BiometricPersonMap(models.Model):

@@ -21,8 +21,8 @@
 - **MEJ-002 — HECHA:** cambio de empresa/sucursal transaccional con rollback ante fallo de refresh.
 - **MEJ-003 — HECHA:** JWT nativos en Keystore/Keychain mediante secure storage, migración de `localStorage`, caché versionada con TTL de 24 h y revalidación al reconectar.
 - **MEJ-004 — HECHA:** Quasar en español, fuentes runtime locales y normalización recursiva de envelopes/estados de error.
-- **MEJ-005:** límites de uploads/ZIP, filas y celdas; protección de memoria/CPU.
-- **MEJ-006:** token biométrico hasheado con rotación y revelación única.
+- **MEJ-005 — HECHA:** límites antes/durante upload y parseo XLSX/CSV, inspección ZIP, ratio de expansión y presupuestos de filas/celdas.
+- **MEJ-006 — HECHA:** token biométrico hasheado, revelación única y rotación; rollout 0020 → código hash-aware → 0021 con rollback legacy fail-safe.
 - **MEJ-007 — HECHA:** `compose.prod.yaml` usa imágenes prod, requiere secretos sin defaults, deshabilita override de transporte, no publica DB/backend/dashboard y limita el frontend a loopback; `check --deploy` es bloqueante.
 - **MEJ-008 — HECHA:** cada request reporting revalida RBAC y usa la intersección con el techo firmado del token; revocaciones aplican de inmediato y altas posteriores no expanden la capability.
 - **MEJ-009 — EN CURSO:** Devices ya conserva metadatos y pagina server-side con prueba del registro 201; continúa la medición de tablas restantes.
