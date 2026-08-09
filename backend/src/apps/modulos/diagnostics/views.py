@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.modulos.common.permissions import rbac_permission
+from apps.modulos.common.pagination import get_limit_offset, paginate_queryset
 
 from .ai_diagnosis import AIDisabledError, run_ai_diagnosis
 from .diagnose import create_diagnostic_run
@@ -31,6 +32,12 @@ from .supervision import build_supervision_summary
 from .triage import TriageError, triage_error, triage_finding
 
 
+def _paginated(request, qs, serializer):
+    limit, offset = get_limit_offset(request)
+    total, rows = paginate_queryset(qs, limit=limit, offset=offset)
+    return Response({"count": total, "limit": limit, "offset": offset, "results": serializer(rows, many=True).data})
+
+
 def _scoped_errors(request):
     return ErrorEvent.objects.filter(company=request.company)
 
@@ -54,8 +61,7 @@ class ErrorEventListView(APIView):
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
-        data = ErrorEventSerializer(qs[:200], many=True).data
-        return Response({"results": data}, status=status.HTTP_200_OK)
+        return _paginated(request, qs.order_by("-last_seen_at", "-id"), ErrorEventSerializer)
 
 
 class ErrorEventDetailView(APIView):
@@ -75,8 +81,7 @@ class SecurityFindingListView(APIView):
             val = request.query_params.get(f)
             if val:
                 qs = qs.filter(**{f: val})
-        data = SecurityFindingSerializer(qs[:300], many=True).data
-        return Response({"results": data}, status=status.HTTP_200_OK)
+        return _paginated(request, qs.order_by("-last_seen_at", "-id"), SecurityFindingSerializer)
 
 
 class SecurityFindingDetailView(APIView):
@@ -130,8 +135,7 @@ class DiagnosticRunListView(APIView):
             val = request.query_params.get(f)
             if val:
                 qs = qs.filter(**{f: val})
-        data = DiagnosticRunSerializer(qs[:200], many=True).data
-        return Response({"results": data}, status=status.HTTP_200_OK)
+        return _paginated(request, qs.order_by("-created_at", "-id"), DiagnosticRunSerializer)
 
 
 class DiagnosticRunDetailView(APIView):
@@ -153,8 +157,7 @@ class CodeUnitEvidenceListView(APIView):
             val = request.query_params.get(f)
             if val:
                 qs = qs.filter(**{f: val})
-        data = CodeUnitEvidenceSerializer(qs[:300], many=True).data
-        return Response({"results": data}, status=status.HTTP_200_OK)
+        return _paginated(request, qs.order_by("domain", "path", "id"), CodeUnitEvidenceSerializer)
 
 
 class ReleaseReadinessView(APIView):

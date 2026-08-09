@@ -13,6 +13,18 @@ export interface Paginated<T> {
   results: T[];
 }
 
+/** Recorre un catálogo paginado sin perder filas; para selects/client tables sin @request. */
+export async function collectPaginated<T>(load: (page: PageReq) => Promise<Paginated<T>>, limit = PAGE.limit): Promise<T[]> {
+  const all: T[] = [];
+  let offset = 0;
+  while (true) {
+    const page = await load({ limit, offset });
+    all.push(...page.results);
+    offset += page.results.length;
+    if (!page.results.length || offset >= page.count) return all;
+  }
+}
+
 /**
  * Página por defecto para listados de CATÁLOGO CORTO (trae todo de una vez).
  * OJO: trunca en silencio por encima de `limit`. Para tablas que pueden crecer

@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from apps.modulos.fleet.models import Driver, MaintenancePlan, MaintenanceType
+from apps.modulos.fleet.models import AssetType, Driver, FleetAsset, FuelLog, MaintenancePlan, MaintenanceType, MeterBasis
 from apps.modulos.iam.models import OrgUnit, UserMembership
 from apps.modulos.rbac.models import Permission, Role, RoleAssignment, RolePermission
 
@@ -70,3 +71,24 @@ def test_list_drivers_requires_read_perm():
     sin_perm = _client(company=company, branch=branch, perms=("fleet.asset.read",))
     assert sin_perm.get("/api/fleet/drivers/").status_code == 403
     assert sin_perm.get("/api/fleet/maintenance/types/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_fuel_cost_pagination_reaches_row_201_and_is_tenant_scoped():
+    _, company, branch = _mk_org()
+    _, other, _ = _mk_org()
+    client = _client(company=company, branch=branch, perms=("fleet.cost.read",))
+    asset = FleetAsset.objects.create(company=company, asset_type=AssetType.VEHICLE, code="OWN", name="Propio")
+    other_asset = FleetAsset.objects.create(company=other, asset_type=AssetType.VEHICLE, code="OTHER", name="Ajeno")
+    FuelLog.objects.bulk_create([
+        FuelLog(company=company, asset=asset, liters=Decimal("1"), unit_cost=Decimal("1"), total_cost=Decimal("1"), meter_basis=MeterBasis.ODOMETER_KM)
+        for _ in range(201)
+    ])
+    FuelLog.objects.create(company=other, asset=other_asset, liters=1, unit_cost=1, total_cost=1)
+
+    response = client.get(f"/api/fleet/assets/{asset.id}/fuel-logs/?limit=25&offset=200")
+
+    assert response.status_code == 200
+    assert response.data["count"] == 201
+    assert response.data["offset"] == 200
+    assert len(response.data["results"]) == 1

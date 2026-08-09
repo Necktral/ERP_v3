@@ -45,12 +45,9 @@
         <q-btn v-if="tab === 'exp'" unelevated no-caps color="primary" icon="receipt_long" label="Registrar gasto" @click="dlgExp = true" />
       </div>
 
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
-      <q-table v-if="tab === 'fuel'" class="app-table" flat :rows="fuelLogs" :columns="fuelCols" row-key="id" :pagination="{ rowsPerPage: 25 }" no-data-label="Sin cargas de combustible." />
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
-      <q-table v-if="tab === 'maint'" class="app-table" flat :rows="maintOrders" :columns="maintCols" row-key="id" :pagination="{ rowsPerPage: 25 }" no-data-label="Sin órdenes de mantenimiento." />
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
-      <q-table v-if="tab === 'exp'" class="app-table" flat :rows="expenses" :columns="expCols" row-key="id" :pagination="{ rowsPerPage: 25 }" no-data-label="Sin gastos." />
+      <q-table v-if="tab === 'fuel'" class="app-table" flat :rows="fuelLogs" :columns="fuelCols" row-key="id" :loading="cargandoTabla" v-model:pagination="pagination.fuel" @request="(r) => pedirPagina('fuel', r)" no-data-label="Sin cargas de combustible." />
+      <q-table v-if="tab === 'maint'" class="app-table" flat :rows="maintOrders" :columns="maintCols" row-key="id" :loading="cargandoTabla" v-model:pagination="pagination.maint" @request="(r) => pedirPagina('maint', r)" no-data-label="Sin órdenes de mantenimiento." />
+      <q-table v-if="tab === 'exp'" class="app-table" flat :rows="expenses" :columns="expCols" row-key="id" :loading="cargandoTabla" v-model:pagination="pagination.exp" @request="(r) => pedirPagina('exp', r)" no-data-label="Sin gastos." />
     </template>
 
     <!-- Combustible -->
@@ -107,9 +104,9 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { useQuasar, type QTableColumn } from 'quasar';
+import { useQuasar, type QTableColumn, type QTableProps } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
-import { apiErrorMessage } from 'src/core/api';
+import { apiErrorMessage, toPageParams } from 'src/core/api';
 import {
   FLEET_EXPENSE_CATEGORIES,
   createFleetExpense,
@@ -133,6 +130,7 @@ const acl = useAclStore();
 const ctx = useContextStore();
 
 const cargando = ref(false);
+const cargandoTabla = ref(false);
 const accionando = ref(false);
 const assetOpts = ref<Array<{ value: number; label: string }>>([]);
 const assetId = ref<number | null>(null);
@@ -143,6 +141,8 @@ const resumen = ref<AssetCostSummary | null>(null);
 const fuelLogs = ref<FuelLogRow[]>([]);
 const maintOrders = ref<MaintenanceOrderRow[]>([]);
 const expenses = ref<FleetExpenseRow[]>([]);
+const nuevaPaginacion = () => ({ page: 1, rowsPerPage: 25, rowsNumber: 0 });
+const pagination = reactive({ fuel: nuevaPaginacion(), maint: nuevaPaginacion(), exp: nuevaPaginacion() });
 
 function puede(code: string): boolean {
   const companyId = ctx.activeCompanyId;
@@ -193,16 +193,28 @@ async function recargar() {
 
 async function cargarActivo() {
   if (!assetId.value) return;
+  cargandoTabla.value = true;
   try {
-    [resumen.value, fuelLogs.value, maintOrders.value, expenses.value] = await Promise.all([
+    const [summary, fuel, maint, exp] = await Promise.all([
       getAssetCostSummary(assetId.value),
-      listFuelLogs(assetId.value),
-      listMaintenanceOrders(assetId.value),
-      listFleetExpenses(assetId.value),
+      listFuelLogs(assetId.value, toPageParams(pagination.fuel)),
+      listMaintenanceOrders(assetId.value, toPageParams(pagination.maint)),
+      listFleetExpenses(assetId.value, toPageParams(pagination.exp)),
     ]);
+    resumen.value = summary;
+    fuelLogs.value = fuel.results; pagination.fuel.rowsNumber = fuel.count;
+    maintOrders.value = maint.results; pagination.maint.rowsNumber = maint.count;
+    expenses.value = exp.results; pagination.exp.rowsNumber = exp.count;
   } catch (e) {
     $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar el activo.') });
+  } finally {
+    cargandoTabla.value = false;
   }
+}
+
+async function pedirPagina(kind: keyof typeof pagination, request: Parameters<NonNullable<QTableProps['onRequest']>>[0]) {
+  Object.assign(pagination[kind], request.pagination);
+  await cargarActivo();
 }
 
 const dlgFuel = ref(false);

@@ -4,6 +4,7 @@
  * con alertas. Los listados devuelven array plano.
  */
 import { api } from 'src/boot/axios';
+import type { PageReq, Paginated } from 'src/core/api';
 
 export const ASSET_TYPE_LABELS: Record<string, string> = {
   VEHICLE: 'Vehículo',
@@ -256,9 +257,9 @@ export interface AssetCostSummary {
   consumption_label: string;
 }
 
-export async function listFuelLogs(assetId: number): Promise<FuelLogRow[]> {
-  const { data } = await api.get<{ results: FuelLogRow[] }>(`/fleet/assets/${assetId}/fuel-logs/`);
-  return data.results;
+export async function listFuelLogs(assetId: number, page: PageReq): Promise<Paginated<FuelLogRow>> {
+  const { data } = await api.get<Paginated<FuelLogRow>>(`/fleet/assets/${assetId}/fuel-logs/`, { params: page });
+  return data;
 }
 
 export async function createFuelLog(
@@ -269,9 +270,9 @@ export async function createFuelLog(
   return data;
 }
 
-export async function listMaintenanceOrders(assetId: number): Promise<MaintenanceOrderRow[]> {
-  const { data } = await api.get<{ results: MaintenanceOrderRow[] }>(`/fleet/assets/${assetId}/maintenance-orders/`);
-  return data.results;
+export async function listMaintenanceOrders(assetId: number, page: PageReq): Promise<Paginated<MaintenanceOrderRow>> {
+  const { data } = await api.get<Paginated<MaintenanceOrderRow>>(`/fleet/assets/${assetId}/maintenance-orders/`, { params: page });
+  return data;
 }
 
 export async function createMaintenanceOrder(
@@ -282,9 +283,9 @@ export async function createMaintenanceOrder(
   return data;
 }
 
-export async function listFleetExpenses(assetId: number): Promise<FleetExpenseRow[]> {
-  const { data } = await api.get<{ results: FleetExpenseRow[] }>(`/fleet/assets/${assetId}/expenses/`);
-  return data.results;
+export async function listFleetExpenses(assetId: number, page: PageReq): Promise<Paginated<FleetExpenseRow>> {
+  const { data } = await api.get<Paginated<FleetExpenseRow>>(`/fleet/assets/${assetId}/expenses/`, { params: page });
+  return data;
 }
 
 export async function createFleetExpense(

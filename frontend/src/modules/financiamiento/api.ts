@@ -5,6 +5,7 @@
  * Montaje backend: `api/financiamiento/` → con baseURL `/api` => `/financiamiento/...`.
  */
 import { api } from 'src/boot/axios';
+import { collectPaginated, type Paginated } from 'src/core/api';
 
 export type Currency = 'NIO' | 'USD';
 export type DisbursementForm = 'CASH' | 'CHECK' | 'TRANSFER' | 'IN_KIND';
@@ -63,8 +64,7 @@ export interface ProducerDeposit {
 }
 
 export async function listProducers(): Promise<ProducerRow[]> {
-  const { data } = await api.get<{ results: ProducerRow[] }>('/financiamiento/producers/');
-  return data.results;
+  return collectPaginated(async (page) => (await api.get<Paginated<ProducerRow>>('/financiamiento/producers/', { params: page })).data);
 }
 export async function createProducer(body: {
   party_id: number;
@@ -157,8 +157,7 @@ export interface ApplicationCreate {
   guarantee_coffee_qq?: number;
 }
 export async function listApplications(): Promise<ApplicationRow[]> {
-  const { data } = await api.get<{ results: ApplicationRow[] }>('/financiamiento/applications/');
-  return data.results;
+  return collectPaginated(async (page) => (await api.get<Paginated<ApplicationRow>>('/financiamiento/applications/', { params: page })).data);
 }
 export async function createApplication(body: ApplicationCreate): Promise<ApplicationRow> {
   const { data } = await api.post<ApplicationRow>('/financiamiento/applications/', body);
@@ -225,10 +224,7 @@ export interface LoanStatement {
   rate_used: string | null;
 }
 export async function listLoans(status?: LoanStatus): Promise<LoanRow[]> {
-  const { data } = await api.get<{ results: LoanRow[] }>('/financiamiento/loans/', {
-    params: status ? { status } : undefined,
-  });
-  return data.results;
+  return collectPaginated(async (page) => (await api.get<Paginated<LoanRow>>('/financiamiento/loans/', { params: { ...page, ...(status ? { status } : {}) } })).data);
 }
 export async function loanStatement(loanId: number): Promise<LoanStatement> {
   const { data } = await api.get<LoanStatement>(`/financiamiento/loans/${loanId}/statement/`);
@@ -271,8 +267,7 @@ export interface ReceptionRow {
   note: string;
 }
 export async function listReceptions(): Promise<ReceptionRow[]> {
-  const { data } = await api.get<{ results: ReceptionRow[] }>('/financiamiento/receptions/');
-  return data.results;
+  return collectPaginated(async (page) => (await api.get<Paginated<ReceptionRow>>('/financiamiento/receptions/', { params: page })).data);
 }
 export async function createReception(body: {
   producer_id: number;
@@ -302,8 +297,7 @@ export interface FixationRow {
   note: string;
 }
 export async function listFixations(): Promise<FixationRow[]> {
-  const { data } = await api.get<{ results: FixationRow[] }>('/financiamiento/fixations/');
-  return data.results;
+  return collectPaginated(async (page) => (await api.get<Paginated<FixationRow>>('/financiamiento/fixations/', { params: page })).data);
 }
 export async function createFixation(body: {
   producer_id: number;
@@ -337,8 +331,7 @@ export interface LiquidationRow {
   note: string;
 }
 export async function listLiquidations(): Promise<LiquidationRow[]> {
-  const { data } = await api.get<{ results: LiquidationRow[] }>('/financiamiento/liquidations/');
-  return data.results;
+  return collectPaginated(async (page) => (await api.get<Paginated<LiquidationRow>>('/financiamiento/liquidations/', { params: page })).data);
 }
 export async function createLiquidation(body: {
   producer_id: number;

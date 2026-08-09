@@ -4,7 +4,7 @@
  * real por lote/finca se puede contabilizar a GL.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { PAGE, collectPaginated, type Paginated } from 'src/core/api';
 
 export const LABOR_CATEGORY_LABELS: Record<string, string> = {
   ESTABLECIMIENTO: 'Establecimiento',
@@ -97,10 +97,7 @@ export async function updateFincaProfile(fincaId: number, input: Partial<FincaRo
 
 // --- Lotes ---
 export async function listPlots(fincaId?: number): Promise<Plot[]> {
-  const params: Record<string, string | number> = { ...PAGE };
-  if (fincaId) params.finca_id = fincaId;
-  const { data } = await api.get<Paginated<Plot>>('/finca/plots/', { params });
-  return data.results;
+  return collectPaginated(async (page) => (await api.get<Paginated<Plot>>('/finca/plots/', { params: { ...page, ...(fincaId ? { finca_id: fincaId } : {}) } })).data);
 }
 
 export async function createPlot(input: {
@@ -145,12 +142,11 @@ export async function listWorkOrders(filters: {
   plot_id?: number;
   status?: string;
 } = {}): Promise<WorkOrder[]> {
-  const params: Record<string, string | number> = { ...PAGE };
-  for (const [k, v] of Object.entries(filters)) {
-    if (v) params[k] = v;
-  }
-  const { data } = await api.get<Paginated<WorkOrder>>('/finca/work-orders/', { params });
-  return data.results;
+  return collectPaginated(async (page) => {
+    const params: Record<string, string | number> = { ...page };
+    for (const [k, v] of Object.entries(filters)) if (v) params[k] = v;
+    return (await api.get<Paginated<WorkOrder>>('/finca/work-orders/', { params })).data;
+  });
 }
 
 export async function createWorkOrder(input: {

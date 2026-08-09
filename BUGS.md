@@ -48,36 +48,36 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** CEC/Finca/Diagnostics / U28–U29 y MEJ-009
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** superar 200 cierres/excepciones/lotes/órdenes o errores/diagnósticos y buscar/triagear el registro siguiente.
 - **Esperado:** preservar `count/limit/offset`, navegar server-side y accionar cualquier fila autorizada.
 - **Actual:** CEC/Finca descartan metadata de endpoints ya paginados; Diagnostics corta `qs[:200]`; las tablas muestran sólo el subconjunto inicial sin aviso.
 - **Impacto:** cierres, excepciones e incidentes de seguridad quedan fuera de gestión y auditoría.
-- **Causa raíz / fix:** pendiente; completar contratos paginados backend donde falta y migrar APIs/QTables al envelope server-side.
+- **Causa raíz / fix:** Diagnostics imponía hard caps y los consumidores descartaban el envelope paginado. **Fix:** Diagnostics devuelve `count/limit/offset/results` con orden estable; CEC/Finca preservan su contrato y el cliente recorre todos los offsets con `collectPaginated`, de modo que ninguna fila queda invisible. La migración de tablas dormidas a `@request` continúa como optimización MEJ-009, no como pérdida funcional.
 
 ### BUG-046 — Financiamiento y Beneficio ocultan entidades válidas tras topes fijos
 
 - **Módulo / paso del ROADMAP:** financiamiento/beneficio / U28 y MEJ-009
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** superar 500 productores, 300 operaciones financieras o 200/300 recetas/órdenes y abrir tablas/selectores.
 - **Esperado:** búsqueda y paginación ordenada con total; cualquier entidad válida puede seleccionarse.
 - **Actual:** backend devuelve slices fijos sin metadata y frontend los convierte en arrays client-side.
 - **Impacto:** productor u operación posterior al tope no puede seleccionarse ni auditarse; historial financiero incompleto.
-- **Causa raíz / fix:** pendiente; contratos `limit/offset/count`, búsqueda server-side y QTables/selectores paginados.
+- **Causa raíz / fix:** slices fijos en backend y arrays que descartaban metadata. **Fix:** todos los listados emiten envelope paginado con orden determinista, productores admite búsqueda server-side y los consumidores recorren todos los offsets. Se verificaron las suites focales y el acceso posterior a los topes sin romper selectores ni acciones.
 
 ### BUG-045 — Historial de costos de flota se trunca a 200 sin orden ni aviso
 
 - **Módulo / paso del ROADMAP:** fleet / U28 y MEJ-009
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** crear más de 200 cargas, mantenimientos o gastos para un activo y buscar el registro 201 en Flota → Costos.
 - **Esperado:** endpoint estable, ordenado y paginado con total; tabla server-side.
 - **Actual:** tres consultas aplican `[:200]` sin orden/count/offset y la UI pagina localmente ese subconjunto.
 - **Impacto:** costos históricos invisibles y lista potencialmente inconsistente con los resúmenes.
-- **Causa raíz / fix:** pendiente; paginar las tres fuentes con orden determinista y adaptar el frontend.
+- **Causa raíz / fix:** hard caps sin contrato y paginación puramente local. **Fix:** combustible, mantenimiento y gastos aceptan `limit/offset`, devuelven total y orden estable; las tres tablas usan `rowsNumber/@request`. La regresión crea 201 filas más una fila cross-tenant y exige que offset 200 devuelva sólo la fila autorizada.
 
 ### BUG-044 — Respuestas tardías mezclan la selección activa con el detalle anterior
 
