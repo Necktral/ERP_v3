@@ -73,6 +73,12 @@
       "module": "apps.kernels.portfolio.urls",
       "reason": "retrieve del ViewSet con el mismo serializer que el listado (sin campos extra); la fila de CxC ya trae todo y las acciones adjust/writeoff salen del listado; sin UI de detalle por decisión (O5)",
       "planned_wave": null
+    },
+    "billing/receivables/reconcile": {
+      "route": "/billing/receivables/reconcile/",
+      "module": "apps.kernels.facturacion.urls",
+      "reason": "operación administrativa de reparación/reconciliación financiera, invocada por API/automatización con permiso dedicado y auditoría; no es flujo de operador cotidiano",
+      "planned_wave": null
     }
   },
   "notes": [

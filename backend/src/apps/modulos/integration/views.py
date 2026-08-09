@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -11,7 +12,7 @@ from apps.modulos.common.permissions import rbac_permission
 
 from .models import InboxEvent, OutboxEvent
 from .serializers import InboxAckIn, OutboxMarkSentIn
-from .services import mark_outbox_event_sent
+from .services import OutboxRecoveryConflict, mark_outbox_event_sent, requeue_outbox_event
 
 
 class HealthView(APIView):
@@ -32,7 +33,7 @@ class OutboxListView(APIView):
         if company is not None:
             qs = qs.filter(company=company)
         if branch is not None:
-            qs = qs.filter(branch=branch)
+            qs = qs.filter(Q(branch=branch) | Q(branch__isnull=True))
 
         status_filter = request.query_params.get("status")
         module_filter = request.query_params.get("source_module")
@@ -88,6 +89,38 @@ class OutboxMarkSentView(APIView):
 
         return Response(
             {"ok": True, "event_id": str(ev.event_id), "status": ev.status},
+            status=status.HTTP_200_OK,
+        )
+
+
+class OutboxRetryView(APIView):
+    permission_classes = [rbac_permission("integration.outbox.retry")]
+
+    def post(self, request, event_id):
+        try:
+            ev = requeue_outbox_event(
+                event_id=event_id,
+                company=request.company,
+                branch=getattr(request, "branch", None),
+                actor_user=request.user,
+                request=request,
+            )
+        except OutboxEvent.DoesNotExist:
+            return Response({"detail": "No encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        except OutboxRecoveryConflict as exc:
+            return Response(
+                {"code": "OUTBOX_ALREADY_SENT", "detail": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(
+            {
+                "ok": True,
+                "event_id": str(ev.event_id),
+                "status": ev.status,
+                "attempt_count": ev.attempt_count,
+                "last_error": ev.last_error,
+                "next_attempt_at": ev.next_attempt_at,
+            },
             status=status.HTTP_200_OK,
         )
 

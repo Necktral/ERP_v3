@@ -17,6 +17,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from apps.modulos.iam.models import OrgUnit, UserMembership
+from apps.modulos.audit.models import AuditEvent
 from apps.modulos.integration.models import InboxEvent, OutboxEvent
 from apps.modulos.integration.services import (
     collect_outbox_health,
@@ -25,6 +26,7 @@ from apps.modulos.integration.services import (
     mark_outbox_event_retry,
     mark_outbox_event_sent,
     publish_outbox_event,
+    requeue_outbox_event,
 )
 from apps.modulos.rbac.models import Permission, Role, RoleAssignment, RolePermission
 
@@ -376,3 +378,69 @@ def test_inbox_list_and_ack_are_tenant_scoped():
     assert denied.status_code == 404
     inbox_b.refresh_from_db()
     assert inbox_b.status == InboxEvent.Status.RECEIVED
+
+
+@pytest.mark.django_db
+def test_requeue_failed_preserves_attempt_history_and_audits():
+    company, branch = _mk_org()
+    actor = _mk_user("recovery")
+    event = publish_outbox_event(source_module="NOMINA", event_type="PayrollPeriodApproved", payload={}, company=company)
+    mark_outbox_event_retry(event=event, error="accounting unavailable", max_attempts=1)
+
+    recovered = requeue_outbox_event(
+        event_id=event.event_id,
+        company=company,
+        branch=branch,
+        actor_user=actor,
+        request=SimpleNamespace(company=company, branch=branch, META={}, path="/retry", method="POST", request_id="r1"),
+    )
+
+    assert recovered.status == OutboxEvent.Status.PENDING
+    assert recovered.attempt_count == 1
+    assert recovered.last_error == "accounting unavailable"
+    assert recovered.next_attempt_at is not None
+    assert AuditEvent.objects.filter(
+        event_type="INTEGRATION_OUTBOX_REQUEUED", subject_id=str(event.event_id)
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_retry_api_is_separate_permission_scoped_and_rejects_sent():
+    company, branch = _mk_org()
+    other_company, other_branch = _mk_org()
+    no_perm = _client_with_perms(company=company, branch=branch, perm_codes=[])
+    allowed = _client_with_perms(company=company, branch=branch, perm_codes=["integration.outbox.retry"])
+
+    failed = publish_outbox_event(source_module="POS", event_type="X", payload={}, company=company, branch=branch)
+    mark_outbox_event_retry(event=failed, error="boom", max_attempts=1)
+    assert no_perm.post(f"/api/integration/outbox/{failed.event_id}/retry/", {}, format="json").status_code == 403
+    response = allowed.post(f"/api/integration/outbox/{failed.event_id}/retry/", {}, format="json")
+    assert response.status_code == 200, response.data
+    assert response.data["attempt_count"] == 1
+    assert response.data["last_error"] == "boom"
+
+    foreign = publish_outbox_event(
+        source_module="POS", event_type="X", payload={}, company=other_company, branch=other_branch
+    )
+    mark_outbox_event_retry(event=foreign, error="foreign", max_attempts=1)
+    assert allowed.post(f"/api/integration/outbox/{foreign.event_id}/retry/", {}, format="json").status_code == 404
+
+    sibling = OrgUnit.objects.create(
+        unit_type=OrgUnit.UnitType.BRANCH,
+        name=f"Sibling_{uuid.uuid4().hex[:6]}",
+        parent=company,
+    )
+    sibling_event = publish_outbox_event(
+        source_module="POS", event_type="X", payload={}, company=company, branch=sibling
+    )
+    mark_outbox_event_retry(event=sibling_event, error="sibling", max_attempts=1)
+    assert allowed.post(
+        f"/api/integration/outbox/{sibling_event.event_id}/retry/", {}, format="json"
+    ).status_code == 404
+
+    sent = publish_outbox_event(source_module="POS", event_type="X", payload={}, company=company, branch=branch)
+    mark_outbox_event_sent(event=sent)
+    conflict = allowed.post(f"/api/integration/outbox/{sent.event_id}/retry/", {}, format="json")
+    assert conflict.status_code == 409
+    sent.refresh_from_db()
+    assert sent.status == OutboxEvent.Status.SENT

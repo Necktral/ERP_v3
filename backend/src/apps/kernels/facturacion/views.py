@@ -52,6 +52,7 @@ from .services import (
     resolve_credit_approval,
     resolve_doc_contingency,
     reverse_payment,
+    reconcile_issued_credit_documents_receivables,
     submit_order_for_credit,
     void_doc,
 )
@@ -71,6 +72,26 @@ class HealthView(APIView):
 
     def get(self, request):
         return Response({"ok": True, "module": "billing"}, status=status.HTTP_200_OK)
+
+
+class BillingReceivableReconcileView(APIView):
+    permission_classes = [rbac_permission("portfolio.receivable.reconcile")]
+
+    def post(self, request):
+        if getattr(request, "branch", None) is None:
+            return Response({"detail": "X-Branch-Id requerido."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            limit = int(request.data.get("limit", 200))
+        except (TypeError, ValueError):
+            return Response({"detail": "limit debe ser entero."}, status=status.HTTP_400_BAD_REQUEST)
+        summary = reconcile_issued_credit_documents_receivables(
+            company=request.company,
+            branch=getattr(request, "branch", None),
+            actor_user=request.user,
+            request=request,
+            limit=limit,
+        )
+        return Response({"ok": True, **summary}, status=status.HTTP_200_OK)
 
 
 class BranchFiscalConfigView(APIView):

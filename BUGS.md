@@ -132,24 +132,24 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** facturación/portfolio/integration / recuperación cross-kernel
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** inyectar un fallo en `link_billing_document_to_receivable` durante emisión; ejecutar después el dispatcher contable y volver a emitir.
 - **Esperado:** cada consumidor confirma su consecuencia de forma durable o un reconciliador idempotente crea la CxC faltante.
 - **Actual:** la factura queda `ISSUED`, el evento compartido termina `SENT` tras el consumo contable, existen cero CxC y `reissue` retorna `already_issued` sin reparar.
 - **Impacto:** venta válida omitida de cartera, aging y cobranza; subledger divergente del documento fiscal.
-- **Causa raíz / fix:** una excepción de portfolio sólo se registra y el estado único del Outbox no representa múltiples consumidores. Pendiente: consecuencia durable por consumidor y operación de reconciliación/replay idempotente, auditable y scopeada.
+- **Causa raíz / fix:** una excepción de portfolio sólo se registraba y el estado único del Outbox no representaba múltiples consumidores. **Fix:** facturación materializa un checkpoint `InboxEvent` independiente para `portfolio.billing_receivable`; el consumidor deja fallos en `FAILED` y éxito en `PROCESSED`. El reconciliador `/api/billing/receivables/reconcile/` valida snapshot↔documento, usa advisory lock, scope company/branch, permiso y auditoría; los reintentos concurrentes producen una sola CxC. Prueba de fault injection y recuperación en `test_billing_to_receivable.py`.
 
 ### BUG-039 — Eventos contables FAILED de nómina no pueden reencolarse y el replay miente
 
 - **Módulo / paso del ROADMAP:** nómina/accounting/integration / recuperación cross-kernel
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** aprobar nómina con fallo contable, agotar `max_attempts` del Outbox, restaurar la dependencia y reintentar por dispatcher y dominio.
 - **Esperado:** una operación administrativa RBAC+audit permite reencolar; el replay es idempotente y devuelve el draft real o un estado pendiente/fallido veraz.
 - **Actual:** el dispatcher sólo toma `PENDING`; `FAILED` queda terminal y el replay devuelve `ALREADY_POSTED` con `draft_id=None` por la mera existencia del evento.
 - **Impacto:** planilla aprobada sin asiento y sin reparación soportada; el cierre contable queda bloqueado.
-- **Causa raíz / fix:** la idempotencia confunde “evento existe” con “consecuencia completada” y no existe transición auditada `FAILED→PENDING`. Pendiente: requeue scopeado y replay basado en resultado persistido.
+- **Causa raíz / fix:** la idempotencia confundía “evento existe” con “consecuencia completada” y no existía transición auditada `FAILED→PENDING`. **Fix:** requeue administrativo scopeado por company/branch con permiso `integration.outbox.retry`, auditoría y rechazo de `SENT`; conserva intentos/error. El replay de nómina informa `PENDING/FAILED` o la consecuencia contable real y recupera sólo tras requeue. Pruebas de fault injection en `test_nomina_accounting.py` y de RBAC/transiciones en `test_integration.py`.
 
 ### BUG-038 — El lockfile frontend contiene dependencias con avisos HIGH/CRITICAL corregibles
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
@@ -15,6 +15,7 @@ from apps.modulos.common.api_exceptions import ConflictError
 from apps.modulos.common.domain_errors import IntegrationError
 from apps.modulos.common.tender import TENDER_PAYMENT_METHOD_VALUES
 from apps.modulos.iam.models import OrgUnit
+from apps.modulos.integration.models import OutboxEvent
 from apps.modulos.integration.services import publish_outbox_event
 from apps.modulos.parties.models import Party, PartyRole
 from apps.modulos.parties.services import assign_party_role
@@ -742,9 +743,23 @@ def issue_doc(
         # CxC (portfolio): una venta a crédito genera una cuenta por cobrar. Best-effort:
         # el cobro/cartera no debe romper la emisión del documento (ownership: portfolio posee el saldo).
         try:
-            from apps.kernels.portfolio.services import link_billing_document_to_receivable
+            from apps.kernels.portfolio.services import consume_billing_document_issued_for_receivable
 
-            link_billing_document_to_receivable(outbox_event=issued_outbox, actor_user=actor)
+            receivable_link = consume_billing_document_issued_for_receivable(
+                outbox_event=issued_outbox,
+                actor_user=actor,
+            )
+            if receivable_link.get("status") == "FAILED":
+                logger.error(
+                    "billing_receivable_link_issue_failed",
+                    extra={
+                        "company_id": company.id,
+                        "branch_id": branch.id,
+                        "doc_id": int(doc.id),
+                        "event_id": str(getattr(issued_outbox, "event_id", "")),
+                        "error": receivable_link.get("error", ""),
+                    },
+                )
         except Exception as exc:  # noqa: BLE001 - aislar el efecto de cartera de la emisión
             logger.exception(
                 "billing_receivable_link_issue_failed",
@@ -792,6 +807,54 @@ def issue_doc(
         if queued_job_id is not None:
             out["print_job_id"] = queued_job_id
         return out
+
+
+def reconcile_issued_credit_documents_receivables(
+    *, company, branch, actor_user=None, request=None, limit: int = 200
+) -> dict[str, int]:
+    """Valida verdad Billing y delega sólo eventos canónicos al dueño de CxC."""
+    from apps.kernels.portfolio.services import reconcile_billing_receivable_events
+
+    safe_limit = max(1, min(int(limit), 500))
+    docs = BillingDocument.objects.filter(
+        company=company,
+        branch=branch,
+        doc_type=DocType.INVOICE,
+        status=DocStatus.ISSUED,
+    ).exclude(credit_status=CreditStatus.NONE).exclude(customer_party__isnull=True).filter(total__gt=0)
+    docs_by_id = {doc.id: doc for doc in docs.order_by("issued_at", "id")[:safe_limit]}
+    events = OutboxEvent.objects.filter(
+        company=company,
+        branch=branch,
+        source_module="BILLING",
+        event_type="DocumentIssued",
+        payload__data__doc_id__in=list(docs_by_id),
+    ).order_by("occurred_at", "id")
+    verified = []
+    for event in events:
+        data = event.payload.get("data", {}) if isinstance(event.payload, dict) else {}
+        doc = docs_by_id.get(data.get("doc_id")) if isinstance(data, dict) else None
+        if doc is None:
+            continue
+        try:
+            snapshot_matches = (
+                str(data.get("credit_status") or "").upper() == str(doc.credit_status).upper()
+                and int(data.get("customer_party_id") or 0) == int(doc.customer_party_id)
+                and Decimal(str(data.get("total") or "0")) == doc.total
+                and str(data.get("currency") or "") == doc.currency
+            )
+        except (InvalidOperation, TypeError, ValueError):
+            snapshot_matches = False
+        if snapshot_matches:
+            verified.append(event)
+    return reconcile_billing_receivable_events(
+        company=company,
+        branch=branch,
+        events=verified,
+        actor_user=actor_user,
+        request=request,
+        limit=safe_limit,
+    )
 
 
 def queue_fiscal_print(
