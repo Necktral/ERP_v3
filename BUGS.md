@@ -60,24 +60,24 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** frontend POS / Paso 7
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** preparar venta para cliente con crédito, dejarla en espera, operar otro cliente y reanudar la primera.
 - **Esperado:** restaurar nombre/ID, reconsultar la cuenta y habilitar crédito según el estado vigente.
 - **Actual:** sólo se restaura `clienteId`; `cuenta` queda nula y `clienteNombre` puede conservar un valor stale.
 - **Impacto:** deshabilita crédito legítimo y puede mostrar/imprimir la identidad equivocada.
-- **Causa raíz / fix:** pendiente; persistir identidad mínima, limpiar estado completo y rehidratar crédito al reanudar.
+- **Causa raíz / fix:** el ticket retenido persistía sólo el ID y el vaciado no limpiaba toda la identidad. **Fix:** conserva la identidad mínima, limpia ID/nombre/cuenta al vaciar y reconsulta el crédito vigente al reanudar, con estados explícitos de carga/error y regresiones.
 
 ### BUG-033 — Errores al consultar crédito se interpretan como “cliente sin cuenta”
 
 - **Módulo / paso del ROADMAP:** frontend ventas/POS / Paso 7
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** seleccionar un cliente con crédito y hacer que `/sales/credit-account/<id>/` responda 401/403/500, timeout o error de red.
 - **Esperado:** sólo 404 significa que no existe cuenta; los demás errores se muestran y preservan un estado explícito.
 - **Actual:** un `catch` general devuelve `null` para cualquier fallo y la caja continúa como si el cliente no tuviera crédito.
 - **Impacto:** el cajero toma una decisión comercial incorrecta y puede negar crédito disponible sin saber que falló el sistema.
-- **Causa raíz / fix:** pendiente; discriminar 404, propagar el resto y cubrir API/UI con regresiones.
+- **Causa raíz / fix:** el helper ocultaba toda excepción. **Fix:** sólo 404 devuelve `null`; autorización, servidor y red se propagan, normalizan y muestran sin sustituirlos por un estado comercial falso.
 
 ### BUG-032 — Reusar una clave de cobro con payload distinto se acepta como replay
 
@@ -96,12 +96,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** frontend auth/router / transversal
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** completar correctamente 2FA con contexto activo, o guardar el cambio obligatorio de contraseña.
 - **Esperado:** continuar por la entrada canónica `/`, que resuelve el destino según contexto y shell.
 - **Actual:** ambas pantallas navegan a `/dashboard`, pero el router sólo registra `/tablero`; el usuario termina en 404 después de autenticarse.
 - **Impacto:** bloquea el cierre normal de dos carriles críticos de acceso sin corromper datos.
-- **Causa raíz / fix:** pendiente; reemplazar ambos destinos por `/` y agregar regresiones de navegación.
+- **Causa raíz / fix:** quedaron dos destinos legacy fuera del contrato del router. **Fix:** navegación canónica compartida hacia `/`, con pruebas para 2FA y cambio obligatorio.
 
 ### BUG-034 — El plan de cuentas permite ciclos entre cuentas padre
 

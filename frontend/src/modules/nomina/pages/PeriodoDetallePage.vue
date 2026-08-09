@@ -350,6 +350,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from 'src/core/api';
 import BackButton from 'src/components/BackButton.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
@@ -675,8 +676,7 @@ async function doAction(s: PayrollSheet, action: 'submit' | 'approve' | 'compute
     $q.notify({ type: 'positive', message: msgs[action] });
     await reload();
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } };
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'No se pudo completar la acción.' });
+    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo completar la acción.') });
   } finally {
     acting.value = null;
   }
@@ -689,12 +689,12 @@ async function doApply(s: PayrollSheet) {
     $q.notify({ type: 'positive', message: 'Asistencia de campo aplicada a la planilla.' });
     await reload();
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } };
     $q.notify({
       type: 'negative',
-      message:
-        err.response?.data?.detail ||
+      message: apiErrorMessage(
+        e,
         'No se pudo aplicar (la asistencia del período debe estar consolidada y aprobada).',
+      ),
     });
   } finally {
     acting.value = null;
@@ -916,8 +916,7 @@ async function doUpdateEntry() {
     $q.notify({ type: 'positive', message: 'Línea actualizada y recalculada.' });
     await cargarEntradas();
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } };
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'No se pudo actualizar la línea.' });
+    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo actualizar la línea.') });
   } finally {
     saving.value = false;
   }
@@ -941,8 +940,7 @@ async function doDeleteEntry(row: PayrollEntry) {
     $q.notify({ type: 'positive', message: 'Línea quitada de la planilla.' });
     await reload();
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } };
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'No se pudo quitar la línea.' });
+    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo quitar la línea.') });
   }
 }
 
@@ -966,7 +964,7 @@ onMounted(reload);
 }
 
 .per-head__title {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 1.35rem;
   font-weight: 800;
   color: var(--app-text);

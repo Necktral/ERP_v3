@@ -292,11 +292,11 @@ onMounted(cargar);
 .reco-kpi__value {
   font-size: 1.35rem;
   font-weight: 700;
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
 }
 
 .reco-titulo {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   color: var(--app-text);
   margin: var(--app-space-4) 0 var(--app-space-3);

@@ -159,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useQuasar } from 'quasar';
 import ConnectivityDot from 'src/components/ConnectivityDot.vue';
@@ -194,6 +194,21 @@ const auth = useAuthStore();
 const acl = useAclStore();
 const ctx = useContextStore();
 const sessionBootstrap = useSessionBootstrapStore();
+
+async function revalidarSesionReconectada() {
+  try {
+    await sessionBootstrap.loadSession({ force: true });
+  } catch {
+    // Axios decide 401/403; ante una caída transitoria se conserva la caché vigente.
+  }
+}
+
+function alReconectar() {
+  void revalidarSesionReconectada();
+}
+
+onMounted(() => window.addEventListener('necktral:server-online', alReconectar));
+onBeforeUnmount(() => window.removeEventListener('necktral:server-online', alReconectar));
 
 // Marca del topbar: branding de la empresa activa (del bootstrap), con fallback a la
 // marca por despliegue (VITE_BRAND_*). El "developer" (crédito) siempre es el estático.
@@ -373,7 +388,7 @@ async function logout() {
 
 .app-brand__name {
   margin-left: var(--app-space-3);
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   letter-spacing: 0.03em;
   font-size: 1.02rem;

@@ -169,6 +169,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from 'src/core/api';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar, type QTableColumn } from 'quasar';
@@ -405,10 +406,9 @@ async function doCreatePeriod() {
     $q.notify({ type: 'positive', message: 'Período creado.' });
     await router.push(`/nomina/periodos/${created.id}`);
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } };
     $q.notify({
       type: 'negative',
-      message: err.response?.data?.detail || 'No se pudo crear el período (¿ya existe ese mes/tipo?).',
+      message: apiErrorMessage(e, 'No se pudo crear el período (¿ya existe ese mes/tipo?).'),
     });
   } finally {
     saving.value = false;

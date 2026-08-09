@@ -341,7 +341,7 @@ onMounted(load);
 }
 
 .hr-stat__value {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 2.4rem;
   font-weight: 800;
   line-height: 1;

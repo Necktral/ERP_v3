@@ -394,7 +394,7 @@ async function createOrg() {
 }
 
 .bootstrap-brand__name {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: 0.04em;

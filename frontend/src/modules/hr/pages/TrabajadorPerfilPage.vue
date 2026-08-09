@@ -864,11 +864,7 @@ async function uploadDocument() {
     docDialog.value = false;
     await reload();
   } catch (e) {
-    const msg =
-      (e as { response?: { data?: { file?: string; detail?: string } } }).response?.data?.file ||
-      (e as { response?: { data?: { detail?: string } } }).response?.data?.detail ||
-      'No se pudo subir el documento.';
-    $q.notify({ type: 'negative', message: msg });
+    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo subir el documento.') });
   } finally {
     savingDoc.value = false;
   }
@@ -1377,7 +1373,7 @@ function doAnnulMemo(m: MemoRow) {
 }
 
 .perfil-head__name {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 1.25rem;
   font-weight: 800;
   color: var(--app-text);
@@ -1488,7 +1484,7 @@ function doAnnulMemo(m: MemoRow) {
 
 .perfil-contract__text :deep(textarea) {
   min-height: 60vh;
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: ui-monospace, 'Courier New', monospace;
   font-size: 0.9rem;
   line-height: 1.55;
 }

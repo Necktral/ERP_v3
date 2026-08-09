@@ -299,7 +299,7 @@ onMounted(reload);
   border: 1px dashed var(--app-border-strong);
   border-radius: var(--app-radius-md);
   background: var(--app-surface);
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: ui-monospace, monospace;
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: 0.04em;

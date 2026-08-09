@@ -83,7 +83,7 @@ const cards = [
   color: var(--app-primary);
 }
 .fin-card__title {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 700;
   font-size: 1.05rem;
   color: var(--app-text);

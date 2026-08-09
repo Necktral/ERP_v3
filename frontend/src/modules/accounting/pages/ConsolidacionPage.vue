@@ -330,7 +330,7 @@ onMounted(async () => {
 .kpi__value {
   font-size: 1.5rem;
   font-weight: 700;
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   margin-top: 2px;
 }
 .kpi--ok .kpi__value {

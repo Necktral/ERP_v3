@@ -35,12 +35,13 @@
 </template>
 
 <script setup lang="ts">
-import { isAxiosError } from 'axios';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from 'src/stores/auth.store';
 import { useContextStore } from 'src/stores/context.store';
 import { useSessionBootstrapStore } from 'src/stores/session-bootstrap.store';
+import { apiErrorMessage } from 'src/core/api';
+import { AUTHENTICATED_HOME_ROUTE } from 'src/modules/auth/navigation';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -71,24 +72,13 @@ async function onSubmit() {
     }
 
     if (ctx.activeCompanyId) {
-      await router.replace('/dashboard');
+      await router.replace(AUTHENTICATED_HOME_ROUTE);
       return;
     }
 
     await router.replace('/select-context');
   } catch (e: unknown) {
-    if (isAxiosError(e)) {
-      const data: unknown = e.response?.data;
-      if (typeof data === 'object' && data !== null && 'detail' in data) {
-        errorMsg.value = String((data as { detail: string }).detail);
-      } else {
-        errorMsg.value = e.message;
-      }
-    } else if (e instanceof Error) {
-      errorMsg.value = e.message;
-    } else {
-      errorMsg.value = String(e);
-    }
+    errorMsg.value = apiErrorMessage(e, 'No se pudo verificar el código.');
   } finally {
     loading.value = false;
   }

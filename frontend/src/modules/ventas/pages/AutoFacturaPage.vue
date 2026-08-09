@@ -871,7 +871,7 @@ onBeforeUnmount(() => {
 }
 
 .af-kiosk-name {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   font-size: 1.3rem;
 }
@@ -898,7 +898,7 @@ onBeforeUnmount(() => {
 }
 
 .af-bienvenida__titulo {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 2.6rem;
   font-weight: 800;
   color: var(--app-primary);

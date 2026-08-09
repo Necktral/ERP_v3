@@ -51,4 +51,16 @@ describe('apiErrorMessage + diccionario', () => {
   it('usa el fallback cuando no hay data', () => {
     expect(apiErrorMessage({}, 'Falló la carga.')).toBe('Falló la carga.');
   });
+
+  it('normaliza envelopes anidados y estados HTTP', () => {
+    expect(apiErrorMessage(errorCon({ error: { code: 'INVALID_AMOUNT', message: 'English' } }))).toBe(
+      CODIGOS.INVALID_AMOUNT,
+    );
+    expect(apiErrorMessage({ response: { status: 403, data: {} } })).toBe(
+      'No tenés permiso para realizar esta acción.',
+    );
+    expect(apiErrorMessage({ response: { status: 503, data: {} } })).toBe(
+      'El servidor no pudo completar la operación.',
+    );
+  });
 });

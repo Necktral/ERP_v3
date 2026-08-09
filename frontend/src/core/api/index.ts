@@ -64,6 +64,28 @@ function traduccionDeCodigo(valor: string): string | null {
   return esCodigoBackend(v) ? (CODIGOS[v] ?? null) : null;
 }
 
+function mensajeDeValor(valor: unknown): string | null {
+  if (typeof valor === 'string') return traduccionDeCodigo(valor) ?? valor;
+  if (Array.isArray(valor)) {
+    for (const item of valor) {
+      const message = mensajeDeValor(item);
+      if (message) return message;
+    }
+  }
+  if (valor && typeof valor === 'object') {
+    const record = valor as Record<string, unknown>;
+    for (const key of ['code', 'error', 'detail', 'non_field_errors', 'message']) {
+      const message = mensajeDeValor(record[key]);
+      if (message) return message;
+    }
+    for (const value of Object.values(record)) {
+      const message = mensajeDeValor(value);
+      if (message) return message;
+    }
+  }
+  return null;
+}
+
 /**
  * Extrae un mensaje legible del envelope de error de DRF:
  * `detail` si existe; si no, el primer error de campo como "campo: mensaje".
@@ -71,22 +93,31 @@ function traduccionDeCodigo(valor: string): string | null {
  * y está en el diccionario central (src/core/codigos), devuelve su traducción.
  */
 export function apiErrorMessage(e: unknown, fallback = ''): string {
-  const err = e as { response?: { data?: Record<string, unknown> } };
+  const err = e as { message?: unknown; response?: { status?: number; data?: unknown } };
   const data = err.response?.data;
-  if (data && typeof data === 'object') {
-    if (typeof data.detail === 'string') {
-      return traduccionDeCodigo(data.detail) ?? data.detail;
+  if (typeof data === 'string') return traduccionDeCodigo(data) ?? data;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const record = data as Record<string, unknown>;
+    const known = new Set(['code', 'error', 'detail', 'non_field_errors', 'message']);
+    for (const key of known) {
+      const message = mensajeDeValor(record[key]);
+      if (message) return message;
     }
-    for (const k of Object.keys(data)) {
-      const v = data[k];
-      if (Array.isArray(v) && v.length) {
-        const s = String(v[0]);
-        return traduccionDeCodigo(s) ?? `${k}: ${s}`;
-      }
-      if (typeof v === 'string') {
-        return traduccionDeCodigo(v) ?? `${k}: ${v}`;
-      }
+    for (const [key, value] of Object.entries(record)) {
+      const message = mensajeDeValor(value);
+      if (message) return `${key}: ${message}`;
     }
   }
-  return fallback;
+  if (!err.response) return fallback || 'No se pudo conectar con el servidor.';
+  const status = err.response.status;
+  if (status === 401) return 'La sesión venció. Iniciá sesión nuevamente.';
+  if (status === 403) return 'No tenés permiso para realizar esta acción.';
+  if (status === 404) return 'No se encontró la información solicitada.';
+  if (status === 409) return 'La operación entra en conflicto con el estado actual.';
+  if (status === 429) return 'Hay demasiadas solicitudes. Esperá un momento e intentá nuevamente.';
+  if (status && status >= 500) return 'El servidor no pudo completar la operación.';
+  if (fallback) return fallback;
+  return typeof err.message === 'string' && err.message.trim()
+    ? err.message
+    : 'No se pudo completar la operación.';
 }

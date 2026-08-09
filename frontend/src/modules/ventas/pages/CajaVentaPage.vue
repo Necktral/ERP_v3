@@ -348,10 +348,16 @@
             label="Cliente (opcional; obligatorio para crédito) — F4"
             @selected="onCliente"
           />
-          <q-banner v-if="cuenta" dense rounded class="caja-cuenta">
+          <q-banner v-if="cuentaCargando" dense rounded class="caja-cuenta">
+            <q-spinner size="18px" class="q-mr-sm" /> Consultando crédito…
+          </q-banner>
+          <q-banner v-else-if="cuenta" dense rounded class="caja-cuenta">
             Cuenta de crédito · disponible:
             <strong>{{ cuenta.available != null ? formatMoney(cuenta.available) : 'sin tope' }}</strong>
             · {{ cuenta.credit_days }} días
+          </q-banner>
+          <q-banner v-else-if="cuentaError" dense rounded class="caja-cuenta bg-red-1 text-negative">
+            {{ cuentaError }}
           </q-banner>
           <q-banner v-else-if="clienteId" dense rounded class="caja-cuenta caja-cuenta--sin">
             Sin cuenta de crédito: solo contado.
@@ -802,6 +808,7 @@ import {
   type PosSalePayment,
   type PosSaleResult,
 } from 'src/modules/ventas/api';
+import { rehydrateHeldCustomer } from 'src/modules/ventas/held-ticket';
 import { useAclStore } from 'src/stores/acl.store';
 import { useContextStore } from 'src/stores/context.store';
 
@@ -1144,7 +1151,10 @@ function ajustarCantidad(ln: LineaCarrito, delta: number) {
 function vaciarCarrito() {
   carrito.value = [];
   clienteId.value = null;
+  clienteNombre.value = '';
   cuenta.value = null;
+  cuentaError.value = '';
+  cuentaCargando.value = false;
   codigoAutoFactura.value = null;
   quitarAutorizacion();
   idemKey = crypto.randomUUID();
@@ -1327,12 +1337,24 @@ function agregarDesdeBusqueda(itemId: number | null) {
 const clienteId = ref<number | null>(null);
 const clienteNombre = ref('');
 const cuenta = ref<CreditAccountSummary | null>(null);
+const cuentaError = ref('');
+const cuentaCargando = ref(false);
 const selectorCliente = ref<{ $el?: HTMLElement } | null>(null);
 
 async function onCliente(party: Party | null) {
   clienteNombre.value = party?.display_name ?? '';
   cuenta.value = null;
-  if (party) cuenta.value = await getCreditAccount(party.id);
+  cuentaError.value = '';
+  if (!party) return;
+  cuentaCargando.value = true;
+  try {
+    cuenta.value = await getCreditAccount(party.id);
+  } catch (error) {
+    cuentaError.value = apiErrorMessage(error, 'No se pudo consultar el crédito del cliente.');
+    $q.notify({ type: 'negative', message: cuentaError.value });
+  } finally {
+    cuentaCargando.value = false;
+  }
 }
 
 // --- Cobro ----------------------------------------------------------------------
@@ -1638,6 +1660,7 @@ interface TicketEspera {
   etiqueta: string;
   total: number;
   clienteId: number | null;
+  clienteNombre?: string;
   lineas: { item: InventoryItem; quantity: number; manual: boolean; unit_price: number; discount_pct: number }[];
 }
 
@@ -1662,6 +1685,7 @@ function dejarEnEspera() {
     etiqueta: clienteNombre.value || `Ticket ${new Date().toLocaleTimeString('es-NI')}`,
     total: totales.value.total,
     clienteId: clienteId.value,
+    clienteNombre: clienteNombre.value,
     lineas: carrito.value.map((l) => ({
       item: l.item,
       quantity: l.quantity,
@@ -1675,9 +1699,24 @@ function dejarEnEspera() {
   $q.notify({ type: 'info', message: 'Ticket en espera; lo retomás desde el botón de arriba.' });
 }
 
-function reanudarTicket(t: TicketEspera) {
+async function reanudarTicket(t: TicketEspera) {
   carrito.value = t.lineas.map((l) => ({ ...l }));
   clienteId.value = t.clienteId;
+  clienteNombre.value = t.clienteNombre ?? '';
+  cuenta.value = null;
+  cuentaError.value = '';
+  if (t.clienteId != null) {
+    cuentaCargando.value = true;
+    try {
+      const restored = await rehydrateHeldCustomer(t, getCreditAccount);
+      cuenta.value = restored.account;
+    } catch (error) {
+      cuentaError.value = apiErrorMessage(error, 'No se pudo consultar el crédito del cliente.');
+      $q.notify({ type: 'negative', message: cuentaError.value });
+    } finally {
+      cuentaCargando.value = false;
+    }
+  }
   borrarTicket(t.id);
   enfocarEscaner();
 }

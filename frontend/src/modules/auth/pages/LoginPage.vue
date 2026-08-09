@@ -150,6 +150,7 @@ import { useSessionBootstrapStore } from 'src/stores/session-bootstrap.store';
 import { BRAND } from 'src/config/brand';
 import { isNativeApp } from 'src/core/platform';
 import { STORAGE_KEYS } from 'src/core/storage/keys';
+import { apiErrorMessage } from 'src/core/api';
 import {
   DEFAULT_SERVER_ORIGIN,
   SUGGESTED_LAN_ORIGIN,
@@ -319,30 +320,9 @@ async function onSubmit() {
         ? `No se pudo conectar a ${getApiBaseUrl()}. El PRIMER ingreso necesita conexión; después la app abre sin red. Revisá el Servidor (abajo) y tu conexión.`
         : 'No se pudo conectar con el servidor. Revisá tu conexión.';
     } else if (isAxiosError(e)) {
-      const data: unknown = e.response?.data;
-      let detail = '';
-      if (typeof data === 'string') {
-        detail = data;
-      } else if (
-        typeof data === 'object' &&
-        data !== null &&
-        'non_field_errors' in data &&
-        Array.isArray((data as Record<string, unknown>).non_field_errors)
-      ) {
-        detail = (data as { non_field_errors: string[] }).non_field_errors[0] ?? '';
-      } else if (
-        typeof data === 'object' &&
-        data !== null &&
-        'detail' in data &&
-        typeof (data as Record<string, unknown>).detail === 'string'
-      ) {
-        detail = (data as { detail: string }).detail;
-      }
-      errorMsg.value = detail || e.message || 'No pudimos iniciar sesión';
-    } else if (e instanceof Error) {
-      errorMsg.value = e.message;
+      errorMsg.value = apiErrorMessage(e, 'No pudimos iniciar sesión.');
     } else {
-      errorMsg.value = String(e);
+      errorMsg.value = apiErrorMessage(e, 'No pudimos iniciar sesión.');
     }
   } finally {
     loading.value = false;
@@ -396,7 +376,7 @@ async function onSubmit() {
 }
 
 .login-brand__name {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: 0.04em;
