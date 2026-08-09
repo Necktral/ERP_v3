@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-044 — Respuestas tardías mezclan la selección activa con el detalle anterior
+
+- **Módulo / paso del ROADMAP:** frontend inventario/accounting/nómina / concurrencia UI
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** hacer lenta la consulta de detalle A y rápida la de B; seleccionar A y enseguida B en Listas de precios.
+- **Esperado:** sólo la respuesta de la selección vigente puede actualizar el detalle y sus acciones.
+- **Actual:** cada promesa escribe al resolver; A tardía reemplaza el detalle aunque B siga resaltada.
+- **Impacto:** el operador puede editar o eliminar tramos/asignaciones de una lista distinta a la que cree activa; patrón candidato también en Presupuestos y Complemento.
+- **Causa raíz / fix:** pendiente; aplicar latest-selection-wins mediante secuencia/abort y regresiones de respuestas fuera de orden en cada patrón confirmado.
+
 ### BUG-043 — Administración de dispositivos oculta silenciosamente los registros 201+
 
 - **Módulo / paso del ROADMAP:** frontend devices / U23 y paginación
