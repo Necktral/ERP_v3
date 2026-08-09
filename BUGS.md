@@ -96,36 +96,36 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** dashboard/reporting / seguridad
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** canjear simultáneamente el mismo grant en estado `ISSUED` desde dos conexiones.
 - **Esperado:** exactamente un canje exitoso y una sola transición a `REDEEMED`.
 - **Actual:** la verificación y transición no tienen lock/CAS; ambas solicitudes pueden emitir credenciales.
 - **Impacto:** replay de una capability de reporting.
-- **Causa raíz / fix:** pendiente; transición atómica con `select_for_update` y prueba PostgreSQL de dos hilos.
+- **Causa raíz / fix:** verificación y transición separadas. **Fix:** transacción y `select_for_update(of=("self",))`; la prueba concurrente deja un éxito, un conflicto y un grant `REDEEMED`.
 
 ### BUG-029 — Bootstrap organizacional concurrente puede crear dos árboles
 
 - **Módulo / paso del ROADMAP:** accounts/iam / bootstrap
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** enviar dos `POST` simultáneos al bootstrap organizacional antes de que exista un holding.
 - **Esperado:** un solo holding/empresa/sucursal; la segunda solicitud recibe conflicto controlado.
 - **Actual:** el chequeo de holding ocurre antes del bloque atómico y no existe constraint singleton.
 - **Impacto:** duplica la raíz organizacional y rompe el contexto inicial.
-- **Causa raíz / fix:** pendiente; serializar con advisory lock y re-chequeo interno.
+- **Causa raíz / fix:** fast-path sin serialización. **Fix:** reutiliza el advisory lock de bootstrap y re-chequea el holding dentro de la transacción; un request gana y el otro recibe 409.
 
 ### BUG-028 — Rotación concurrente de refresh token puede generar dos hijos válidos
 
 - **Módulo / paso del ROADMAP:** accounts/auth / seguridad
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** refrescar simultáneamente la misma sesión/token desde dos conexiones.
 - **Esperado:** un 200, un 401 y un único descendiente activo.
 - **Actual:** la sesión padre se lee sin lock; ambos requests pueden crear un hijo antes de revocarla.
 - **Impacto:** debilita rotación y detección de replay de credenciales.
-- **Causa raíz / fix:** pendiente; transacción, lock de sesión y re-chequeo.
+- **Causa raíz / fix:** la sesión padre se revocaba después de crear el hijo sin lock. **Fix:** transición bajo `transaction.atomic()` y `select_for_update`; prueba real: `[200, 401]` y un único hijo activo.
 
 ### BUG-027 — Diagnostics mezcla y expone incidentes entre empresas
 

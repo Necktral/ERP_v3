@@ -33,7 +33,7 @@
 |---|---|---|
 | Baseline real backend/frontend/guards | EN CURSO | frontend real: lint/typecheck/build PASS, Vitest 26/26; backend pendiente |
 | P0 dinero y aislamiento de facturación | EN CURSO | BUG-022..024 + tests API/concurrencia |
-| P0 tenant/auth/integration/diagnostics | EN CURSO | BUG-025..030 + migraciones/tests |
+| P0 tenant/auth/integration/diagnostics | HECHO | BUG-025..030; 189 tests tenant + 24 auth/dashboard verdes |
 | Accounting y recuperación cross-kernel | PENDIENTE | CoA, fault injection, reintentos |
 | 30 unidades + 5 lentes | PENDIENTE | `AUDITORIA_LOG.md` actualizado |
 | Rendimiento/migraciones/rollback | PENDIENTE | budgets, planes y rehearsal |
