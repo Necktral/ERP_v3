@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-038 — El lockfile frontend contiene dependencias con avisos HIGH/CRITICAL corregibles
+
+- **Módulo / paso del ROADMAP:** frontend/supply chain / baseline QA
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** ejecutar `npm audit --json` sobre el lockfile reconstruido y confirmar el árbol con `npm ls`.
+- **Esperado:** cero vulnerabilidades HIGH/CRITICAL corregibles en dependencias runtime o toolchain de entrega; cualquier residual debe tener alcance y excepción fechada.
+- **Actual:** 10 paquetes reportados (3 low, 1 moderate, 5 high y 1 critical), incluidos Axios directo y `tar` transitivo de Capacitor CLI; npm indica corrección disponible.
+- **Impacto:** exposición a DoS/prototype pollution y riesgo de archivos maliciosos en tooling; el alcance varía entre navegador, build y CLI.
+- **Causa raíz / fix:** pendiente; actualizar versiones compatibles y overrides transitivos de manera intencional, reconstruir lockfiles, repetir audit y todos los gates. El `esbuild` low que exige major se evaluará por alcance y se documentará si queda residual.
+
 ### BUG-037 — El importador biométrico XLSX no limita tamaño, expansión ni filas
 
 - **Módulo / paso del ROADMAP:** nómina/biometría / plataforma y uploads
