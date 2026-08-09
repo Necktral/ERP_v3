@@ -132,36 +132,36 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** diagnostics / aislamiento multiempresa
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** con permiso scoped en empresa A, listar/detallar/triagear un `ErrorEvent` de B; generar el mismo stack en A y B.
 - **Esperado:** eventos y deduplicación aislados por empresa.
 - **Actual:** las vistas consultan globalmente y el dedupe usa sólo `stack_hash`, conservando el scope del primer incidente.
 - **Impacto:** fuga de stack/rutas y mutación cross-tenant; métricas mezcladas.
-- **Causa raíz / fix:** pendiente; scope por `request.company` y dedupe `(company, stack_hash)`.
+- **Causa raíz / fix:** vistas y dedupe globales. **Fix:** FKs tenant con backfill, constraints scoped/global y scope de list/detail/run/IA/triage; matriz A/B incluida.
 
 ### BUG-026 — Integration Inbox es global y mutable desde otro tenant
 
 - **Módulo / paso del ROADMAP:** integration / aislamiento multiempresa
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** con permisos de integración en A, listar o hacer ACK por ID a un evento originado en B.
 - **Esperado:** eventos tenant-scoped; acceso global sólo con permiso de plataforma.
 - **Actual:** `InboxEvent` no materializa company/branch y list/ACK operan sobre el conjunto global.
 - **Impacto:** fuga de metadatos y cambio de estado cross-tenant.
-- **Causa raíz / fix:** pendiente; expansión/backfill de scope, constraints y filtros de API.
+- **Causa raíz / fix:** Inbox no materializaba el scope del Outbox. **Fix:** FKs company/branch, backfill, check/índice y list/ACK scoped por empresa+sucursal.
 
 ### BUG-025 — Documents acepta una sucursal perteneciente a otra empresa
 
 - **Módulo / paso del ROADMAP:** documents / aislamiento multiempresa
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** autenticado en empresa A, subir un documento con `branch_id` de B.
 - **Esperado:** 404/422 y cero filas creadas.
 - **Actual:** la rama se resuelve por ID/tipo sin exigir `parent=company` y se persiste A+B.
 - **Impacto:** corrupción de scope y acceso cruzado a documentos.
-- **Causa raíz / fix:** pendiente; resolver la sucursal dentro de la empresa y agregar defensa de modelo.
+- **Causa raíz / fix:** lookup de rama sólo por ID/tipo. **Fix:** scope en API, validación en servicio/modelo, reparación histórica y prueba A/B.
 
 ### BUG-024 — Cobros de facturación mezclan importes nominales de monedas distintas
 

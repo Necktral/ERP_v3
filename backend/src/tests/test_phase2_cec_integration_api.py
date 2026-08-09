@@ -97,6 +97,8 @@ def test_cec_and_integration_endpoints_flow():
         source_module="CEC",
         event_type="CloseRunCreated",
         payload={"run_id": run_id},
+        company=company,
+        branch=branch,
     )
     r_ack = client.post(f"/api/integration/inbox/{inbox.id}/ack/", {"status": "PROCESSED"}, format="json")
     assert r_ack.status_code == 200

@@ -8,6 +8,7 @@ determinista (estado EXTRACTED = borrador con campos, cola de revisión humana).
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -96,3 +97,8 @@ class ScannedDocument(models.Model):
 
     def __str__(self) -> str:
         return f"ScannedDocument(id={self.pk}, type={self.doc_type}, status={self.status})"
+
+    def clean(self) -> None:
+        super().clean()
+        if self.branch_id is not None and self.branch.parent_id != self.company_id:
+            raise ValidationError({"branch": "La sucursal debe pertenecer a la empresa del documento."})

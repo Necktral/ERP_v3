@@ -96,7 +96,11 @@ class InboxListView(APIView):
     permission_classes = [rbac_permission("integration.inbox.read")]
 
     def get(self, request):
-        qs = InboxEvent.objects.all().order_by("-received_at", "-id")
+        company = request.company
+        branch = getattr(request, "branch", None)
+        qs = InboxEvent.objects.filter(company=company).order_by("-received_at", "-id")
+        if branch is not None:
+            qs = qs.filter(branch=branch)
         consumer = request.query_params.get("consumer")
         st = request.query_params.get("status")
         if consumer:
@@ -130,7 +134,11 @@ class InboxAckView(APIView):
     permission_classes = [rbac_permission("integration.inbox.process")]
 
     def post(self, request, inbox_id: int):
-        ev = get_object_or_404(InboxEvent, id=inbox_id)
+        qs = InboxEvent.objects.filter(company=request.company)
+        branch = getattr(request, "branch", None)
+        if branch is not None:
+            qs = qs.filter(branch=branch)
+        ev = get_object_or_404(qs, id=inbox_id)
         s = InboxAckIn(data=request.data)
         s.is_valid(raise_exception=True)
         v = s.validated_data

@@ -15,6 +15,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from apps.modulos.iam.models import OrgUnit
+
 
 class RiskClass(models.TextChoices):
     C1 = "C1", "C1 — dinero/stock/fiscal/permisos/CEC/auditoría"
@@ -33,21 +35,12 @@ class ErrorStatus(models.TextChoices):
 
 
 class ErrorEvent(models.Model):
-    class Meta:
-        app_label = "diagnostics"
-        ordering = ["-last_seen_at"]
-        indexes = [
-            models.Index(fields=["stack_hash"]),
-            models.Index(fields=["domain", "risk_class"]),
-            models.Index(fields=["status", "-last_seen_at"]),
-        ]
-
     error_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
     # Identidad/dedupe.
     exception_type = models.CharField(max_length=255)
     message_hash = models.CharField(max_length=64, blank=True, default="")
-    stack_hash = models.CharField(max_length=64, unique=True)
+    stack_hash = models.CharField(max_length=64)
     stack_trace_redacted = models.TextField(blank=True, default="")
 
     # Ubicación (frame más profundo del repo).
@@ -66,10 +59,16 @@ class ErrorEvent(models.Model):
         max_length=2, choices=RiskClass.choices, default=RiskClass.C3
     )
 
-    # Trazabilidad / tenant (desacoplado: ids como texto, no FK).
+    # Trazabilidad / tenant. Los campos legacy se conservan durante la transición.
     correlation_id = models.CharField(max_length=64, blank=True, default="")
-    company_id = models.CharField(max_length=64, blank=True, default="")
-    branch_id = models.CharField(max_length=64, blank=True, default="")
+    company = models.ForeignKey(
+        OrgUnit, null=True, blank=True, on_delete=models.PROTECT, related_name="diagnostic_errors_company"
+    )
+    branch = models.ForeignKey(
+        OrgUnit, null=True, blank=True, on_delete=models.PROTECT, related_name="diagnostic_errors_branch"
+    )
+    company_legacy_id = models.CharField(max_length=64, blank=True, default="")
+    branch_legacy_id = models.CharField(max_length=64, blank=True, default="")
 
     # Agregación.
     occurrence_count = models.PositiveIntegerField(default=1)
@@ -81,6 +80,31 @@ class ErrorEvent(models.Model):
         max_length=16, choices=ErrorStatus.choices, default=ErrorStatus.OPEN
     )
     owner = models.CharField(max_length=128, blank=True, default="")
+
+    class Meta:
+        app_label = "diagnostics"
+        ordering = ["-last_seen_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["stack_hash", "company"], name="uq_error_stack_company"),
+            models.UniqueConstraint(
+                fields=["stack_hash"],
+                condition=models.Q(company__isnull=True),
+                name="uq_error_stack_global",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(branch__isnull=True) | models.Q(company__isnull=False),
+                name="ck_error_branch_requires_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["stack_hash"]),
+            models.Index(
+                fields=["company", "status", "-last_seen_at"],
+                name="diagnostics_error_scope_idx",
+            ),
+            models.Index(fields=["domain", "risk_class"]),
+            models.Index(fields=["status", "-last_seen_at"]),
+        ]
 
     def __str__(self) -> str:
         return (

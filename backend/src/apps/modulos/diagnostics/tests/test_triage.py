@@ -31,13 +31,15 @@ def _capture(msg: str) -> ErrorEvent:
         return record_error_event(exc_type=exc_type, exc_value=exc_value, tb=tb, request=None)
 
 
-def _mk_error(*, risk: str = "C1", status: str = "open") -> ErrorEvent:
+def _mk_error(*, risk: str = "C1", status: str = "open", company=None, branch=None) -> ErrorEvent:
     return ErrorEvent.objects.create(
         exception_type="Boom",
         stack_hash=uuid.uuid4().hex,
         domain="payments",
         risk_class=risk,
         status=status,
+        company=company,
+        branch=branch,
     )
 
 
@@ -126,7 +128,7 @@ def test_api_triage_error_confirma_y_firma():
     client = mk_client(
         company=company, branch=branch, perm_codes=["diagnostics.error.triage"]
     )
-    err = _mk_error()
+    err = _mk_error(company=company, branch=branch)
     r = client.post(
         f"/api/diagnostics/errors/{err.error_id}/triage/",
         {"status": "confirmed"},
@@ -143,7 +145,7 @@ def test_api_triage_estado_ilegal_es_400():
     client = mk_client(
         company=company, branch=branch, perm_codes=["diagnostics.error.triage"]
     )
-    err = _mk_error()
+    err = _mk_error(company=company, branch=branch)
     r = client.post(
         f"/api/diagnostics/errors/{err.error_id}/triage/",
         {"status": "regressed"},

@@ -29,7 +29,8 @@ def build_evidence_bundle(error: ErrorEvent) -> dict[str, Any]:
             "occurrence_count": r.occurrence_count,
             "status": r.status,
         }
-        for r in ErrorEvent.objects.filter(Q(domain=error.domain) | Q(file_path=error.file_path))
+        for r in ErrorEvent.objects.filter(company=error.company)
+        .filter(Q(domain=error.domain) | Q(file_path=error.file_path))
         .exclude(pk=error.pk)
         .order_by("-occurrence_count")[:_RELATED_LIMIT]
     ]

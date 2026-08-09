@@ -45,8 +45,16 @@ class ScannedDocumentUploadView(APIView):
         branch_id = v.get("branch_id")
         if branch_id:
             branch = OrgUnit.objects.filter(
-                id=branch_id, unit_type=OrgUnit.UnitType.BRANCH
+                id=branch_id,
+                unit_type=OrgUnit.UnitType.BRANCH,
+                parent=company,
+                is_active=True,
             ).first()
+            if branch is None:
+                return Response(
+                    {"branch_id": "Sucursal no encontrada en la empresa activa."},
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
         doc = create_scanned_document(
             company=company,
             branch=branch,

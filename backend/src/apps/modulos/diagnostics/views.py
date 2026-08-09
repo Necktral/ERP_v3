@@ -31,11 +31,20 @@ from .supervision import build_supervision_summary
 from .triage import TriageError, triage_error, triage_finding
 
 
+def _scoped_errors(request):
+    return ErrorEvent.objects.filter(company=request.company)
+
+
+def _scoped_runs(request):
+    visible_error_ids = [str(value) for value in _scoped_errors(request).values_list("error_id", flat=True)]
+    return DiagnosticRun.objects.filter(subject_type="error_event", subject_id__in=visible_error_ids)
+
+
 class ErrorEventListView(APIView):
     permission_classes = [rbac_permission("diagnostics.error.read")]
 
     def get(self, request):
-        qs = ErrorEvent.objects.all()
+        qs = _scoped_errors(request)
         domain_f = request.query_params.get("domain")
         if domain_f:
             qs = qs.filter(domain=domain_f)
@@ -53,7 +62,7 @@ class ErrorEventDetailView(APIView):
     permission_classes = [rbac_permission("diagnostics.error.read")]
 
     def get(self, request, error_id):
-        obj = get_object_or_404(ErrorEvent, error_id=error_id)
+        obj = get_object_or_404(_scoped_errors(request), error_id=error_id)
         return Response(ErrorEventDetailSerializer(obj).data, status=status.HTTP_200_OK)
 
 
@@ -107,7 +116,7 @@ class DiagnoseErrorView(APIView):
     permission_classes = [rbac_permission("diagnostics.diagnose.run")]
 
     def post(self, request, error_id):
-        error = get_object_or_404(ErrorEvent, error_id=error_id)
+        error = get_object_or_404(_scoped_errors(request), error_id=error_id)
         run = create_diagnostic_run(error=error, trigger_type="manual", created_by=request.user)
         return Response(DiagnosticRunSerializer(run).data, status=status.HTTP_201_CREATED)
 
@@ -116,7 +125,7 @@ class DiagnosticRunListView(APIView):
     permission_classes = [rbac_permission("diagnostics.diagnose.read")]
 
     def get(self, request):
-        qs = DiagnosticRun.objects.all()
+        qs = _scoped_runs(request)
         for f in ("subject_id", "risk_class", "status", "domain"):
             val = request.query_params.get(f)
             if val:
@@ -129,7 +138,7 @@ class DiagnosticRunDetailView(APIView):
     permission_classes = [rbac_permission("diagnostics.diagnose.read")]
 
     def get(self, request, run_id):
-        obj = get_object_or_404(DiagnosticRun, run_id=run_id)
+        obj = get_object_or_404(_scoped_runs(request), run_id=run_id)
         return Response(DiagnosticRunSerializer(obj).data, status=status.HTTP_200_OK)
 
 
@@ -194,7 +203,7 @@ class AIDiagnoseView(APIView):
     permission_classes = [rbac_permission("diagnostics.ai_diagnose.run")]
 
     def post(self, request, run_id):
-        run = get_object_or_404(DiagnosticRun, run_id=run_id)
+        run = get_object_or_404(_scoped_runs(request), run_id=run_id)
         try:
             run = run_ai_diagnosis(run=run, actor=request.user)
         except AIDisabledError as exc:
@@ -214,7 +223,7 @@ class ErrorEventTriageView(APIView):
     def post(self, request, error_id):
         s = TriageSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        obj = get_object_or_404(ErrorEvent, error_id=error_id)
+        obj = get_object_or_404(_scoped_errors(request), error_id=error_id)
         try:
             obj = triage_error(
                 error=obj, status=s.validated_data["status"], owner=request.user.username

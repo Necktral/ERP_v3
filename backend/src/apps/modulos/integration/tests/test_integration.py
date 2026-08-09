@@ -147,6 +147,7 @@ def test_create_or_get_inbox_event_idempotent():
     row3, created3 = create_or_get_inbox_event(event=ev, consumer="reporting")
     assert created3 is True
     assert row3.id != row1.id
+    assert row1.company_id == company.id
 
 
 # ---------------------------------------------------------------------------
@@ -345,3 +346,33 @@ def test_inbox_ack_via_api():
     inbox.refresh_from_db()
     assert inbox.status == InboxEvent.Status.PROCESSED
     assert inbox.processed_at is not None
+
+
+@pytest.mark.django_db
+def test_inbox_list_and_ack_are_tenant_scoped():
+    company_a, branch_a = _mk_org()
+    company_b, branch_b = _mk_org()
+    client = _client_with_perms(
+        company=company_a,
+        branch=branch_a,
+        perm_codes=["integration.inbox.read", "integration.inbox.process"],
+    )
+    event_a = publish_outbox_event(
+        source_module="POS", event_type="A", payload={}, company=company_a, branch=branch_a
+    )
+    event_b = publish_outbox_event(
+        source_module="POS", event_type="B", payload={}, company=company_b, branch=branch_b
+    )
+    inbox_a, _ = create_or_get_inbox_event(event=event_a, consumer="accounting")
+    inbox_b, _ = create_or_get_inbox_event(event=event_b, consumer="accounting")
+
+    listed = client.get("/api/integration/inbox/")
+    assert listed.status_code == 200, listed.data
+    assert {row["id"] for row in listed.data["results"]} == {inbox_a.id}
+
+    denied = client.post(
+        f"/api/integration/inbox/{inbox_b.id}/ack/", {"status": "PROCESSED"}, format="json"
+    )
+    assert denied.status_code == 404
+    inbox_b.refresh_from_db()
+    assert inbox_b.status == InboxEvent.Status.RECEIVED

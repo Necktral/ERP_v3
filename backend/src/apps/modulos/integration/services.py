@@ -136,6 +136,8 @@ def create_or_get_inbox_event(
                 event_type=event.event_type,
                 schema_version=int(event.schema_version or 1),
                 payload=event.payload if isinstance(event.payload, dict) else {},
+                company_id=event.company_id,
+                branch_id=event.branch_id,
                 status=status,
             )
         ],
@@ -154,6 +156,10 @@ def create_or_get_inbox_event(
                 "event_type": str(event.event_type),
             },
         )
+    if persisted.company_id is None and event.company_id is not None:
+        persisted.company_id = event.company_id
+        persisted.branch_id = event.branch_id
+        persisted.save(update_fields=["company", "branch"])
     return persisted, True
 
 
