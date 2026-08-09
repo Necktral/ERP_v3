@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-031 — Completar 2FA o cambio obligatorio navega a `/dashboard` inexistente
+
+- **Módulo / paso del ROADMAP:** frontend auth/router / transversal
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** completar correctamente 2FA con contexto activo, o guardar el cambio obligatorio de contraseña.
+- **Esperado:** continuar por la entrada canónica `/`, que resuelve el destino según contexto y shell.
+- **Actual:** ambas pantallas navegan a `/dashboard`, pero el router sólo registra `/tablero`; el usuario termina en 404 después de autenticarse.
+- **Impacto:** bloquea el cierre normal de dos carriles críticos de acceso sin corromper datos.
+- **Causa raíz / fix:** pendiente; reemplazar ambos destinos por `/` y agregar regresiones de navegación.
+
 ### BUG-034 — El plan de cuentas permite ciclos entre cuentas padre
 
 - **Módulo / paso del ROADMAP:** accounting / Paso 2
