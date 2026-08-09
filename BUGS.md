@@ -31,6 +31,42 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-043 — Administración de dispositivos oculta silenciosamente los registros 201+
+
+- **Módulo / paso del ROADMAP:** frontend devices / U23 y paginación
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** crear 201 o más dispositivos en un tenant y abrir Administración → Dispositivos.
+- **Esperado:** paginación server-side con total, o carga exhaustiva explícita y acotada.
+- **Actual:** la API solicita una única página `limit=200, offset=0`; la tabla descarta `count/next` y no avisa el truncamiento.
+- **Impacto:** dispositivos quedan invisibles para auditoría y revocación, con riesgo operativo y de seguridad.
+- **Causa raíz / fix:** pendiente; adoptar contrato paginado y cubrir navegación más allá de 200 filas.
+
+### BUG-042 — Diálogos críticos desbordan el viewport móvil de 360 px
+
+- **Módulo / paso del ROADMAP:** frontend inventario/nómina / responsive U24–U26
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** a 360 px abrir Agregar tramo/Asignar en Lista de precios o Historial en Régimen INSS.
+- **Esperado:** diálogo y acciones completos, alcanzables sin scroll horizontal.
+- **Actual:** cards fuerzan `min-width` de 380/420 px (o 360 sin margen), cortando contenido y controles.
+- **Impacto:** flujos críticos de inventario y nómina quedan parcialmente inutilizables en móvil.
+- **Causa raíz / fix:** pendiente; sustituir mínimos rígidos por ancho acotado al viewport y agregar regresión responsive.
+
+### BUG-041 — Controles de sólo icono no exponen un nombre accesible
+
+- **Módulo / paso del ROADMAP:** frontend transversal / accesibilidad U23–U26
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** navegar con lector/árbol de accesibilidad a botones papelera/copiar/cerrar en Pedidos, Biometría, Perfil de trabajador y pantallas equivalentes.
+- **Esperado:** cada control expone un nombre específico y ayuda visible al foco/hover.
+- **Actual:** al menos 26 botones `round icon` carecen de `label`/`aria-label`; el icono decorativo no comunica propósito fiable.
+- **Impacto:** acciones, incluso destructivas, son indistinguibles mediante lector de pantalla o control por voz (WCAG 4.1.2/2.4.6).
+- **Causa raíz / fix:** pendiente; etiquetar todo el conjunto U23–U26 y añadir un guard/test que evite regresión.
+
 ### BUG-040 — Una factura emitida puede perder su CxC sin consumidor durable ni reconciliador
 
 - **Módulo / paso del ROADMAP:** facturación/portfolio/integration / recuperación cross-kernel
