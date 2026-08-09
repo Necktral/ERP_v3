@@ -172,6 +172,7 @@ import { useUiStore } from 'src/stores/ui.store';
 import { NAV, NAV_SECTIONS } from 'src/app/nav';
 import { isNativeApp } from 'src/core/platform';
 import { useConnectivity } from 'src/core/connectivity';
+import { switchContextWithRollback } from 'src/core/context-switch';
 
 // App nativa (Capacitor) = monopropósito CO-PA: oculta el drawer y la navegación a otros módulos.
 const native = isNativeApp();
@@ -266,9 +267,9 @@ async function cambiarContexto(companyId: string | number, branchId: string | nu
   if (esContextoActivo(companyId, resolvedBranchId)) return;
   switching.value = true;
   try {
-    ctx.setContext(companyId, resolvedBranchId);
-    // Recarga sesión: ACL + módulos efectivos de la empresa nueva.
-    await sessionBootstrap.loadSession({ force: true });
+    await switchContextWithRollback(ctx, companyId, resolvedBranchId, () =>
+      sessionBootstrap.loadSession({ force: true }),
+    );
     // A la raíz: la ruta actual puede no existir/permitirse en la otra empresa.
     await router.replace('/');
     // BUG-9: una empresa SIN sucursal operativa deja el contexto sin X-Branch-Id, y las

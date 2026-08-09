@@ -73,7 +73,7 @@ function etiqueta(campo: Campo): string {
 
 function valorTexto(nombre: string): string {
   const v = props.modelValue[nombre];
-  return v === null || v === undefined ? '' : String(v);
+  return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : '';
 }
 
 function valorNumero(nombre: string): number | null {

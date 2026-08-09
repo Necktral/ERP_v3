@@ -269,7 +269,7 @@ import type { QTableColumn } from 'quasar';
 import EstadoChip from 'src/components/EstadoChip.vue';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatMoney, formatQty } from 'src/core/format';
 import {
   approvePhysicalCount,
@@ -279,7 +279,7 @@ import {
   createPhysicalCount,
   getInventoryValuation,
   getPhysicalCount,
-  listPhysicalCounts,
+  listPhysicalCountsPage,
   listWarehouses,
   type InventoryValuation,
   type PhysicalCountDetail,

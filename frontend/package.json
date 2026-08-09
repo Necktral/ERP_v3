@@ -7,12 +7,17 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "verify:toolchain": "node scripts/verify-toolchain.mjs",
+    "prelint": "npm run verify:toolchain",
     "lint": "eslint -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
+    "pretypecheck": "npm run verify:toolchain",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore",
+    "pretest": "npm run verify:toolchain",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "quasar dev",
+    "prebuild": "npm run verify:toolchain",
     "build": "quasar build",
     "postinstall": "quasar prepare"
   },

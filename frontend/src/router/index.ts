@@ -11,6 +11,8 @@ import { useAclStore } from 'src/stores/acl.store';
 import { useContextStore } from 'src/stores/context.store';
 import { useSessionBootstrapStore } from 'src/stores/session-bootstrap.store';
 import { isAxiosError } from 'axios';
+import { hasRequiredModule, isAllowedInNativeShell } from 'src/router/access';
+import { isNativeApp } from 'src/core/platform';
 
 export default route(function () {
   const createHistory = process.env.SERVER
@@ -70,6 +72,10 @@ export default route(function () {
       return true;
     }
 
+    if (isNativeApp() && !isAllowedInNativeShell(to.path)) {
+      return { path: '/nomina/sala-de-pago' };
+    }
+
     // 1) Bootstrap de sesión ONLINE: solo el PRIMER ingreso (sin caché) llega acá. Si falla:
     //    401/403 reales → sesión inválida → /login; sin respuesta (offline) → /login (no hay caché).
     if (!sessionBootstrap.loaded) {
@@ -110,6 +116,12 @@ export default route(function () {
     if (requiresContext && !ctx.activeCompanyId) {
       if (to.path !== '/select-context') return { path: '/select-context' };
       return true;
+    }
+
+    const effectiveModules =
+      sessionBootstrap.payload?.effective_modules ?? sessionBootstrap.payload?.allowed_modules ?? [];
+    if (!hasRequiredModule(to.path, effectiveModules)) {
+      return { path: '/403' };
     }
 
     // 4) ACL por ruta

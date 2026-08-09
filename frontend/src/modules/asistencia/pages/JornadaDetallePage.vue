@@ -486,7 +486,7 @@ async function cargarEmpleados() {
     lineasLista.value = opcionesEmpleados.value.map((o) => ({
       employee_id: o.value,
       nombre: o.label,
-      status: 'UNKNOWN' as RollcallLineStatus,
+      status: 'UNKNOWN',
       absence_reason: '',
     }));
   } catch {

@@ -807,6 +807,12 @@ async function construirAsistencia() {
   }
 }
 
+function copiarCodigo() {
+  void copyToClipboard(codigoSolicitud.value).then(() =>
+    $q.notify({ type: 'positive', message: 'Código copiado.' }),
+  );
+}
+
 // ===================== carga inicial =====================
 onMounted(async () => {
   cargandoEmpleados.value = true;

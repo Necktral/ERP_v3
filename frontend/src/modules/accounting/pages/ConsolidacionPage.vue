@@ -255,8 +255,8 @@ async function verResumen() {
 const filasResumen = computed<{ label: string; value: string }[]>(() => {
   const r = resumen.value;
   if (!r) return [];
-  const s = (r.summary ?? {}) as Record<string, unknown>;
-  const metrics = (typeof s.metrics === 'object' && s.metrics !== null ? s.metrics : {}) as Record<string, unknown>;
+  const s = r.summary ?? {};
+  const metrics = isRecord(s.metrics) ? s.metrics : {};
   const mes = mesesOpts.find((m) => m.value === r.month)?.label ?? String(r.month);
   const filas = [
     { label: 'Corrida', value: r.run_id },
@@ -275,11 +275,15 @@ const filasResumen = computed<{ label: string; value: string }[]>(() => {
   return filas;
 });
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 const incidenciasResumen = computed<string[]>(() => {
-  const s = (resumen.value?.summary ?? {}) as Record<string, unknown>;
+  const s = resumen.value?.summary ?? {};
   const issues = Array.isArray(s.issues) ? s.issues : [];
   return issues.map((i) =>
-    i && typeof i === 'object' && 'code' in i ? String((i as Record<string, unknown>).code) : String(i),
+    i && typeof i === 'object' && 'code' in i ? String(i.code) : String(i),
   );
 });
 

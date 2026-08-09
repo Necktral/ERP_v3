@@ -156,12 +156,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** frontend/QA / transversal
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** ejecutar los CLI reales de ESLint, vue-tsc y Quasar en vez de los binarios locales vacíos.
 - **Esperado:** el gate ejecuta herramientas reales y el build termina verde.
 - **Actual:** ejecutables de `node_modules/.bin` de 0 bytes retornan éxito; el build real falla en Intereses, Conteo físico y Captura de campo.
 - **Impacto:** CI/certificaciones no detectan una SPA que no construye y pantallas rotas.
-- **Causa raíz / fix:** pendiente; reconstruir instalación desde lockfile, corregir errores y blindar el runner contra bins inválidos.
+- **Causa raíz / fix:** una instalación local corrupta dejó launchers de `node_modules/.bin` vacíos y el gate no verificaba que las herramientas se ejecutaran. **Fix:** `npm ci`, preflight `verify-toolchain.mjs` antes de lint/typecheck/test/build y corrección de los errores reales en Intereses, Conteo físico, Captura de campo y hallazgos de lint. Verificado con lint/typecheck/build reales y 26/26 Vitest.
 
 ### BUG-002 — El admin del bootstrap es superusuario permanente (divergencia con la constitución)
 

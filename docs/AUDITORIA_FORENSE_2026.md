@@ -16,10 +16,10 @@
 
 ## Mejoras registradas
 
-- **MEJ-001:** guard de router por permiso y módulo efectivo; shell nativo limitado a su propósito.
-- **MEJ-002:** cambio de empresa/sucursal transaccional con rollback ante fallo de refresh.
+- **MEJ-001 — HECHA:** guard de router por permiso y módulo efectivo; shell nativo limitado a su propósito.
+- **MEJ-002 — HECHA:** cambio de empresa/sucursal transaccional con rollback ante fallo de refresh.
 - **MEJ-003:** almacenamiento seguro nativo, TTL offline y revalidación al reconectar.
-- **MEJ-004:** Quasar en español, fuentes locales y normalización completa de errores de UI.
+- **MEJ-004 — PARCIAL:** Quasar en español; fuentes locales y normalización exhaustiva de errores siguen pendientes.
 - **MEJ-005:** límites de uploads/ZIP, filas y celdas; protección de memoria/CPU.
 - **MEJ-006:** token biométrico hasheado con rotación y revelación única.
 - **MEJ-007:** compose/perfil productivo fail-closed y sin secretos conocidos por defecto.
@@ -31,7 +31,7 @@
 
 | Frente | Estado | Evidencia esperada |
 |---|---|---|
-| Baseline real backend/frontend/guards | EN CURSO | comandos y artefactos fechados |
+| Baseline real backend/frontend/guards | EN CURSO | frontend real: lint/typecheck/build PASS, Vitest 26/26; backend pendiente |
 | P0 dinero y aislamiento de facturación | EN CURSO | BUG-022..024 + tests API/concurrencia |
 | P0 tenant/auth/integration/diagnostics | EN CURSO | BUG-025..030 + migraciones/tests |
 | Accounting y recuperación cross-kernel | PENDIENTE | CoA, fault injection, reintentos |
