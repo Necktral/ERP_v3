@@ -36,12 +36,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** Compras / contratos OpenAPI / U6, U29 y lente L4
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** ejecutar con `config.settings.prod` `python manage.py check --deploy --fail-level ERROR` o `SchemaGenerator().get_schema(...)`.
 - **Esperado:** el esquema se genera y el preflight puede distinguir errores bloqueantes de la deuda documental conocida.
 - **Actual:** `drf_spectacular.E001: attribute name must be string, not 'function'`; producción no supera el chequeo. La primera ruta que dispara el error es `POST /api/procurement/orders/{order_id}/approve/`.
 - **Impacto:** el despliegue fail-closed agregado por la auditoría no puede arrancar y el contrato OpenAPI no puede validarse ni exportarse.
-- **Causa raíz / fix:** `_OrderActionView` y sus subclases guardan la función de dominio en el atributo de clase `action`; drf-spectacular reserva ese atributo para el nombre textual de una acción de ViewSet y lo pasa a `getattr`, que rechaza la función. Se renombrará el callable interno sin cambiar rutas/respuestas y se añadirá una regresión que genere el esquema completo. Los avisos preexistentes de autenticación/serializers se inventariarán por separado, no se silenciarán.
+- **Causa raíz / fix:** `_OrderActionView` y sus subclases guardaban la función de dominio en el atributo de clase `action`; drf-spectacular reserva ese atributo para el nombre textual de una acción de ViewSet y lo pasaba a `getattr`, que rechaza la función. El callable se renombró a `service_action`, sin cambiar rutas ni respuestas. `test_openapi_schema_generation.py` genera el esquema completo y exige la operación de aprobación. El preflight de producción bloquea errores (`--fail-level ERROR`); las advertencias históricas se inventarían y controlan por separado, sin silenciarlas ni convertirlas en una caída de arranque.
 
 ### BUG-047 — CEC, Finca y Diagnostics hacen invisibles filas posteriores al tope
 
