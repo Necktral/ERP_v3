@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-032 — Reusar una clave de cobro con payload distinto se acepta como replay
+
+- **Módulo / paso del ROADMAP:** facturación / idempotencia de dinero
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** cobrar con clave K y luego repetir K cambiando monto, moneda, método o documento.
+- **Esperado:** conflicto de idempotencia; una clave sólo puede representar un payload canónico.
+- **Actual:** el servicio devuelve el pago previo apenas encuentra K, sin comparar el payload solicitado.
+- **Impacto:** el cliente puede creer que aplicó un cobro corregido cuando en realidad se conservó otro monto/método.
+- **Causa raíz / fix:** pendiente; comparar los campos monetarios y de identidad antes de declarar replay, y probar cada divergencia.
+
 ### BUG-031 — Completar 2FA o cambio obligatorio navega a `/dashboard` inexistente
 
 - **Módulo / paso del ROADMAP:** frontend auth/router / transversal
