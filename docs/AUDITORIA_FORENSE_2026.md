@@ -23,7 +23,7 @@
 - **MEJ-004 — HECHA:** Quasar en español, fuentes runtime locales y normalización recursiva de envelopes/estados de error.
 - **MEJ-005:** límites de uploads/ZIP, filas y celdas; protección de memoria/CPU.
 - **MEJ-006:** token biométrico hasheado con rotación y revelación única.
-- **MEJ-007:** compose/perfil productivo fail-closed y sin secretos conocidos por defecto.
+- **MEJ-007 — HECHA:** `compose.prod.yaml` usa imágenes prod, requiere secretos sin defaults, deshabilita override de transporte, no publica DB/backend/dashboard y limita el frontend a loopback; `check --deploy` es bloqueante.
 - **MEJ-008 — HECHA:** cada request reporting revalida RBAC y usa la intersección con el techo firmado del token; revocaciones aplican de inmediato y altas posteriores no expanden la capability.
 - **MEJ-009:** auditoría de las tablas restantes con datos >200 y paginación donde corresponda.
 - **MEJ-010:** query budgets, EXPLAIN e índices sólo con volumen representativo.

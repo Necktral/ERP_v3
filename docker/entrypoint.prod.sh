@@ -35,8 +35,9 @@ python manage.py migrate --noinput
 # Static (Django admin + whitenoise manifest)
 python manage.py collectstatic --noinput
 
-# Preflight (te detecta cosas de prod rápido)
-python manage.py check --deploy || true
+# Un deployment inseguro no debe arrancar. Las excepciones se corrigen en settings,
+# no ocultando el resultado del preflight.
+python manage.py check --deploy --fail-level WARNING
 
 # Gunicorn
 : "${GUNICORN_WORKERS:=3}"
