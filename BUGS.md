@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-033 — Errores al consultar crédito se interpretan como “cliente sin cuenta”
+
+- **Módulo / paso del ROADMAP:** frontend ventas/POS / Paso 7
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** seleccionar un cliente con crédito y hacer que `/sales/credit-account/<id>/` responda 401/403/500, timeout o error de red.
+- **Esperado:** sólo 404 significa que no existe cuenta; los demás errores se muestran y preservan un estado explícito.
+- **Actual:** un `catch` general devuelve `null` para cualquier fallo y la caja continúa como si el cliente no tuviera crédito.
+- **Impacto:** el cajero toma una decisión comercial incorrecta y puede negar crédito disponible sin saber que falló el sistema.
+- **Causa raíz / fix:** pendiente; discriminar 404, propagar el resto y cubrir API/UI con regresiones.
+
 ### BUG-032 — Reusar una clave de cobro con payload distinto se acepta como replay
 
 - **Módulo / paso del ROADMAP:** facturación / idempotencia de dinero
