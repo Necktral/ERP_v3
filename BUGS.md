@@ -31,6 +31,30 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-037 — El importador biométrico XLSX no limita tamaño, expansión ni filas
+
+- **Módulo / paso del ROADMAP:** nómina/biometría / plataforma y uploads
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** enviar al endpoint de importación un XLSX comprimido grande, con alta razón de expansión ZIP o con un número masivo de filas/celdas.
+- **Esperado:** rechazo temprano y controlado por límites explícitos de bytes comprimidos/descomprimidos, miembros ZIP, filas y celdas.
+- **Actual:** el endpoint ejecuta `upload.read()` completo y el lector descomprime/materializa el libro sin presupuestos de recursos.
+- **Impacto:** un usuario autorizado puede agotar RAM/CPU del worker y degradar o derribar el servicio.
+- **Causa raíz / fix:** pendiente; validar tamaño antes de leer, inspeccionar de forma segura el contenedor ZIP y aplicar límites durante el parseo con pruebas de archivos adversariales pequeños.
+
+### BUG-036 — El secreto de dispositivos biométricos se persiste en texto claro
+
+- **Módulo / paso del ROADMAP:** nómina/biometría / credenciales de dispositivos
+- **Fecha:** 2026-08-08
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** enrolar un dispositivo y consultar directamente la columna `BiometricDevice.api_token` en la DB o un backup.
+- **Esperado:** persistir sólo un hash no reversible; revelar el secreto una única vez al crear o rotar y autenticar por comparación segura.
+- **Actual:** el token completo se guarda como valor `unique` y el endpoint público hace lookup directo por ese valor.
+- **Impacto:** una lectura de DB/backup permite suplantar todos los dispositivos cuyos tokens sean extraídos.
+- **Causa raíz / fix:** pendiente; migrar a hash versionado, agregar creación/rotación con revelación única y mantener una transición compatible y auditable.
+
 ### BUG-035 — Reanudar una venta en espera pierde identidad y crédito del cliente
 
 - **Módulo / paso del ROADMAP:** frontend POS / Paso 7
