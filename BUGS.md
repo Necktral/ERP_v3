@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-049 — La reconciliación operacional del cierre ejecuta una consulta por asiento
+
+- **Módulo / paso del ROADMAP:** accounting / cierre, reconciliación y rendimiento U5–U7
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** poblar eventos/drafts/asientos posteados y medir `reconcile_operational_vs_accounting` con `CaptureQueriesContext`: N=10 produce 17 consultas; N=100, 107; N=500, 507.
+- **Esperado:** presupuesto constante o acotado por lote, independiente de la cantidad de asientos reconciliados.
+- **Actual:** `hasattr(draft, "journal_entry")` y el acceso posterior disparan un lookup por cada draft porque la consulta sólo precarga `economic_event`. A 500 registros tomó 532.85 ms local; el cierre multianual puede ejecutar miles de round trips.
+- **Impacto:** latencia lineal, presión sobre PostgreSQL y riesgo de timeout/bloqueo del cierre fiscal y su reporte operacional.
+- **Causa raíz / fix:** relación reversa `journal_entry` no precargada. Se congelará primero una prueba roja con query budget 1 vs. 100; luego se precargará en la consulta base o se resolverá por lote y se verificará el plan con volumen sintético.
+
 ### BUG-048 — El preflight de producción cae al generar OpenAPI por colisión con `view.action`
 
 - **Módulo / paso del ROADMAP:** Compras / contratos OpenAPI / U6, U29 y lente L4
