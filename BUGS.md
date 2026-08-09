@@ -31,6 +31,30 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-040 — Una factura emitida puede perder su CxC sin consumidor durable ni reconciliador
+
+- **Módulo / paso del ROADMAP:** facturación/portfolio/integration / recuperación cross-kernel
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** inyectar un fallo en `link_billing_document_to_receivable` durante emisión; ejecutar después el dispatcher contable y volver a emitir.
+- **Esperado:** cada consumidor confirma su consecuencia de forma durable o un reconciliador idempotente crea la CxC faltante.
+- **Actual:** la factura queda `ISSUED`, el evento compartido termina `SENT` tras el consumo contable, existen cero CxC y `reissue` retorna `already_issued` sin reparar.
+- **Impacto:** venta válida omitida de cartera, aging y cobranza; subledger divergente del documento fiscal.
+- **Causa raíz / fix:** una excepción de portfolio sólo se registra y el estado único del Outbox no representa múltiples consumidores. Pendiente: consecuencia durable por consumidor y operación de reconciliación/replay idempotente, auditable y scopeada.
+
+### BUG-039 — Eventos contables FAILED de nómina no pueden reencolarse y el replay miente
+
+- **Módulo / paso del ROADMAP:** nómina/accounting/integration / recuperación cross-kernel
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** aprobar nómina con fallo contable, agotar `max_attempts` del Outbox, restaurar la dependencia y reintentar por dispatcher y dominio.
+- **Esperado:** una operación administrativa RBAC+audit permite reencolar; el replay es idempotente y devuelve el draft real o un estado pendiente/fallido veraz.
+- **Actual:** el dispatcher sólo toma `PENDING`; `FAILED` queda terminal y el replay devuelve `ALREADY_POSTED` con `draft_id=None` por la mera existencia del evento.
+- **Impacto:** planilla aprobada sin asiento y sin reparación soportada; el cierre contable queda bloqueado.
+- **Causa raíz / fix:** la idempotencia confunde “evento existe” con “consecuencia completada” y no existe transición auditada `FAILED→PENDING`. Pendiente: requeue scopeado y replay basado en resultado persistido.
+
 ### BUG-038 — El lockfile frontend contiene dependencias con avisos HIGH/CRITICAL corregibles
 
 - **Módulo / paso del ROADMAP:** frontend/supply chain / baseline QA
