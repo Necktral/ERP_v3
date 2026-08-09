@@ -14,5 +14,11 @@
     "@capacitor/filesystem": "^7.1.8",
     "@capacitor/share": "^7.0.4"
   },
+  "overrides": {
+    "minimatch@10": {
+      "brace-expansion": "5.0.9"
+    },
+    "tar": "7.5.22"
+  },
   "author": "Wiston Gutierrez <wguti3306@gmail.com>"
 }

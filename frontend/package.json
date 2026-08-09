@@ -32,11 +32,11 @@
     "@capacitor/network": "^7.0.4",
     "@capacitor/share": "^7.0.4",
     "@quasar/extras": "^2.0.0",
-    "axios": "^1.16.0",
+    "axios": "^1.19.0",
     "jeep-sqlite": "^2.8.0",
     "pinia": "^3.0.1",
     "qrcode": "^1.5.4",
-    "quasar": "^2.19.3",
+    "quasar": "^2.24.0",
     "tweetnacl": "^1.0.3",
     "vue": "^3.5.22",
     "vue-router": "^4.0.12"
@@ -66,6 +66,20 @@
     "vue-tsc": "^3.3.4"
   },
   "overrides": {
+    "body-parser": "1.20.6",
+    "immutable": "5.1.9",
+    "minimatch@5": {
+      "brace-expansion": "2.1.4"
+    },
+    "minimatch@9": {
+      "brace-expansion": "2.1.4"
+    },
+    "minimatch@10": {
+      "brace-expansion": "5.0.9"
+    },
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26",
+    "tar": "7.5.22",
     "flatted": "^3.4.2",
     "js-cookie": "3.0.7"
   },

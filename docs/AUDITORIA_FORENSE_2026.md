@@ -13,6 +13,7 @@
 - Sólo 4 archivos Vitest; no existe suite E2E de navegador.
 - Las evidencias históricas no certifican el HEAD actual: los ejecutables frontend locales estaban vacíos y producían falsos verdes.
 - Estado inicial confirmado: BUG-021..030 y BUG-034 abiertos en `BUGS.md`.
+- Supply chain frontend actualizada: auditorías de producción y Capacitor sin vulnerabilidades; residual de dos avisos LOW duplicados de `esbuild`, limitado al servidor dev de Windows y pendiente de un salto mayor de app-vite.
 
 ## Mejoras registradas
 

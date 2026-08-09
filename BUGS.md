@@ -60,12 +60,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** frontend/supply chain / baseline QA
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** ejecutar `npm audit --json` sobre el lockfile reconstruido y confirmar el árbol con `npm ls`.
 - **Esperado:** cero vulnerabilidades HIGH/CRITICAL corregibles en dependencias runtime o toolchain de entrega; cualquier residual debe tener alcance y excepción fechada.
 - **Actual:** 10 paquetes reportados (3 low, 1 moderate, 5 high y 1 critical), incluidos Axios directo y `tar` transitivo de Capacitor CLI; npm indica corrección disponible.
 - **Impacto:** exposición a DoS/prototype pollution y riesgo de archivos maliciosos en tooling; el alcance varía entre navegador, build y CLI.
-- **Causa raíz / fix:** pendiente; actualizar versiones compatibles y overrides transitivos de manera intencional, reconstruir lockfiles, repetir audit y todos los gates. El `esbuild` low que exige major se evaluará por alcance y se documentará si queda residual.
+- **Causa raíz / fix:** lockfile desactualizado y transitivas sin mínimos seguros. **Fix:** Axios/Quasar compatibles actualizados y overrides explícitos para tar, brace-expansion, postcss, immutable, nanoid y body-parser. Auditoría productiva y Capacitor quedan en cero; sólo persisten dos avisos LOW duplicados de `esbuild` en el servidor de desarrollo Windows, cuya corrección exige major de app-vite. `npm ci`, 37 tests, lint, typecheck, SPA build y `cap sync` verdes.
 
 ### BUG-037 — El importador biométrico XLSX no limita tamaño, expansión ni filas
 
