@@ -166,7 +166,7 @@
             Guardá este token AHORA: se muestra una sola vez. El aparato (o el puente) lo usa para empujar marcas.
           </div>
           <q-input :model-value="tokenMostrado" readonly outlined dense>
-            <template #append><q-btn flat dense round icon="content_copy" @click="copiarToken" /></template>
+            <template #append><q-btn flat dense round icon="content_copy" aria-label="Copiar token del aparato" @click="copiarToken"><q-tooltip>Copiar token</q-tooltip></q-btn></template>
           </q-input>
         </q-card-section>
         <q-card-actions align="right">

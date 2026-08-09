@@ -53,6 +53,7 @@
         round
         color="primary"
         icon="send"
+        aria-label="Enviar consulta"
         :loading="enviando"
         :disable="!entrada.trim() || enviando"
         @click="enviarActual"

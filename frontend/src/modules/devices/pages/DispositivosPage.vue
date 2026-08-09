@@ -25,7 +25,8 @@
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      v-model:pagination="pagination"
+      @request="onRequest"
       no-data-label="Aún no hay dispositivos enrolados. Generá un código y canjealo desde el aparato."
     >
       <template #body-cell-label="props">
@@ -121,7 +122,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { useQuasar, copyToClipboard, type QTableColumn } from 'quasar';
+import { useQuasar, copyToClipboard, type QTableColumn, type QTableProps } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import QRCode from 'qrcode';
 import {
@@ -141,6 +142,7 @@ const ctx = useContextStore();
 const loading = ref(false);
 const saving = ref(false);
 const devices = ref<DeviceRow[]>([]);
+const pagination = ref({ page: 1, rowsPerPage: 25, rowsNumber: 0 });
 const myDeviceId = getDeviceIdentity()?.device_id ?? null;
 
 // Solo quien tiene sync.device.revoke ve el botón (el endpoint igual lo exige).
@@ -189,12 +191,21 @@ function statusLabel(s: DeviceRow['status']): string {
 async function reload() {
   loading.value = true;
   try {
-    devices.value = await listDevices();
+    const { page, rowsPerPage } = pagination.value;
+    const result = await listDevices(rowsPerPage, (page - 1) * rowsPerPage);
+    devices.value = result.results;
+    pagination.value.rowsNumber = result.count;
   } catch {
     $q.notify({ type: 'negative', message: 'No se pudieron cargar los dispositivos.' });
   } finally {
     loading.value = false;
   }
+}
+
+function onRequest(request: Parameters<NonNullable<QTableProps['onRequest']>>[0]) {
+  pagination.value.page = request.pagination.page;
+  pagination.value.rowsPerPage = request.pagination.rowsPerPage;
+  void reload();
 }
 
 // --- generar código ---

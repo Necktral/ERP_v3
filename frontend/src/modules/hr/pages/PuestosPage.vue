@@ -168,7 +168,7 @@
                 { label: 'Empresa', value: 'COMPANY' },
               ]"
             />
-            <q-btn flat dense round icon="delete" color="grey-7" @click="roleRows.splice(idx, 1)" />
+            <q-btn flat dense round icon="delete" color="grey-7" aria-label="Eliminar rol del puesto" @click="roleRows.splice(idx, 1)" />
           </div>
           <q-btn flat dense no-caps icon="add" label="Agregar rol" @click="addRoleRow" />
         </q-card-section>

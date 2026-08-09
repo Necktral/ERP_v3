@@ -249,7 +249,7 @@
           </template>
           <template #body-cell-acciones="props">
             <q-td :props="props" class="text-right">
-              <q-btn flat dense round icon="visibility" @click="openContract(props.row.id)">
+              <q-btn flat dense round icon="visibility" aria-label="Ver contrato" @click="openContract(props.row.id)">
                 <q-tooltip>Ver / editar texto</q-tooltip>
               </q-btn>
             </q-td>
@@ -282,12 +282,12 @@
         >
           <template #body-cell-acciones="props">
             <q-td :props="props" class="text-right">
-              <q-btn flat dense round icon="visibility" @click="viewDocument(props.row.id)">
+              <q-btn flat dense round icon="visibility" aria-label="Ver documento" @click="viewDocument(props.row.id)">
                 <q-tooltip>Ver / descargar</q-tooltip>
               </q-btn>
               <q-btn
                 v-if="puede('hr.file.manage')"
-                flat dense round icon="delete" color="negative" @click="removeDocument(props.row.id)"
+                flat dense round icon="delete" color="negative" aria-label="Eliminar documento" @click="removeDocument(props.row.id)"
               >
                 <q-tooltip>Eliminar</q-tooltip>
               </q-btn>
@@ -352,7 +352,7 @@
           </template>
           <template #body-cell-acciones="props">
             <q-td :props="props" class="text-right">
-              <q-btn flat dense round icon="visibility" @click="viewMemo(props.row)">
+              <q-btn flat dense round icon="visibility" aria-label="Ver memorando" @click="viewMemo(props.row)">
                 <q-tooltip>Ver</q-tooltip>
               </q-btn>
               <q-btn
@@ -362,6 +362,7 @@
                 round
                 icon="cancel"
                 color="negative"
+                aria-label="Anular memorando"
                 @click="doAnnulMemo(props.row)"
               >
                 <q-tooltip>Anular</q-tooltip>
@@ -602,7 +603,7 @@
               {{ currentContract?.status === 'BORRADOR' ? 'Texto editable: ajustalo al caso y emitilo cuando esté listo.' : 'Texto congelado (el contrato ya fue emitido).' }}
             </div>
           </div>
-          <q-btn flat round icon="close" @click="contractOpen = false" />
+          <q-btn flat round icon="close" aria-label="Cerrar contrato" @click="contractOpen = false" />
         </q-card-section>
         <q-card-section class="perfil-contract__body">
           <q-input

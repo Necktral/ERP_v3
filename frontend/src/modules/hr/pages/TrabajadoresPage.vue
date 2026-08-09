@@ -269,7 +269,7 @@
           </div>
           <q-input :model-value="provisionResult.temp_password" outlined dense readonly>
             <template #append>
-              <q-btn flat dense round icon="content_copy" @click="copyTemp" />
+              <q-btn flat dense round icon="content_copy" aria-label="Copiar contraseña temporal" @click="copyTemp"><q-tooltip>Copiar contraseña</q-tooltip></q-btn>
             </template>
           </q-input>
         </q-card-section>

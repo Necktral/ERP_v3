@@ -74,7 +74,7 @@
             >
               <template #body-cell-acciones="props">
                 <q-td :props="props" class="q-gutter-xs">
-                  <q-btn dense flat round size="sm" color="negative" icon="delete" @click="borrarTramo(props.row)" />
+                  <q-btn dense flat round size="sm" color="negative" icon="delete" aria-label="Eliminar tramo de precio" @click="borrarTramo(props.row)" />
                 </q-td>
               </template>
             </q-table>
@@ -106,7 +106,7 @@
               </template>
               <template #body-cell-acciones="props">
                 <q-td :props="props" class="q-gutter-xs">
-                  <q-btn dense flat round size="sm" color="negative" icon="delete" @click="borrarAsignacion(props.row)" />
+                  <q-btn dense flat round size="sm" color="negative" icon="delete" aria-label="Eliminar asignación de lista" @click="borrarAsignacion(props.row)" />
                 </q-td>
               </template>
             </q-table>
@@ -120,7 +120,7 @@
 
     <!-- Alta / edición de lista -->
     <q-dialog v-model="listaOpen">
-      <q-card class="app-dialog" style="min-width: 360px">
+      <q-card class="app-dialog" style="width: min(360px, calc(100vw - 32px))">
         <q-card-section class="text-h6">{{ editId ? 'Editar lista' : 'Nueva lista de precios' }}</q-card-section>
         <q-card-section class="q-gutter-md">
           <q-input v-model="fLista.name" label="Nombre *" outlined dense />
@@ -136,7 +136,7 @@
 
     <!-- Tramo -->
     <q-dialog v-model="tramoOpen">
-      <q-card class="app-dialog" style="min-width: 380px">
+      <q-card class="app-dialog" style="width: min(380px, calc(100vw - 32px))">
         <q-card-section class="text-h6">Agregar tramo de precio</q-card-section>
         <q-card-section class="q-gutter-md">
           <ItemSelect v-model="fTramo.item_id" label="Artículo *" @selected="onItemSel" />
@@ -154,7 +154,7 @@
 
     <!-- Asignación -->
     <q-dialog v-model="asgOpen">
-      <q-card class="app-dialog" style="min-width: 380px">
+      <q-card class="app-dialog" style="width: min(380px, calc(100vw - 32px))">
         <q-card-section class="text-h6">Asignar lista</q-card-section>
         <q-card-section class="q-gutter-md">
           <q-option-group v-model="asgTipo" :options="asgTipoOpts" color="primary" inline />
@@ -172,6 +172,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { LatestRequest } from 'src/core/latest-request';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
@@ -201,6 +202,8 @@ const listas = ref<PriceListRow[]>([]);
 const detalle = ref<PriceListDetail | null>(null);
 const selId = ref<number | null>(null);
 const loading = ref(false);
+const detalleLoading = ref(false);
+const selectionRequests = new LatestRequest();
 const guardando = ref(false);
 const itemNames = ref<Map<number, string>>(new Map());
 
@@ -239,12 +242,17 @@ async function reload() {
   }
 }
 async function seleccionar(id: number) {
+  const isCurrent = selectionRequests.begin();
   selId.value = id;
   detalle.value = null;
+  detalleLoading.value = true;
   try {
-    detalle.value = await getPriceList(id);
+    const result = await getPriceList(id);
+    if (isCurrent() && selId.value === id) detalle.value = result;
   } catch (e) {
-    fail(e, 'No se pudo cargar la lista.');
+    if (isCurrent()) fail(e, 'No se pudo cargar la lista.');
+  } finally {
+    if (isCurrent()) detalleLoading.value = false;
   }
 }
 async function refrescarDetalle() {

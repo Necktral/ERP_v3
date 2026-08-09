@@ -62,7 +62,7 @@
                   <q-item-label caption>{{ t.lineas.length }} líneas · {{ formatMoney(t.total) }}</q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                  <q-btn flat dense round size="sm" icon="delete" @click.stop="borrarTicket(t.id)" />
+                  <q-btn flat dense round size="sm" icon="delete" aria-label="Eliminar ticket retenido" @click.stop="borrarTicket(t.id)" />
                 </q-item-section>
               </q-item>
             </q-list>
@@ -331,7 +331,7 @@
               </td>
               <td class="text-right">{{ formatMoney(totalLinea(ln)) }}</td>
               <td>
-                <q-btn flat dense round size="sm" icon="close" @click="carrito.splice(i, 1)" />
+                <q-btn flat dense round size="sm" icon="close" aria-label="Eliminar producto del carrito" @click="carrito.splice(i, 1)" />
               </td>
             </tr>
           </tbody>
@@ -488,7 +488,7 @@
               class="caja-cobro__mixto-metodo"
             />
             <q-input v-model.number="p.amount" dense outlined type="number" min="0.01" label="Monto" />
-            <q-btn flat dense round icon="close" :disable="pagosMixtos.length <= 1" @click="pagosMixtos.splice(i, 1)" />
+            <q-btn flat dense round icon="close" aria-label="Eliminar forma de pago" :disable="pagosMixtos.length <= 1" @click="pagosMixtos.splice(i, 1)" />
           </div>
           <q-btn flat no-caps dense icon="add" label="Agregar pago" @click="pagosMixtos.push({ method: 'CASH', amount: 0 })" />
           <div class="caja-cobro__vuelto" :class="{ 'caja-cobro__vuelto--falta': faltanteMixto > 0 }">

@@ -88,7 +88,7 @@
                 <td><q-input v-model="ln.planned_jornales" outlined dense type="number" /></td>
                 <td><q-input v-model="ln.planned_rate" outlined dense type="number" /></td>
                 <td><q-input v-model="ln.planned_insumos_amount" outlined dense type="number" /></td>
-                <td><q-btn flat dense round icon="close" size="sm" @click="lineas.splice(i, 1)" /></td>
+                <td><q-btn flat dense round icon="close" size="sm" aria-label="Eliminar línea del presupuesto" @click="lineas.splice(i, 1)" /></td>
               </tr>
             </tbody>
           </q-markup-table>

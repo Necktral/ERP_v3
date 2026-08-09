@@ -36,48 +36,48 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** frontend inventario/accounting/nómina / concurrencia UI
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** hacer lenta la consulta de detalle A y rápida la de B; seleccionar A y enseguida B en Listas de precios.
 - **Esperado:** sólo la respuesta de la selección vigente puede actualizar el detalle y sus acciones.
 - **Actual:** cada promesa escribe al resolver; A tardía reemplaza el detalle aunque B siga resaltada.
 - **Impacto:** el operador puede editar o eliminar tramos/asignaciones de una lista distinta a la que cree activa; patrón candidato también en Presupuestos y Complemento.
-- **Causa raíz / fix:** pendiente; aplicar latest-selection-wins mediante secuencia/abort y regresiones de respuestas fuera de orden en cada patrón confirmado.
+- **Causa raíz / fix:** los tres loaders publicaban cualquier resolución tardía. **Fix:** secuencia compartida `LatestRequest`, detalle oculto/acciones deshabilitadas durante carga y pruebas A-lenta/B-rápida en Listas, Presupuestos y Complemento.
 
 ### BUG-043 — Administración de dispositivos oculta silenciosamente los registros 201+
 
 - **Módulo / paso del ROADMAP:** frontend devices / U23 y paginación
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** crear 201 o más dispositivos en un tenant y abrir Administración → Dispositivos.
 - **Esperado:** paginación server-side con total, o carga exhaustiva explícita y acotada.
 - **Actual:** la API solicita una única página `limit=200, offset=0`; la tabla descarta `count/next` y no avisa el truncamiento.
 - **Impacto:** dispositivos quedan invisibles para auditoría y revocación, con riesgo operativo y de seguridad.
-- **Causa raíz / fix:** pendiente; adoptar contrato paginado y cubrir navegación más allá de 200 filas.
+- **Causa raíz / fix:** el cliente descartaba metadatos DRF. **Fix:** conserva `count/next/previous`, QTable pagina server-side y la regresión navega/revoca el dispositivo 201.
 
 ### BUG-042 — Diálogos críticos desbordan el viewport móvil de 360 px
 
 - **Módulo / paso del ROADMAP:** frontend inventario/nómina / responsive U24–U26
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** a 360 px abrir Agregar tramo/Asignar en Lista de precios o Historial en Régimen INSS.
 - **Esperado:** diálogo y acciones completos, alcanzables sin scroll horizontal.
 - **Actual:** cards fuerzan `min-width` de 380/420 px (o 360 sin margen), cortando contenido y controles.
 - **Impacto:** flujos críticos de inventario y nómina quedan parcialmente inutilizables en móvil.
-- **Causa raíz / fix:** pendiente; sustituir mínimos rígidos por ancho acotado al viewport y agregar regresión responsive.
+- **Causa raíz / fix:** mínimos rígidos mayores o iguales al viewport. **Fix:** cinco diálogos usan ancho máximo calculado con margen de 32 px y un guard impide reintroducir `min-width >= 360px`.
 
 ### BUG-041 — Controles de sólo icono no exponen un nombre accesible
 
 - **Módulo / paso del ROADMAP:** frontend transversal / accesibilidad U23–U26
 - **Fecha:** 2026-08-08
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** navegar con lector/árbol de accesibilidad a botones papelera/copiar/cerrar en Pedidos, Biometría, Perfil de trabajador y pantallas equivalentes.
 - **Esperado:** cada control expone un nombre específico y ayuda visible al foco/hover.
 - **Actual:** al menos 26 botones `round icon` carecen de `label`/`aria-label`; el icono decorativo no comunica propósito fiable.
 - **Impacto:** acciones, incluso destructivas, son indistinguibles mediante lector de pantalla o control por voz (WCAG 4.1.2/2.4.6).
-- **Causa raíz / fix:** pendiente; etiquetar todo el conjunto U23–U26 y añadir un guard/test que evite regresión.
+- **Causa raíz / fix:** se confiaba en iconos decorativos como único nombre. **Fix:** etiquetado específico de todo el conjunto detectado, tooltips donde aportan contexto y guard Vitest transversal contra botones redondos icon-only sin nombre.
 
 ### BUG-040 — Una factura emitida puede perder su CxC sin consumidor durable ni reconciliador
 

@@ -161,7 +161,7 @@
                 </td>
                 <td class="text-right text-weight-bold">{{ formatMoney(anual(ln)) }}</td>
                 <td v-if="editable" class="text-right">
-                  <q-btn flat dense round size="sm" icon="close" @click="lineasEdit.splice(i, 1)" />
+                  <q-btn flat dense round size="sm" icon="close" aria-label="Eliminar línea del presupuesto" @click="lineasEdit.splice(i, 1)" />
                 </td>
               </tr>
               <tr v-if="!lineasEdit.length">
@@ -248,6 +248,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { LatestRequest } from 'src/core/latest-request';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
@@ -281,6 +282,7 @@ const NOMBRE_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep
 const presupuestos = ref<BudgetRow[]>([]);
 const seleccionado = ref<BudgetRow | null>(null);
 const detalle = ref<BudgetDetail | null>(null);
+const selectionRequests = new LatestRequest();
 const cargando = ref(false);
 const accionando = ref(false);
 const tab = ref('lineas');
@@ -353,19 +355,22 @@ async function recargar() {
 }
 
 async function seleccionar(b: BudgetRow) {
+  const isCurrent = selectionRequests.begin();
   seleccionado.value = b;
   vs.value = null;
   tab.value = 'lineas';
   try {
-    detalle.value = await getBudget(b.id);
-    lineasEdit.value = detalle.value.lines.map((l) => ({
+    const result = await getBudget(b.id);
+    if (!isCurrent() || seleccionado.value?.id !== b.id) return;
+    detalle.value = result;
+    lineasEdit.value = result.lines.map((l) => ({
       account_code: l.account_code,
       cost_center_id: l.cost_center_id,
       cost_center_code: l.cost_center_code,
       monthly: { ...l.monthly },
     }));
   } catch (e) {
-    notificarError(e, 'No se pudo cargar el presupuesto.');
+    if (isCurrent()) notificarError(e, 'No se pudo cargar el presupuesto.');
   }
 }
 

@@ -67,6 +67,7 @@
             round
             size="sm"
             icon="edit"
+            aria-label="Editar precio de proveedor"
             @click="abrirEditar(props.row)"
           />
         </q-td>

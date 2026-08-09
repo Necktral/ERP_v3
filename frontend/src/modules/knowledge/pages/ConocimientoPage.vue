@@ -68,6 +68,7 @@
         round
         color="primary"
         icon="send"
+        aria-label="Enviar mensaje"
         :loading="enviando"
         :disable="!entrada.trim() || enviando"
         @click="enviarActual"

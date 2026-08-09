@@ -56,7 +56,7 @@
 
     <!-- Historial de afiliaciones INSS -->
     <q-dialog v-model="histOpen">
-      <q-card class="app-dialog" style="min-width: 420px">
+      <q-card class="app-dialog" style="width: min(420px, calc(100vw - 32px))">
         <q-card-section class="text-h6">Historial INSS · {{ histNombre }}</q-card-section>
         <q-card-section>
           <DataReport :data="histData" />
@@ -69,7 +69,7 @@
 
     <!-- Override -->
     <q-dialog v-model="overrideOpen">
-      <q-card class="app-dialog" style="min-width: 360px">
+      <q-card class="app-dialog" style="width: min(360px, calc(100vw - 32px))">
         <q-card-section class="text-h6">Ajustar INSS · {{ nombre(overrideRow) }}</q-card-section>
         <q-card-section class="q-gutter-md">
           <div>

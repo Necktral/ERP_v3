@@ -205,7 +205,7 @@
               label="Centro"
               class="dia-manual-linea__cc"
             />
-            <q-btn flat dense round size="sm" icon="close" @click="manual.lines.splice(i, 1)" />
+            <q-btn flat dense round size="sm" icon="close" aria-label="Eliminar línea del asiento" @click="manual.lines.splice(i, 1)" />
           </div>
 
           <div class="dia-manual-totales" :class="cuadrado ? 'text-positive' : 'text-negative'">

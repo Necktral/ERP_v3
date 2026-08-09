@@ -111,6 +111,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { LatestRequest } from 'src/core/latest-request';
 import { useQuasar, type QTableColumn } from 'quasar';
 import { useRoute } from 'vue-router';
 import PageHeader from 'src/components/PageHeader.vue';
@@ -138,6 +139,7 @@ const periodId = Number(route.params.id);
 const hojas = ref<ComplementSheetRow[]>([]);
 const detalle = ref<ComplementSheetDetail | null>(null);
 const selId = ref<number | null>(null);
+const selectionRequests = new LatestRequest();
 const cargando = ref(false);
 const creando = ref(false);
 const acting = ref(false);
@@ -170,12 +172,14 @@ async function cargar() {
   }
 }
 async function seleccionar(id: number) {
+  const isCurrent = selectionRequests.begin();
   selId.value = id;
   detalle.value = null;
   try {
-    detalle.value = await getComplementSheet(periodId, id);
+    const result = await getComplementSheet(periodId, id);
+    if (isCurrent() && selId.value === id) detalle.value = result;
   } catch (e) {
-    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar la hoja.') });
+    if (isCurrent()) $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar la hoja.') });
   }
 }
 async function refrescar() {

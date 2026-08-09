@@ -92,7 +92,7 @@
             <q-input v-model="b.max_income_str" outlined dense type="number" label="Hasta (vacío = sin tope)" />
             <q-input v-model="b.base_tax" outlined dense type="number" label="Impuesto base" />
             <q-input v-model="b.rate" outlined dense type="number" step="0.0001" label="Tasa (0–1)" />
-            <q-btn flat dense round size="sm" icon="close" @click="irEdit.splice(i, 1)" />
+            <q-btn flat dense round size="sm" icon="close" aria-label="Eliminar regla de ingreso" @click="irEdit.splice(i, 1)" />
           </div>
           <q-btn flat dense no-caps size="sm" icon="add" label="Agregar tramo" @click="agregarTramo" />
         </q-card-section>

@@ -83,7 +83,7 @@
             >
               <q-tooltip>Vacío = usa el precio del proveedor (acordado o último costo).</q-tooltip>
             </q-input>
-            <q-btn flat dense round icon="close" :disable="lineas.length === 1" @click="lineas.splice(i, 1)" />
+            <q-btn flat dense round icon="close" aria-label="Eliminar línea de orden" :disable="lineas.length === 1" @click="lineas.splice(i, 1)" />
           </div>
           <q-btn flat no-caps icon="add" label="Agregar línea" @click="lineas.push({ item_id: null, qty: '1', unit_cost: '' })" />
 

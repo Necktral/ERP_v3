@@ -80,7 +80,7 @@
             <div v-for="(d, i) in fLiq.deductions" :key="i" class="row q-col-gutter-sm q-mb-xs items-center">
               <q-input class="col" v-model="d.concept" dense outlined label="Concepto" />
               <q-input class="col-4" v-model.number="d.amount" type="number" dense outlined label="Monto" />
-              <q-btn flat dense round size="sm" icon="close" @click="fLiq.deductions.splice(i, 1)" />
+              <q-btn flat dense round size="sm" icon="close" aria-label="Eliminar deducción" @click="fLiq.deductions.splice(i, 1)" />
             </div>
             <q-btn flat dense no-caps size="sm" icon="add" label="Agregar deducción" @click="fLiq.deductions.push({ concept: '', amount: 0 })" />
           </div>
