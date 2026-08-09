@@ -123,6 +123,7 @@
     "modulos.dashboard->modulos.iam",
     "modulos.dashboard->modulos.rbac",
     "modulos.diagnostics->modulos.common",
+    "modulos.diagnostics->modulos.iam",
     "modulos.documents->modulos.common",
     "modulos.documents->modulos.iam",
     "modulos.estacion_servicios->kernels.facturacion",
@@ -171,6 +172,7 @@
     "modulos.integration->kernels.inventarios",
     "modulos.integration->kernels.nomina",
     "modulos.integration->kernels.portfolio",
+    "modulos.integration->modulos.audit",
     "modulos.integration->modulos.common",
     "modulos.integration->modulos.hr",
     "modulos.integration->modulos.iam",
@@ -250,6 +252,7 @@
   ],
   "notes": [
     "Baseline for architecture_dependency_guard ratchet.",
-    "Adding new edges requires explicit architecture PR approval."
+    "Adding new edges requires explicit architecture PR approval.",
+    "Forensic campaign 2026-08: diagnostics materializes tenant OrgUnit scope; integration recovery emits immutable audit events. Both edges are deliberate and covered by tenant/RBAC tests."
   ]
 }

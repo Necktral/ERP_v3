@@ -218,6 +218,14 @@
       "ticket_ref": "U5-BASELINE",
       "fingerprint": "eef896a12e11a4dfcfabd0c00f8f18b64853e4cd64e299b00d4d674a5ebea56a"
     },
+    "backend/src/apps/kernels/facturacion/migrations/0012_alter_billingpayment_idempotency_key.py": {
+      "risk_class": "high_lock_risk",
+      "rollout_strategy": "replace idempotency constraint after rehearsal on an ephemeral PostgreSQL clone",
+      "rollback_strategy": "reverse migration restores document-scoped constraint; roll forward preferred after writes",
+      "owner": "billing-kernel",
+      "ticket_ref": "BUG-023/BUG-032",
+      "fingerprint": "871c8809d6f2ee24f227e6a79bffc1f2399c6f4ffd51fe6179fa9cd02ee91548"
+    },
     "backend/src/apps/kernels/inventarios/migrations/0001_initial.py": {
       "risk_class": "high_lock_risk",
       "rollout_strategy": "baseline_existing_migration",
@@ -481,6 +489,22 @@
       "owner": "db-architecture",
       "ticket_ref": "U5-BASELINE",
       "fingerprint": "531299f508d685dc473c990dac5e76736b8d166b4e5f056c0b49d1229880c55c"
+    },
+    "backend/src/apps/kernels/nomina/migrations/0020_hash_biometric_device_tokens.py": {
+      "risk_class": "backfill",
+      "rollout_strategy": "expand hash column, backfill while plaintext remains, then deploy hash-aware code",
+      "rollback_strategy": "reversible while plaintext is retained; verify legacy token authentication before contract",
+      "owner": "payroll-security",
+      "ticket_ref": "BUG-036",
+      "fingerprint": "9d7d4fc524fed0b39ca97f6f406371396c512e174e32ed8c09fd1752a5b43c37"
+    },
+    "backend/src/apps/kernels/nomina/migrations/0021_retire_plaintext_biometric_tokens.py": {
+      "risk_class": "destructive",
+      "rollout_strategy": "contract only after 0020 and hash-aware application verification; re-backfill window writes",
+      "rollback_strategy": "intentionally irreversible; restore pre-0021 backup or retain hash-aware code and rotate tokens",
+      "owner": "payroll-security",
+      "ticket_ref": "BUG-036",
+      "fingerprint": "050d08db72ac1e6acfc05c9ad503142f81ad1fce0c2266bfc03b6b64e69552d8"
     },
     "backend/src/apps/kernels/payments/migrations/0001_initial.py": {
       "risk_class": "high_lock_risk",
@@ -866,6 +890,14 @@
       "ticket_ref": "U5-BASELINE",
       "fingerprint": "bc1ad297170e2156ef95c016e943585b70170a9fa8a0d556c11fb94b07c11ea6"
     },
+    "backend/src/apps/modulos/diagnostics/migrations/0006_error_event_tenant_scope.py": {
+      "risk_class": "backfill",
+      "rollout_strategy": "expand tenant FKs, backfill legacy events, then add scoped uniqueness and checks",
+      "rollback_strategy": "reverse constraints/FKs; retain an export of legacy global events before rollout",
+      "owner": "platform-security",
+      "ticket_ref": "BUG-027",
+      "fingerprint": "c90278ce96840a92cba310175354bba0bf65d6d17fda65610565ebf115afb465"
+    },
     "backend/src/apps/modulos/documents/migrations/0001_initial.py": {
       "risk_class": "expand",
       "rollout_strategy": "baseline_existing_migration",
@@ -889,6 +921,14 @@
       "owner": "db-architecture",
       "ticket_ref": "U5-BASELINE",
       "fingerprint": "bc30f806b47b24b4ffa096c239c0d39492ba92bc4f900bfcfd5b17329d4c2862"
+    },
+    "backend/src/apps/modulos/documents/migrations/0004_repair_cross_company_branches.py": {
+      "risk_class": "backfill",
+      "rollout_strategy": "null cross-company branch links before enforcing model/API tenant validation",
+      "rollback_strategy": "schema reverse is safe; invalid cross-tenant links are deliberately not reconstructed",
+      "owner": "platform-security",
+      "ticket_ref": "BUG-025",
+      "fingerprint": "1cc4bd0fac768f27bbe0687c86190f69ab087fb00297cfd12450b19694355cd4"
     },
     "backend/src/apps/modulos/estacion_servicios/migrations/0001_initial.py": {
       "risk_class": "expand",
@@ -1201,6 +1241,14 @@
       "owner": "db-architecture",
       "ticket_ref": "U5-BASELINE",
       "fingerprint": "addbf5e091f37b91beccd7b8adb7efeda9dddfaeae198bc1d7adb88bf060f5a4"
+    },
+    "backend/src/apps/modulos/integration/migrations/0004_inbox_tenant_scope.py": {
+      "risk_class": "backfill",
+      "rollout_strategy": "expand scope FKs, backfill from Outbox or validated payload, then add check/index",
+      "rollback_strategy": "reverse scope fields only after exporting tenant attribution for audit",
+      "owner": "platform-security",
+      "ticket_ref": "BUG-026",
+      "fingerprint": "ac1361f33bd5cfd267e14531b267a39daae974ba9c19296d39752f59c50a5765"
     },
     "backend/src/apps/modulos/knowledge/migrations/0001_initial.py": {
       "risk_class": "expand",
