@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-048 — El preflight de producción cae al generar OpenAPI por colisión con `view.action`
+
+- **Módulo / paso del ROADMAP:** Compras / contratos OpenAPI / U6, U29 y lente L4
+- **Fecha:** 2026-08-08
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** ejecutar con `config.settings.prod` `python manage.py check --deploy --fail-level ERROR` o `SchemaGenerator().get_schema(...)`.
+- **Esperado:** el esquema se genera y el preflight puede distinguir errores bloqueantes de la deuda documental conocida.
+- **Actual:** `drf_spectacular.E001: attribute name must be string, not 'function'`; producción no supera el chequeo. La primera ruta que dispara el error es `POST /api/procurement/orders/{order_id}/approve/`.
+- **Impacto:** el despliegue fail-closed agregado por la auditoría no puede arrancar y el contrato OpenAPI no puede validarse ni exportarse.
+- **Causa raíz / fix:** `_OrderActionView` y sus subclases guardan la función de dominio en el atributo de clase `action`; drf-spectacular reserva ese atributo para el nombre textual de una acción de ViewSet y lo pasa a `getattr`, que rechaza la función. Se renombrará el callable interno sin cambiar rutas/respuestas y se añadirá una regresión que genere el esquema completo. Los avisos preexistentes de autenticación/serializers se inventariarán por separado, no se silenciarán.
+
 ### BUG-047 — CEC, Finca y Diagnostics hacen invisibles filas posteriores al tope
 
 - **Módulo / paso del ROADMAP:** CEC/Finca/Diagnostics / U28–U29 y MEJ-009
