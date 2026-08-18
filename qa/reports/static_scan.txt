@@ -1,4 +1,10 @@
 static_scan_target=/app/backend/src/apps
 static_scan_pattern=(TODO|FIXME|XXX|HACK|NotImplementedError)
 
-OK: sin hallazgos
+HALLAZGOS:
+/app/backend/src/apps/kernels/inventarios/counting.py:221:        # Balances actuales de TODOS los ítems del conteo en 1 query (antes: una
+/app/backend/src/apps/kernels/reporting/domain_adapters/inventory.py:114:            f"Detalle truncado a {MAX_DETAIL_ROWS} movimientos; los totales cubren TODO el rango. "
+/app/backend/src/apps/kernels/reporting/domain_adapters/accounting.py:81:# sobre TODO el rango); el detalle se corta aquí para no materializar años de
+/app/backend/src/apps/kernels/reporting/domain_adapters/accounting.py:100:    # Totales en la BD (una query de agregación, cubre TODO el rango).
+/app/backend/src/apps/kernels/reporting/domain_adapters/accounting.py:146:            f"Detalle truncado a {GL_MAX_ROWS} líneas; los totales cubren TODO el rango. "
+/app/backend/src/apps/kernels/nomina/tests/test_golden_compute_sheet_bulk.py:8:TODOS los campos concretos del PayrollEntry. Invariante legal: el neto del
