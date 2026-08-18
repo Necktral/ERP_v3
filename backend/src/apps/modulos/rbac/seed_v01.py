@@ -1091,6 +1091,10 @@ def seed_rbac_v01() -> SeedResult:
                 "cec.exception.resolve",
             ],
             "cashier": [
+                # Caja de venta: acceso mínimo a la ruta POS y a sus selectores de inventario.
+                "sales.pos.sell",
+                "inventory.item.read",
+                "inventory.warehouse.read",
                 "billing.doc.create",
                 "billing.doc.read",
                 "billing.doc.issue",
