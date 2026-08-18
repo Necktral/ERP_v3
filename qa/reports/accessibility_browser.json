@@ -1,0 +1,12 @@
+{
+  "status": "passed",
+  "generated_at": "2026-08-18T19:36:50.511Z",
+  "runner": "@playwright/test",
+  "checks": [
+    "axe serious/critical=0",
+    "teclado/foco visible",
+    "360x800",
+    "768x1024",
+    "1440x900"
+  ]
+}

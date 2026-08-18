@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "generated_at": "2026-08-18T19:36:53.238Z",
+  "runner": "@playwright/test",
+  "checks": [
+    "sesión cacheada",
+    "entrada offline",
+    "reconexión",
+    "revalidación de sesión"
+  ]
+}

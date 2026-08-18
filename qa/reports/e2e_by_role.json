@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "generated_at": "2026-08-18T19:36:44.639Z",
+  "runner": "@playwright/test",
+  "checks": [
+    "login y contexto por rol",
+    "admin: HR/nómina/compras/inventario/ventas/contabilidad",
+    "contador permitido contabilidad y denegado HR",
+    "cajero permitido caja y denegado contabilidad"
+  ]
+}

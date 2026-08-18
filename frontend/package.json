@@ -16,6 +16,7 @@
     "pretest": "npm run verify:toolchain",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e:forensic": "playwright test",
     "dev": "quasar dev",
     "prebuild": "npm run verify:toolchain",
     "build": "quasar build",
@@ -42,8 +43,10 @@
     "vue-router": "^4.0.12"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
     "@capacitor/cli": "^7.6.6",
     "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.62.1",
     "@quasar/app-vite": "^2.5.4",
     "@types/node": "^20.5.9",
     "@types/qrcode": "^1.5.6",
