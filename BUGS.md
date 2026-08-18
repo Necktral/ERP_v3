@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-058 — Una revaluación FX bloqueada nunca puede reintentarse
+
+- **Módulo / paso del ROADMAP:** accounting / revaluación FX L3
+- **Fecha:** 2026-08-18
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** ejecutar revaluación sin tasa/config, obtener BLOCKED, corregir la causa y repetir el mismo período/scope.
+- **Esperado:** el retry reevalúa idempotentemente y completa una sola vez con la configuración ya corregida.
+- **Actual:** `run_fx_revaluation` considera BLOCKED terminal igual que COMPLETED y devuelve el bloqueo anterior sin volver a evaluar.
+- **Impacto:** el cierre queda atascado aun después de reparar la causa; requiere manipulación manual de estado.
+- **Causa raíz / fix:** pendiente; el fast-path de idempotencia agrupa estados terminales exitosos y recuperables.
+
 ### BUG-057 — Consolidación intercompany elimina moneda extranjera como si fuera NIO
 
 - **Módulo / paso del ROADMAP:** accounting/intercompany / L3 integridad contable
