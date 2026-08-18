@@ -63,6 +63,9 @@ class FieldCaptureWorkDayCreateIn(serializers.Serializer):
 
 class FieldCaptureReportOut(serializers.ModelSerializer):
     event_count = serializers.IntegerField(source="worker_events.count", read_only=True)
+    approval_request_uuid = serializers.UUIDField(
+        source="approval_request.request_id", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = FieldCaptureReport
@@ -80,6 +83,7 @@ class FieldCaptureReportOut(serializers.ModelSerializer):
             "approved_by",
             "approved_at",
             "approval_request",
+            "approval_request_uuid",
             "observations",
             "event_count",
             "created_at",

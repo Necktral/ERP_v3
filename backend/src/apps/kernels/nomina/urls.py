@@ -123,6 +123,7 @@ urlpatterns = [
     path("field/work-days/<int:work_day_id>/consolidations/", FieldConsolidationListView.as_view()),
     # Aprobación SoD (maker-checker): solicitar → aprobar (approver != maker)
     path("field/work-days/<int:work_day_id>/approve-request/", FieldApprovalRequestView.as_view()),
+    path("field/approval-requests/", FieldApprovalRequestView.as_view()),
     path("field/approvals/<uuid:request_id>/approve/", FieldApprovalApproveView.as_view()),
     path("field/crews/<int:crew_id>/report/", FieldCrewReportView.as_view()),
     path("field/sheets/<int:sheet_id>/apply-field-attendance/", FieldApplyToSheetView.as_view()),

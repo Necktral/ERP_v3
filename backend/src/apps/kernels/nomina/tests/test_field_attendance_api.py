@@ -15,6 +15,10 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from apps.kernels.nomina.models import (
+    FieldCrew,
+    FieldRollCall,
+    FieldRollCallLine,
+    FieldWorkDay,
     PayrollEntry,
     PayrollPeriod,
     PayrollSheet,
@@ -22,7 +26,7 @@ from apps.kernels.nomina.models import (
 )
 from apps.kernels.nomina.services import create_default_nicaragua_config
 from apps.modulos.hr.models import Employee
-from apps.modulos.iam.models import OrgUnit, UserMembership
+from apps.modulos.iam.models import ApprovalRequest, OrgUnit, UserMembership
 from apps.modulos.rbac.models import Permission, Role, RoleAssignment, RolePermission
 
 User = get_user_model()
@@ -201,3 +205,100 @@ def test_apply_approved_attendance_to_sheet():
 
     entry.refresh_from_db()
     assert entry.days_worked > Decimal("0.00")
+
+
+@pytest.mark.django_db
+def test_persisted_work_day_reads_are_rbac_and_tenant_scoped():
+    company_a, branch_a = _scope()
+    company_b, branch_b = _scope()
+    reader_a = _client(company=company_a, branch=branch_a, perms=["nomina.field.read"])
+    capture_only = _client(company=company_a, branch=branch_a, perms=["nomina.field.capture"])
+    employee_a = _emp(company_a, "Persistida")
+    day_a = FieldWorkDay.objects.create(
+        company=company_a, branch=branch_a, work_date=date(2026, 6, 3), opened_by=reader_a.user
+    )
+    day_b = FieldWorkDay.objects.create(
+        company=company_b, branch=branch_b, work_date=date(2026, 6, 3)
+    )
+    rollcall = FieldRollCall.objects.create(
+        work_day=day_a, submitted_by=reader_a.user, notes="Lista persistida"
+    )
+    FieldRollCallLine.objects.create(
+        rollcall=rollcall, employee=employee_a, status="ABSENT", absence_reason="PERMISSION"
+    )
+    crew = FieldCrew.objects.create(
+        work_day=day_a, name="Cuadrilla persistida", supervisor_employee=employee_a
+    )
+
+    response = reader_a.get(f"{BASE}/work-days/{day_a.id}/rollcall/")
+    assert response.status_code == 200, response.data
+    assert response.data["notes"] == "Lista persistida"
+    assert response.data["lines"] == [{
+        "id": response.data["lines"][0]["id"],
+        "employee_id": employee_a.id,
+        "status": "ABSENT",
+        "absence_reason": "PERMISSION",
+        "note": "",
+    }]
+
+    response = reader_a.get(f"{BASE}/work-days/{day_a.id}/crews/")
+    assert response.status_code == 200, response.data
+    assert response.data["results"] == [{
+        "id": crew.id,
+        "name": "Cuadrilla persistida",
+        "work_day_id": day_a.id,
+        "supervisor_employee_id": employee_a.id,
+        "is_active": True,
+    }]
+
+    assert capture_only.get(f"{BASE}/work-days/{day_a.id}/rollcall/").status_code == 403
+    assert reader_a.get(f"{BASE}/work-days/{day_b.id}/rollcall/").status_code == 404
+    assert reader_a.get(f"{BASE}/work-days/{day_b.id}/crews/").status_code == 404
+
+
+@pytest.mark.django_db
+def test_approval_request_reads_are_rbac_and_tenant_scoped():
+    company_a, branch_a = _scope()
+    company_b, branch_b = _scope()
+    reader_a = _client(company=company_a, branch=branch_a, perms=["nomina.field.read"])
+    no_read = _client(company=company_a, branch=branch_a, perms=["nomina.field.approve.request"])
+    day_a = FieldWorkDay.objects.create(
+        company=company_a, branch=branch_a, work_date=date(2026, 6, 4), opened_by=reader_a.user
+    )
+    day_b = FieldWorkDay.objects.create(
+        company=company_b, branch=branch_b, work_date=date(2026, 6, 4)
+    )
+    approval_a = ApprovalRequest.objects.create(
+        company=company_a,
+        branch=branch_a,
+        action_type="FIELD_ATTENDANCE_APPROVE",
+        subject_type="FIELD_WORK_DAY",
+        subject_id=str(day_a.id),
+        required_permission="nomina.field.approve",
+        requested_by=reader_a.user,
+        reason="Persistida A",
+        payload={"work_day_id": day_a.id},
+    )
+    ApprovalRequest.objects.create(
+        company=company_b,
+        branch=branch_b,
+        action_type="FIELD_ATTENDANCE_APPROVE",
+        subject_type="FIELD_WORK_DAY",
+        subject_id=str(day_b.id),
+        required_permission="nomina.field.approve",
+        requested_by=_client(
+            company=company_b, branch=branch_b, perms=["nomina.field.read"]
+        ).user,
+        payload={"work_day_id": day_b.id},
+    )
+
+    response = reader_a.get(f"{BASE}/approval-requests/?status=PENDING")
+    assert response.status_code == 200, response.data
+    assert [row["request_id"] for row in response.data["results"]] == [str(approval_a.request_id)]
+    assert response.data["results"][0]["work_day_id"] == day_a.id
+
+    response = reader_a.get(f"{BASE}/work-days/{day_a.id}/approve-request/")
+    assert response.status_code == 200, response.data
+    assert [row["request_id"] for row in response.data["results"]] == [str(approval_a.request_id)]
+    assert reader_a.get(f"{BASE}/work-days/{day_b.id}/approve-request/").status_code == 404
+    assert no_read.get(f"{BASE}/approval-requests/").status_code == 403

@@ -153,6 +153,22 @@ export interface RollcallLineIn {
   note?: string;
 }
 
+export interface FieldRollcall {
+  id: number;
+  work_day_id: number;
+  submitted_by_id: number;
+  submitted_at: string;
+  notes: string;
+  lines: Array<RollcallLineIn & { id: number; employee_id: number }>;
+}
+
+export async function getFieldRollcall(workDayId: number): Promise<FieldRollcall | null> {
+  const { data } = await api.get<FieldRollcall | null>(
+    `/nomina/field/work-days/${workDayId}/rollcall/`,
+  );
+  return data;
+}
+
 /** Envía el pase de lista inicial del día (reemplaza el anterior si lo hay). */
 export async function submitRollcall(
   workDayId: number,
@@ -172,6 +188,40 @@ export interface FieldCrewCreated {
   name: string;
   work_day_id: number;
   supervisor_employee_id: number;
+}
+
+export interface FieldCrew extends FieldCrewCreated {
+  is_active: boolean;
+}
+
+export async function listFieldCrews(workDayId: number): Promise<FieldCrew[]> {
+  const { data } = await api.get<{ results: FieldCrew[] }>(
+    `/nomina/field/work-days/${workDayId}/crews/`,
+  );
+  return data.results;
+}
+
+export interface FieldApprovalRequest {
+  request_id: string;
+  work_day_id: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXECUTED';
+  requested_by_id: number;
+  reason: string;
+  requested_at: string;
+  decided_by_id: number | null;
+  decided_at: string | null;
+}
+
+export async function listFieldApprovalRequests(
+  filters: { workDayId?: number; status?: FieldApprovalRequest['status'] } = {},
+): Promise<FieldApprovalRequest[]> {
+  const path = filters.workDayId == null
+    ? '/nomina/field/approval-requests/'
+    : `/nomina/field/work-days/${filters.workDayId}/approve-request/`;
+  const { data } = await api.get<{ results: FieldApprovalRequest[] }>(path, {
+    params: filters.status ? { status: filters.status } : undefined,
+  });
+  return data.results;
 }
 
 /** Crea una cuadrilla de la jornada (capataz responsable incluido). */
@@ -414,6 +464,7 @@ export interface CaptureReport {
   approved_by: number | null;
   approved_at: string | null;
   approval_request: number | null;
+  approval_request_uuid: string | null;
   observations: string;
   event_count: number;
   created_at: string;
