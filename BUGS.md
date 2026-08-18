@@ -60,36 +60,36 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** RBAC/ventas / E2E por rol U18 y L1
 - **Fecha:** 2026-08-18
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** asignar el rol seed `cashier`, iniciar sesión y abrir `/ventas`.
 - **Esperado:** el cajero puede leer catálogo/bodega y ejecutar la venta POS, sin permisos de supervisión.
 - **Actual:** `cashier` sólo recibe permisos de factura/reporte; la ruta exige `sales.pos.sell` y responde 403. Ese permiso existe únicamente en roles más privilegiados.
 - **Impacto:** el rol operativo estándar queda bloqueado del flujo principal de caja o fuerza a otorgar privilegios excesivos.
-- **Causa raíz / fix:** pendiente; la matriz seed del rol no evolucionó junto con el endpoint y el guard de ruta POS.
+- **Causa raíz / fix:** la matriz seed no evolucionó junto con el endpoint POS. **Fix:** `cashier` recibe sólo `sales.pos.sell` y lecturas de ítems/bodegas; conserva denegados override, posteo de inventario y contabilidad. Prueba de rol y E2E confirman acceso a caja y 403 a contabilidad.
 
 ### BUG-053 — La barra global de carga no tiene nombre accesible
 
 - **Módulo / paso del ROADMAP:** frontend / accesibilidad U23–U26
 - **Fecha:** 2026-08-18
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** iniciar una navegación o petición que active la barra global de Quasar y ejecutar axe/inspeccionar el árbol accesible.
 - **Esperado:** el elemento `role=progressbar` expone un nombre accesible en español.
 - **Actual:** la barra global aparece sin nombre; axe lo clasifica como impacto serio.
 - **Impacto:** usuarios de lector de pantalla reciben un indicador de progreso sin propósito identificable.
-- **Causa raíz / fix:** pendiente; falta etiquetar la instancia global de loading bar o proveer un indicador equivalente accesible.
+- **Causa raíz / fix:** el componente global no exponía etiqueta. **Fix:** boot accesible asigna nombre español al progressbar; axe real no reporta impactos serious/critical.
 
 ### BUG-052 — La configuración móvil impide ampliar la interfaz
 
 - **Módulo / paso del ROADMAP:** frontend / accesibilidad móvil U23–U26
 - **Fecha:** 2026-08-18
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** abrir la SPA en viewport móvil e inspeccionar el meta viewport o ejecutar axe.
 - **Esperado:** el usuario puede ampliar el contenido conforme WCAG 1.4.4.
 - **Actual:** el viewport generado contiene `user-scalable=no`/`maximum-scale=1`; axe lo clasifica como crítico.
 - **Impacto:** personas con baja visión no pueden usar zoom del navegador y parte de la interfaz resulta inaccesible.
-- **Causa raíz / fix:** pendiente; la configuración de Quasar genera restricciones de escala incompatibles con accesibilidad.
+- **Causa raíz / fix:** el meta viewport restringía la escala. **Fix:** viewport permite zoom y una regresión estática más axe real cubren 360, 768 y 1440 px.
 
 ### BUG-051 — Colisión o agotamiento de numeración fiscal termina en HTTP 500
 
