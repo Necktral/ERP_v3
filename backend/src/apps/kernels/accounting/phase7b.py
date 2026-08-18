@@ -20,6 +20,7 @@ from apps.modulos.integration.services import publish_outbox_event
 
 from .models import (
     ChartOfAccount,
+    CompanyAccountingConfig,
     ConsolidationEliminationLink,
     ConsolidationRun,
     FiscalPeriod,
@@ -1480,8 +1481,34 @@ def run_consolidation(
                 coa_map[(int(cid), str(coa_row.code))] = coa_row
 
         issues: list[dict[str, Any]] = []
-        elimination_count = 0
+        parent_cfg = CompanyAccountingConfig.objects.filter(company=parent_company).first()
+        functional_currency = str(
+            (parent_cfg.functional_currency if parent_cfg is not None else "NIO") or "NIO"
+        ).strip().upper()
+        unsupported_currency_ids = {
+            tx.pk
+            for tx in tx_rows
+            if str(tx.currency or "").strip().upper() != functional_currency
+        }
         for tx in tx_rows:
+            if tx.pk in unsupported_currency_ids:
+                issues.append(
+                    {
+                        "code": "CONSOLIDATION_CURRENCY_UNSUPPORTED",
+                        "tx_id": str(tx.tx_id),
+                        "detail": (
+                            "La consolidación no convierte monedas; "
+                            f"se esperaba {functional_currency} y se recibió {tx.currency}."
+                        ),
+                        "currency": str(tx.currency or ""),
+                        "functional_currency": functional_currency,
+                    }
+                )
+        elimination_count = 0
+        pending_elimination_links: list[tuple[IntercompanyTransaction, dict[str, Any]]] = []
+        for tx in tx_rows:
+            if tx.pk in unsupported_currency_ids:
+                continue
             amount = _q_money(_to_decimal(tx.amount))
             if amount <= Decimal("0.00"):
                 continue
@@ -1544,14 +1571,13 @@ def run_consolidation(
                 "source_elimination_side": source_elimination_side,
                 "target_elimination_side": target_elimination_side,
             }
-            ConsolidationEliminationLink.objects.update_or_create(
-                consolidation_run=run,
-                intercompany_transaction=tx,
-                defaults={"elimination_json": elimination_payload},
-            )
+            pending_elimination_links.append((tx, elimination_payload))
             elimination_count += 1
 
-        if strict and issues:
+        # Unsupported currency is an integrity-hard failure: permissive mode may
+        # tolerate advisory data issues, but it must never publish a nominal,
+        # partially eliminated multi-currency consolidation.
+        if issues and (strict or bool(unsupported_currency_ids)):
             summary_blocked = {
                 "schema_version": 1,
                 "status": ConsolidationRun.Status.BLOCKED,
@@ -1590,6 +1616,13 @@ def run_consolidation(
                 manifest_hash=output_hash,
                 issues_count=int(len(issues)),
                 summary_json=summary_blocked,
+            )
+
+        for tx, elimination_payload in pending_elimination_links:
+            ConsolidationEliminationLink.objects.update_or_create(
+                consolidation_run=run,
+                intercompany_transaction=tx,
+                defaults={"elimination_json": elimination_payload},
             )
 
         trial_rows = _build_trial_report(trial_map=trial_map)

@@ -765,7 +765,10 @@ def run_fx_revaluation(
                 "summary_json": {},
             },
         )
-        if not created and run.status in (RevaluationRun.Status.COMPLETED, RevaluationRun.Status.BLOCKED):
+        # COMPLETED is terminal/idempotent. BLOCKED is deliberately recoverable:
+        # after correcting rates/configuration the same locked run is evaluated
+        # again, without creating a second run or a second set of entries.
+        if not created and run.status == RevaluationRun.Status.COMPLETED:
             summary_json = dict(run.summary_json or {})
             return RevaluationExecutionResult(
                 run_id=str(run.run_id),
