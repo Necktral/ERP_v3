@@ -3129,7 +3129,9 @@ def reconcile_operational_vs_accounting(
     }
     drafts_by_event = {
         row.economic_event_id: row
-        for row in JournalDraft.objects.select_related("economic_event").filter(economic_event_id__in=[ev.id for ev in economic_by_outbox.values()])
+        for row in JournalDraft.objects.select_related("economic_event", "journal_entry").filter(
+            economic_event_id__in=[ev.id for ev in economic_by_outbox.values()]
+        )
     }
 
     def _operational_amount(ev: OutboxEvent) -> Decimal:
