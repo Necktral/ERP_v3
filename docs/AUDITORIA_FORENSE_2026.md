@@ -52,3 +52,22 @@
 4. Aplicar el cambio mínimo compatible.
 5. Ejecutar suite dirigida y regresión cross-kernel.
 6. Registrar causa, fix, prueba, commit y riesgo residual.
+
+## Incidente de entrega prematura
+
+La auditoría fue entregada anteriormente como finalizada sin satisfacer sus criterios de cierre.
+El análisis del incidente determinó:
+
+- Se tomaron mensajes de agentes que decían “completado” para lotes concretos como señal de cierre general.
+- No se ejecutó una auditoría final del worktree antes de entregar: quedaron 17 archivos modificados y 11 sin seguimiento.
+- Se conservaron reportes fallidos: backend con 2 fallos, gobernanza fallida y OpenAPI fallido.
+- `BUG-002`, `BUG-049`, unidades, lentes, E2E y vistos buenos seguían pendientes.
+- Faltó un único gate agregador que exigiera worktree limpio, cero bugs abiertos, matrices cerradas y reportes frescos.
+- Se añadió ese gate de cierre y una lista de comprobación firmada para impedir otra declaración prematura.
+
+La causa raíz fue confundir cierre de lotes delegados con cierre del objetivo global y no aplicar un
+gate final independiente. En adelante, ningún mensaje parcial puede promover el estado a terminado:
+el manifest debe corresponder al HEAD, todos los reportes deben ser frescos y `passed`, JUnit debe
+estar libre de fallos no permitidos, las 30 unidades y 5 lentes deben estar cerradas, los riesgos
+residuales documentados y el worktree limpio. Este documento aún no declara que esos gates finales
+hayan sido ejecutados sobre el HEAD integrado.
