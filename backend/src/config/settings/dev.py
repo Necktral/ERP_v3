@@ -1,6 +1,7 @@
 from .base import *  # noqa
 
 DEBUG = True
+SYNC_DEMO_COMMANDS_ENABLED = True
 
 from datetime import timedelta
 

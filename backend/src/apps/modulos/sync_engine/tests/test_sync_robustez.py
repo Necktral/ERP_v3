@@ -24,6 +24,7 @@ from datetime import timedelta
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -255,6 +256,27 @@ def test_unknown_command_type_primer_rechazo_es_schema_invalid():
     # Queda persistido como REJECTED en AppliedCommand.
     row = AppliedCommand.objects.get(command_id=cmd["command_id"])
     assert row.result_status == AppliedCommand.ResultStatus.REJECTED
+
+
+@pytest.mark.django_db
+@override_settings(SYNC_DEMO_COMMANDS_ENABLED=False)
+def test_demo_ping_disabled_is_rejected_but_real_handlers_remain_registered():
+    """MEJ-011: producción rechaza DEMO_PING sin apagar comandos operativos."""
+    from apps.modulos.sync_engine.registry import get_handler
+
+    company, branch = _mk_org()
+    device, priv = _enroll_device(company=company, branch=branch)
+    cmd = _legacy_signed_command(
+        private_key=priv, company_id=company.id, branch_id=branch.id,
+        command_type="DEMO_PING", payload={"msg": "disabled"},
+    )
+    response = APIClient().post(
+        BATCH_URL, _legacy_batch_body([cmd]), format="json", HTTP_X_DEVICE_ID=str(device.id),
+    )
+    assert response.status_code == 200, response.data
+    assert response.data["results"][0]["status"] == "REJECTED"
+    assert response.data["results"][0]["reason"] == "SYNC_SCHEMA_INVALID"
+    assert get_handler("INVENTORY_MOVEMENT_RECEIVE") is not None
 
 
 @pytest.mark.django_db

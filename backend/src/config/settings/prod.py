@@ -1,6 +1,7 @@
 from .base import *  # noqa
 
 DEBUG = False
+SYNC_DEMO_COMMANDS_ENABLED = False
 
 # Fail-fast si llaves inseguras o faltan
 import sys
