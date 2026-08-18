@@ -319,7 +319,19 @@ def create_draft(
 
     with transaction.atomic():
         if idempotency_key:
-            existing = BillingDocument.objects.filter(company=company, idempotency_key=idempotency_key).first()
+            # El constraint único es el último respaldo, pero no puede ofrecer
+            # semántica de replay a dos INSERT simultáneos. Serializamos por la
+            # misma clave lógica antes de consultar/crear.
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    [f"billing-document:{company.id}:{idempotency_key}"],
+                )
+            existing = (
+                BillingDocument.objects.select_for_update()
+                .filter(company=company, idempotency_key=idempotency_key)
+                .first()
+            )
             if existing:
                 return CreateResult(existing.id)
 
