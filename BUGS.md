@@ -60,12 +60,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** facturación / U9 numeración y contingencia fiscal
 - **Fecha:** 2026-08-18
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** preparar una secuencia cuyo próximo número ya exista, o cuyo `next_number` sea `2147483647`, e intentar emitir una factura.
 - **Esperado:** conflicto de dominio controlado, transacción revertida y documento todavía en borrador, sin consumir el número.
 - **Actual:** la colisión propaga `IntegrityError` y el agotamiento `DataError`; la vista no captura esas excepciones y responde HTTP 500.
 - **Impacto:** una condición fiscal operable se presenta como caída interna, impide una recuperación guiada y puede generar reintentos inseguros del operador.
-- **Causa raíz / fix:** pendiente; la asignación no traduce errores de unicidad/rango de PostgreSQL a `BillingConflictError` ni valida el límite antes de incrementar.
+- **Causa raíz / fix:** la asignación no validaba el rango ni verificaba el número ocupado antes de avanzar el cursor. **Fix:** bajo el lock de la secuencia se rechaza rango inválido/agotado y colisión como `BillingConflictError`; la vista lo traduce a HTTP 409. Cuatro regresiones PostgreSQL cubren ocho emisiones concurrentes, colisión, agotamiento y contingencia idempotente, manteniendo documento y cursor atómicos.
 
 ### BUG-050 — La búsqueda server-side de productores omite código de acopio y cédula
 
