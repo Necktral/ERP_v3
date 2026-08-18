@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-056 — Exportaciones de reporting no tienen límites de memoria ni tamaño
+
+- **Módulo / paso del ROADMAP:** reporting / U21 y rendimiento L5
+- **Fecha:** 2026-08-18
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** exportar un run con una cantidad muy grande de filas/celdas en CSV o XLSX.
+- **Esperado:** límites explícitos de filas, celdas y bytes; rechazo controlado antes de agotar memoria o sobredimensionar la base.
+- **Actual:** se materializan todas las filas, el CSV/XML completo, el ZIP y una copia base64; luego se persiste todo el contenido en DB sin tope.
+- **Impacto:** una exportación autorizada puede causar presión extrema de RAM/CPU, caída del worker y crecimiento no acotado de PostgreSQL.
+- **Causa raíz / fix:** pendiente; el contrato de exportación carece de presupuestos y validación previa/posterior al render.
+
 ### BUG-055 — Dos ventas POS simultáneas con la misma clave provocan HTTP 500
 
 - **Módulo / paso del ROADMAP:** ventas/POS / U18 y lente L2
