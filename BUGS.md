@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-055 — Dos ventas POS simultáneas con la misma clave provocan HTTP 500
+
+- **Módulo / paso del ROADMAP:** ventas/POS / U18 y lente L2
+- **Fecha:** 2026-08-18
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** enviar en paralelo dos ventas POS idénticas con la misma `idempotency_key` sobre PostgreSQL.
+- **Esperado:** un envío crea la venta y el otro devuelve replay; una sola factura, salida de inventario y entrada de caja.
+- **Actual:** un hilo completa la venta y el otro propaga `IntegrityError` por `uniq_bill_idempotency_per_company`, resultando en HTTP 500.
+- **Impacto:** un doble toque/reintento de red concurrente parece una caída, induce nuevos reintentos y rompe el contrato explícito de idempotencia del POS.
+- **Causa raíz / fix:** pendiente; `create_draft` hace consulta y creación sin serializar por empresa+clave, por lo que ambos hilos observan ausencia antes del INSERT único.
+
 ### BUG-054 — El rol cajero no puede acceder al POS que debe operar
 
 - **Módulo / paso del ROADMAP:** RBAC/ventas / E2E por rol U18 y L1
