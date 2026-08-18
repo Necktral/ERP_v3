@@ -389,11 +389,17 @@ def certify_phase7_gl_run(
         strict=True,
     )
 
+    revaluation_replay_ok = (
+        str(reval_second.status) == "BLOCKED"
+        and str(reval_second.run_id) == str(reval_first.run_id)
+        if blocked
+        else bool(reval_second.idempotent)
+    )
     deterministic = (
         first_counts == second_counts
         and first_hash == second_hash
         and int(second_post.posted) == 0
-        and bool(reval_second.idempotent)
+        and revaluation_replay_ok
     )
     passed = bool(deterministic and (blocked == bool(expect_blocked)))
     posting_first = {
