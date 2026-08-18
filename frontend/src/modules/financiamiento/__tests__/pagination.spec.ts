@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { get } = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('src/boot/axios', () => ({ api: { get, post: vi.fn() } }));
 
-import { listFixationsPage, listProducersPage, listReceptionsPage } from 'src/modules/financiamiento/api';
+import { listFixationsPage, listLoansPage, listProducersPage, listReceptionsPage } from 'src/modules/financiamiento/api';
 
 describe('paginación remota de financiamiento', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -30,5 +30,14 @@ describe('paginación remota de financiamiento', () => {
 
     expect(get).toHaveBeenCalledWith(endpoint, { params: { limit: 25, offset: 200 } });
     expect(page.count).toBe(225);
+  });
+
+  it('busca préstamos activos remotamente con una sola página acotada', async () => {
+    get.mockResolvedValue({ data: { count: 600, limit: 25, offset: 0, results: [] } });
+    await listLoansPage({ limit: 25, offset: 0 }, 'ACTIVE', 'PR-2026');
+    expect(get).toHaveBeenCalledWith('/financiamiento/loans/', {
+      params: { limit: 25, offset: 0, status: 'ACTIVE', search: 'PR-2026' },
+    });
+    expect(get).toHaveBeenCalledTimes(1);
   });
 });

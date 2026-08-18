@@ -20,6 +20,9 @@
           outlined
           emit-value
           map-options
+          use-input
+          input-debounce="250"
+          @filter="buscarProductores"
           options-dense
           class="recibo-field"
         />
@@ -105,7 +108,7 @@ import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { apiErrorMessage } from 'src/core/api';
 import {
   createReception,
-  listProducers,
+  listProducersPage,
   listQualities,
   listReceptionsPage,
   PHYSICAL_STATE_LABELS,
@@ -126,6 +129,14 @@ interface Opt {
   value: number;
 }
 const prodOpts = ref<Opt[]>([]);
+async function buscarProductores(value: string, update: (callback: () => void) => void) {
+  const page = await listProducersPage({ limit: 25, offset: 0 }, value.trim());
+  update(() => {
+    prodOpts.value = page.results.map((p) => ({
+      label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id,
+    }));
+  });
+}
 const calOpts = ref<Opt[]>([]);
 const tareByQuality = new Map<number, number>();
 
@@ -178,11 +189,7 @@ const cols: QTableColumn<ReceptionRow>[] = [
 
 async function cargarCatalogos() {
   try {
-    const [prods, cals] = await Promise.all([listProducers(), listQualities()]);
-    prodOpts.value = prods.map((p) => ({
-      label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`,
-      value: p.id,
-    }));
+    const [, cals] = await Promise.all([buscarProductores('', (callback) => callback()), listQualities()]);
     calOpts.value = cals.map((c) => ({ label: `${c.code} — ${c.name}`, value: c.id }));
     tareByQuality.clear();
     for (const c of cals) tareByQuality.set(c.id, Number(c.default_tare_pct) || 0);

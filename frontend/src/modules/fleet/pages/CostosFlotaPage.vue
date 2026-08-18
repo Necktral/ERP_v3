@@ -12,6 +12,7 @@
         v-model="assetId"
         :options="assetOpts"
         outlined dense emit-value map-options label="Vehículo / activo"
+        use-input input-debounce="250" @filter="buscarActivos"
         class="cf-select"
         @update:model-value="cargarActivo"
       />
@@ -113,7 +114,7 @@ import {
   createFuelLog,
   createMaintenanceOrder,
   getAssetCostSummary,
-  listAssets,
+  listAssetsPage,
   listFleetExpenses,
   listFuelLogs,
   listMaintenanceOrders,
@@ -178,8 +179,7 @@ const expCols: QTableColumn<FleetExpenseRow>[] = [
 async function recargar() {
   cargando.value = true;
   try {
-    const assets = await listAssets();
-    assetOpts.value = assets.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }));
+    await buscarActivos('', (callback) => callback());
     if (!assetId.value && assetOpts.value.length) {
       assetId.value = assetOpts.value[0]!.value;
     }
@@ -189,6 +189,13 @@ async function recargar() {
   } finally {
     cargando.value = false;
   }
+}
+
+async function buscarActivos(value: string, update: (callback: () => void) => void) {
+  const page = await listAssetsPage({ limit: 25, offset: 0 }, value.trim());
+  update(() => {
+    assetOpts.value = page.results.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }));
+  });
 }
 
 async function cargarActivo() {

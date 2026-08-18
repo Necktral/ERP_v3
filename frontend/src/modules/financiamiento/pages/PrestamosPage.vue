@@ -79,7 +79,7 @@
       <q-card class="app-dialog" style="min-width: 420px">
         <q-card-section class="text-h6">Nueva solicitud de financiamiento</q-card-section>
         <q-card-section class="q-gutter-md">
-          <q-select v-model="fApp.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense />
+          <q-select v-model="fApp.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense use-input input-debounce="250" @filter="buscarProductores" />
           <div class="row q-col-gutter-md">
             <q-input class="col" v-model.number="fApp.requested_nio" type="number" label="Monto C$" outlined dense />
             <q-input class="col" v-model.number="fApp.requested_usd" type="number" label="Monto US$" outlined dense />
@@ -187,7 +187,7 @@ import {
   disburseApplication,
   listApplicationsPage,
   listLoansPage,
-  listProducers,
+  listProducersPage,
   loanStatement,
   registerLoanPayment,
   rejectApplication,
@@ -218,6 +218,12 @@ interface Opt<T = number> {
   value: T;
 }
 const prodOpts = ref<Opt[]>([]);
+async function buscarProductores(value: string, update: (callback: () => void) => void) {
+  const page = await listProducersPage({ limit: 25, offset: 0 }, value.trim());
+  update(() => {
+    prodOpts.value = page.results.map((p) => ({ label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id }));
+  });
+}
 const formaOpts = (Object.keys(DISBURSEMENT_LABELS) as DisbursementForm[]).map((k) => ({ label: DISBURSEMENT_LABELS[k], value: k }));
 const monedaOpts = (Object.keys(CURRENCY_LABELS) as Currency[]).map((k) => ({ label: CURRENCY_LABELS[k] ?? k, value: k }));
 const monedaTargetOpts: Opt<Currency | ''>[] = [{ label: '(misma)', value: '' }, ...monedaOpts];
@@ -412,14 +418,7 @@ async function confirmarPago() {
   }
 }
 
-onMounted(async () => {
-  try {
-    const prods = await listProducers();
-    prodOpts.value = prods.map((p) => ({ label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id }));
-  } catch {
-    /* noop */
-  }
-});
+onMounted(() => void buscarProductores('', (callback) => callback()));
 </script>
 
 <style scoped>

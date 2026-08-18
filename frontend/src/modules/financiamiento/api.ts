@@ -5,7 +5,7 @@
  * Montaje backend: `api/financiamiento/` → con baseURL `/api` => `/financiamiento/...`.
  */
 import { api } from 'src/boot/axios';
-import { collectPaginated, type PageReq, type Paginated } from 'src/core/api';
+import type { PageReq, Paginated } from 'src/core/api';
 
 export type Currency = 'NIO' | 'USD';
 export type DisbursementForm = 'CASH' | 'CHECK' | 'TRANSFER' | 'IN_KIND';
@@ -65,9 +65,6 @@ export interface ProducerDeposit {
 
 export async function listProducersPage(page: PageReq, search = ''): Promise<Paginated<ProducerRow>> {
   return (await api.get<Paginated<ProducerRow>>('/financiamiento/producers/', { params: { ...page, ...(search ? { search } : {}) } })).data;
-}
-export async function listProducers(): Promise<ProducerRow[]> {
-  return collectPaginated((page) => listProducersPage(page));
 }
 export async function createProducer(body: {
   party_id: number;
@@ -159,9 +156,6 @@ export interface ApplicationCreate {
   guarantee_other?: string;
   guarantee_coffee_qq?: number;
 }
-export async function listApplications(): Promise<ApplicationRow[]> {
-  return collectPaginated(listApplicationsPage);
-}
 export async function listApplicationsPage(page: PageReq): Promise<Paginated<ApplicationRow>> {
   return (await api.get<Paginated<ApplicationRow>>('/financiamiento/applications/', { params: page })).data;
 }
@@ -229,11 +223,8 @@ export interface LoanStatement {
   consolidated_nio: string | null;
   rate_used: string | null;
 }
-export async function listLoans(status?: LoanStatus): Promise<LoanRow[]> {
-  return collectPaginated((page) => listLoansPage(page, status));
-}
-export async function listLoansPage(page: PageReq, status?: LoanStatus): Promise<Paginated<LoanRow>> {
-  return (await api.get<Paginated<LoanRow>>('/financiamiento/loans/', { params: { ...page, ...(status ? { status } : {}) } })).data;
+export async function listLoansPage(page: PageReq, status?: LoanStatus, search = ''): Promise<Paginated<LoanRow>> {
+  return (await api.get<Paginated<LoanRow>>('/financiamiento/loans/', { params: { ...page, ...(status ? { status } : {}), ...(search ? { search } : {}) } })).data;
 }
 export async function loanStatement(loanId: number): Promise<LoanStatement> {
   const { data } = await api.get<LoanStatement>(`/financiamiento/loans/${loanId}/statement/`);
@@ -275,9 +266,6 @@ export interface ReceptionRow {
   stock_movement_id: number | null;
   note: string;
 }
-export async function listReceptions(): Promise<ReceptionRow[]> {
-  return collectPaginated(listReceptionsPage);
-}
 export async function listReceptionsPage(page: PageReq): Promise<Paginated<ReceptionRow>> {
   return (await api.get<Paginated<ReceptionRow>>('/financiamiento/receptions/', { params: page })).data;
 }
@@ -307,9 +295,6 @@ export interface FixationRow {
   status: FixationStatus;
   liquidation_id: number | null;
   note: string;
-}
-export async function listFixations(): Promise<FixationRow[]> {
-  return collectPaginated(listFixationsPage);
 }
 export async function listFixationsPage(page: PageReq): Promise<Paginated<FixationRow>> {
   return (await api.get<Paginated<FixationRow>>('/financiamiento/fixations/', { params: page })).data;
@@ -344,9 +329,6 @@ export interface LiquidationRow {
   exchange_rate_used: string | null;
   payment_intent_id: number | null;
   note: string;
-}
-export async function listLiquidations(): Promise<LiquidationRow[]> {
-  return collectPaginated(listLiquidationsPage);
 }
 export async function listLiquidationsPage(page: PageReq): Promise<Paginated<LiquidationRow>> {
   return (await api.get<Paginated<LiquidationRow>>('/financiamiento/liquidations/', { params: page })).data;

@@ -1,7 +1,7 @@
 /**
  * Flota (fleet) — vehículos y maquinaria: lecturas de odómetro/horómetro,
  * documentos con vencimiento (seguro, circulación…) y planes de mantenimiento
- * con alertas. Los listados devuelven array plano.
+ * con alertas. Activos, conductores e historiales volumétricos usan envelopes paginados.
  */
 import { api } from 'src/boot/axios';
 import type { PageReq, Paginated } from 'src/core/api';
@@ -86,9 +86,13 @@ export interface MaintenancePlanRow {
 }
 
 // --- Activos ---
-export async function listAssets(): Promise<FleetAsset[]> {
-  const { data } = await api.get<FleetAsset[]>('/fleet/assets/');
+export async function listAssetsPage(page: PageReq, search = ''): Promise<Paginated<FleetAsset>> {
+  const { data } = await api.get<Paginated<FleetAsset>>('/fleet/assets/', { params: { ...page, ...(search ? { search } : {}) } });
   return data;
+}
+
+export async function listAssets(search = ''): Promise<FleetAsset[]> {
+  return (await listAssetsPage({ limit: 25, offset: 0 }, search)).results;
 }
 
 export async function upsertAsset(input: {
@@ -116,9 +120,13 @@ export async function recordMeterReading(input: {
 }
 
 // --- Conductores ---
-export async function listDrivers(): Promise<FleetDriver[]> {
-  const { data } = await api.get<FleetDriver[]>('/fleet/drivers/');
+export async function listDriversPage(page: PageReq, search = ''): Promise<Paginated<FleetDriver>> {
+  const { data } = await api.get<Paginated<FleetDriver>>('/fleet/drivers/', { params: { ...page, ...(search ? { search } : {}) } });
   return data;
+}
+
+export async function listDrivers(search = ''): Promise<FleetDriver[]> {
+  return (await listDriversPage({ limit: 25, offset: 0 }, search)).results;
 }
 
 export async function upsertDriver(input: {

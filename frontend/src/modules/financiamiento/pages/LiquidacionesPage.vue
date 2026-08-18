@@ -42,7 +42,7 @@
       <q-card class="app-dialog" style="min-width: 380px">
         <q-card-section class="text-h6">Nueva fijación de precio</q-card-section>
         <q-card-section class="q-gutter-md">
-          <q-select v-model="fFix.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense />
+          <q-select v-model="fFix.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense use-input input-debounce="250" @filter="buscarProductores" />
           <div class="row q-col-gutter-md">
             <q-input class="col" v-model.number="fFix.pounds" type="number" label="Libras *" outlined dense />
             <q-input class="col" v-model.number="fFix.price_per_lb" type="number" step="0.0001" label="Precio/lb *" outlined dense />
@@ -62,7 +62,7 @@
       <q-card class="app-dialog" style="min-width: 460px">
         <q-card-section class="text-h6">Nueva liquidación</q-card-section>
         <q-card-section class="q-gutter-md">
-          <q-select v-model="fLiq.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense @update:model-value="onProducerLiq" />
+          <q-select v-model="fLiq.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense use-input input-debounce="250" @filter="buscarProductores" @update:model-value="onProducerLiq" />
 
           <div v-if="fLiq.producer_id">
             <div class="text-caption text-muted q-mb-xs">Fijaciones abiertas a liquidar *</div>
@@ -70,7 +70,7 @@
             <q-option-group v-else v-model="fLiq.fixation_ids" type="checkbox" :options="fixOpts" />
           </div>
 
-          <q-select v-model="fLiq.loan_id" :options="loanOpts" label="Aplicar a préstamo (opcional)" outlined dense emit-value map-options options-dense clearable />
+          <q-select v-model="fLiq.loan_id" :options="loanOpts" label="Aplicar a préstamo (opcional)" outlined dense emit-value map-options options-dense clearable use-input input-debounce="250" @filter="buscarPrestamos" />
           <q-input v-model.number="fLiq.exchange_rate" type="number" step="0.0001" label="Tasa de cambio (si cruza moneda)" outlined dense />
 
           <div>
@@ -107,9 +107,9 @@ import {
   createFixation,
   createLiquidation,
   listFixationsPage,
-  listLoans,
+  listLoansPage,
   listLiquidationsPage,
-  listProducers,
+  listProducersPage,
   type Currency,
   type FixationRow,
   type LiquidationRow,
@@ -133,6 +133,19 @@ interface Opt<T = number> {
 }
 const prodOpts = ref<Opt[]>([]);
 const loanOpts = ref<Opt[]>([]);
+async function buscarProductores(value: string, update: (callback: () => void) => void) {
+  const page = await listProducersPage({ limit: 25, offset: 0 }, value.trim());
+  update(() => {
+    prodOpts.value = page.results.map((p) => ({ label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id }));
+    for (const p of page.results) prodNameById.set(p.id, p.party_name);
+  });
+}
+async function buscarPrestamos(value: string, update: (callback: () => void) => void) {
+  const page = await listLoansPage({ limit: 25, offset: 0 }, 'ACTIVE', value.trim());
+  update(() => {
+    loanOpts.value = page.results.map((l) => ({ label: `${l.reference} · ${l.producer_name}`, value: l.id }));
+  });
+}
 const monedaOpts = (Object.keys(CURRENCY_LABELS) as Currency[]).map((k) => ({ label: CURRENCY_LABELS[k], value: k }));
 const guardando = ref(false);
 
@@ -236,14 +249,8 @@ async function guardarLiq() {
   }
 }
 
-onMounted(async () => {
-  try {
-    const [prods, loans] = await Promise.all([listProducers(), listLoans('ACTIVE')]);
-    prodOpts.value = prods.map((p) => ({ label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id }));
-    for (const p of prods) prodNameById.set(p.id, p.party_name);
-    loanOpts.value = loans.map((l) => ({ label: `${l.reference} · ${l.producer_name}`, value: l.id }));
-  } catch {
-    /* noop */
-  }
+onMounted(() => {
+  void buscarProductores('', (callback) => callback());
+  void buscarPrestamos('', (callback) => callback());
 });
 </script>

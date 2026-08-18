@@ -20,7 +20,6 @@
       </template>
     </PageHeader>
 
-    <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
     <q-table
       class="app-table"
       :rows="rows"
@@ -28,7 +27,8 @@
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      v-model:pagination="pagination"
+      @request="onRequest"
       no-data-label="Aún no hay conductores."
     >
       <template #body-cell-vence="props">
@@ -89,6 +89,9 @@
             dense
             emit-value
             map-options
+            use-input
+            input-debounce="250"
+            @filter="buscarActivos"
           />
         </q-card-section>
         <q-card-actions align="right">
@@ -114,12 +117,12 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate } from 'src/core/format';
 import {
   assignDriver,
-  listAssets,
-  listDrivers,
+  listAssetsPage,
+  listDriversPage,
   upsertDriver,
   type FleetAsset,
   type FleetDriver,
@@ -131,8 +134,8 @@ const $q = useQuasar();
 const acl = useAclStore();
 const ctx = useContextStore();
 
-const { rows, loading, reload } = useListado<FleetDriver>(() => listDrivers(), {
-  errorMessage: 'No se pudieron cargar los conductores.',
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<FleetDriver>(listDriversPage, {
+  rowsPerPage: 25, errorMessage: 'No se pudieron cargar los conductores.',
 });
 
 const activos = ref<FleetAsset[]>([]);
@@ -146,6 +149,10 @@ const puedeGestionar = computed(() => {
 const opcionesActivo = computed(() =>
   activos.value.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` })),
 );
+async function buscarActivos(value: string, update: (callback: () => void) => void) {
+  const page = await listAssetsPage({ limit: 25, offset: 0 }, value.trim());
+  update(() => { activos.value = page.results; });
+}
 
 const columns: QTableColumn<FleetDriver>[] = [
   { name: 'full_name', label: 'Conductor', field: 'full_name', align: 'left', sortable: true },
@@ -208,7 +215,7 @@ async function abrirAsignar(d: FleetDriver) {
   activoAsignar.value = null;
   if (activos.value.length === 0) {
     try {
-      activos.value = await listAssets();
+      await buscarActivos('', (callback) => callback());
     } catch {
       /* sin activos */
     }
