@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-062 — Checkboxes de selección del catálogo no tienen nombre accesible
+
+- **Módulo / paso del ROADMAP:** inventario/frontend/accesibilidad / L4
+- **Fecha:** 2026-08-18
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** abrir `/inventario/catalogo` a 360 px y ejecutar axe sobre la tabla con selección.
+- **Esperado:** el checkbox de selección masiva y cada checkbox de fila exponen un nombre específico mediante texto, `aria-label` o `aria-labelledby`.
+- **Actual:** QTable genera `.q-checkbox[role=checkbox]` con estado ARIA pero sin nombre; axe reporta `aria-toggle-field-name` serio.
+- **Impacto:** usuarios de lector de pantalla no pueden distinguir la selección masiva ni qué fila están seleccionando.
+- **Causa raíz / fix:** pendiente; los slots de selección no proporcionan etiquetas accesibles.
+
 ### BUG-061 — Tooltip global de Quasar no alcanza contraste mínimo
 
 - **Módulo / paso del ROADMAP:** frontend/accesibilidad / L4
