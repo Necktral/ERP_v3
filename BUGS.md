@@ -36,12 +36,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** reporting / U21 y rendimiento L5
 - **Fecha:** 2026-08-18
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** exportar un run con una cantidad muy grande de filas/celdas en CSV o XLSX.
 - **Esperado:** límites explícitos de filas, celdas y bytes; rechazo controlado antes de agotar memoria o sobredimensionar la base.
 - **Actual:** se materializan todas las filas, el CSV/XML completo, el ZIP y una copia base64; luego se persiste todo el contenido en DB sin tope.
 - **Impacto:** una exportación autorizada puede causar presión extrema de RAM/CPU, caída del worker y crecimiento no acotado de PostgreSQL.
-- **Causa raíz / fix:** pendiente; el contrato de exportación carece de presupuestos y validación previa/posterior al render.
+- **Causa raíz / fix:** el contrato carecía de presupuestos. **Fix:** límites configurables (10k filas, 200k celdas, 64 KiB/celda, 8 MiB de entrada y 10 MiB de salida), validación UTF-8 previa y backstop posterior. El rechazo deja `ExportLog` FAILED sin contenido parcial. Suite reporting 47/47 y lote de cache/lineage/límites 16/16 verdes.
 
 ### BUG-055 — Dos ventas POS simultáneas con la misma clave provocan HTTP 500
 
