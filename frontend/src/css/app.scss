@@ -384,3 +384,10 @@ body {
     padding: var(--app-space-3);
   }
 }
+/* Tooltips opacos: sobre el header translúcido el fondo por defecto se mezclaba
+   hasta 1.82:1 en móvil (BUG-061). */
+.q-tooltip {
+  background: #1b1b1b !important;
+  color: #fff !important;
+  opacity: 1 !important;
+}

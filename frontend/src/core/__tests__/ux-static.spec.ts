@@ -17,6 +17,35 @@ describe('guardas UX estáticas', () => {
     expect(html).not.toContain('maximum-scale=1');
     expect(boot).toContain("setAttribute('aria-label', 'Cargando página')");
   });
+  it('expone navegación con rol correcto y tablas desplazables enfocables', () => {
+    const layout = readFileSync(resolve(process.cwd(), 'src/layouts/AppLayout.vue'), 'utf8');
+    const boot = readFileSync(resolve(process.cwd(), 'src/boot/accessibility.ts'), 'utf8');
+    expect(layout).toContain('role="navigation" aria-label="Navegación principal"');
+    expect(boot).toContain(".q-table__middle.scroll");
+    expect(boot).toContain("setAttribute('tabindex', '0')");
+  });
+  it('mantiene tooltips opacos con contraste alto', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/css/app.scss'), 'utf8');
+    expect(css).toMatch(/\.q-tooltip\s*\{[^}]*background:\s*#1b1b1b\s*!important/si);
+    expect(css).toMatch(/\.q-tooltip\s*\{[^}]*color:\s*#fff\s*!important/si);
+    expect(css).toMatch(/\.q-tooltip\s*\{[^}]*opacity:\s*1\s*!important/si);
+  });
+  it('nombra la selección masiva y por fila del catálogo de inventario', () => {
+    const catalog = readFileSync(
+      resolve(process.cwd(), 'src/modules/inventory/pages/CatalogoInventarioPage.vue'),
+      'utf8',
+    );
+    expect(catalog).toContain('aria-label="Seleccionar todos los artículos"');
+    expect(catalog).toContain(':aria-label="`Seleccionar artículo ${scope.row.sku || scope.row.name || scope.row.id}`"');
+  });
+  it('usa texto verde de alto contraste para el estado en línea', () => {
+    const connectivity = readFileSync(
+      resolve(process.cwd(), 'src/components/ConnectivityDot.vue'),
+      'utf8',
+    );
+    expect(connectivity).toMatch(/\.conn--on \.conn__label\s*\{[^}]*color:\s*#137333/si);
+    expect(connectivity).not.toMatch(/\.conn--on \.conn__label\s*\{[^}]*var\(--q-positive\)/si);
+  });
   it('todo q-btn redondo con icono tiene nombre accesible', () => {
     const offenders: string[] = [];
     for (const file of vueFiles(join(process.cwd(), 'src/modules'))) {

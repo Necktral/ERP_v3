@@ -125,7 +125,7 @@
     </q-header>
 
     <q-drawer v-if="!native" v-model="drawer" show-if-above bordered class="app-drawer" :width="248">
-      <q-list padding>
+      <q-list padding role="navigation" aria-label="Navegación principal">
         <template v-for="grupo in navAgrupado" :key="grupo.section">
           <q-item-label header class="app-drawer__header">{{ grupo.section }}</q-item-label>
           <q-item
