@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "manifest": {
+    "path": "run_manifest.json",
+    "commit_fields": ["commit", "head_commit", "git_commit"],
+    "max_age_hours": 24,
+    "required_status": "passed",
+    "required_gates": ["setup", "gate1", "gate2", "gate3"]
+  },
+  "required_reports": [
+    "architecture_dependency_guard.json",
+    "api_frontend_drift_report.json",
+    "codex_governance_guard.json",
+    "kernel_compat_usage.json",
+    "migration_rehearsal_summary.json",
+    "migration_safety_guard.json",
+    "openapi_contract_guard.json",
+    "production_preflight.json",
+    "route_authz_guard.json",
+    "route_contract_report.json",
+    "security_exceptions_guard.json",
+    "security_findings_guard.json",
+    "static_gate_summary.json"
+  ],
+  "junit_reports": ["pytest.xml", "frontend_vitest.xml"],
+  "allowed_skips": [
+    "src.apps.modulos.financiamiento.tests.test_risk::test_rf_serving_usa_modelo_si_existe"
+  ],
+  "evidence_groups": {
+    "accessibility_browser": ["accessibility_browser.json"],
+    "e2e_by_role": ["e2e_by_role.json"],
+    "offline_reconnect": ["offline_reconnect_e2e.json"],
+    "retail_pos_http": ["retail_pos_edge_e2e_guard.json"]
+  },
+  "bugs_file": "BUGS.md",
+  "audit_log_file": "docs/AUDITORIA_LOG.md",
+  "expected_units": 30,
+  "expected_lenses": 5,
+  "closed_matrix_status": "HECHO",
+  "residual_risk_file": "docs/AUDITORIA_FORENSE_2026.md",
+  "residual_risk_headings": ["riesgos residuales", "riesgo residual"]
+}
