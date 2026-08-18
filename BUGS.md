@@ -48,12 +48,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** accounting / cierre, reconciliación y rendimiento U5–U7
 - **Fecha:** 2026-08-08
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** poblar eventos/drafts/asientos posteados y medir `reconcile_operational_vs_accounting` con `CaptureQueriesContext`: N=10 produce 17 consultas; N=100, 107; N=500, 507.
 - **Esperado:** presupuesto constante o acotado por lote, independiente de la cantidad de asientos reconciliados.
 - **Actual:** `hasattr(draft, "journal_entry")` y el acceso posterior disparan un lookup por cada draft porque la consulta sólo precarga `economic_event`. A 500 registros tomó 532.85 ms local; el cierre multianual puede ejecutar miles de round trips.
 - **Impacto:** latencia lineal, presión sobre PostgreSQL y riesgo de timeout/bloqueo del cierre fiscal y su reporte operacional.
-- **Causa raíz / fix:** relación reversa `journal_entry` no precargada. Se congelará primero una prueba roja con query budget 1 vs. 100; luego se precargará en la consulta base o se resolverá por lote y se verificará el plan con volumen sintético.
+- **Causa raíz / fix:** relación reversa `journal_entry` no precargada. **Fix:** la consulta base carga `economic_event` y `journal_entry`; la regresión exige siete consultas tanto con 1 como con 100 drafts posteados. Medición PostgreSQL posterior: 7 consultas en ambos tamaños y `Hash Left Join` de 100 filas en ~0.34 ms.
 
 ### BUG-048 — El preflight de producción cae al generar OpenAPI por colisión con `view.action`
 
@@ -396,14 +396,14 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** 1 (estructura organizacional) / arranque
 - **Fecha:** 2026-07-01
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:**
   1. Completar el wizard de bootstrap (crea el usuario admin inicial).
   2. Revisar el usuario creado: `is_superuser=True`, permanente.
 - **Esperado:** según la constitución (§ arranque), el primer admin es **temporal** — un puente para el primer ingreso que se **desactiva/borra** una vez que el admin se registra como empleado-administrador y crea a los demás.
 - **Actual:** el bootstrap crea un superusuario permanente; no existe el paso de "desactivar admin temporal".
 - **Impacto:** no bloquea el paso 1, pero deja un superusuario suelto no ligado a un empleado. A revisar cuando se implemente el empleado-administrador (paso 3, HR).
-- **Causa raíz / fix:** pendiente (decisión de diseño; probablemente en el paso 3).
+- **Causa raíz / fix:** faltaba una transición explícita entre el puente bootstrap y la administración RBAC normal. **Fix:** operación HR confirmada que vincula el usuario al expediente activo y sólo retira `is_superuser/is_staff` tras verificar membresía, `company_admin`, AdminGrants y permisos mínimos. Usa locks, scope tenant y auditoría; el replay idéntico responde 200 sin segunda mutación/evento y dos POST concurrentes producen una transición más un replay. La UI refresca la sesión/ACL inmediatamente.
 
 ## Bugs cerrados
 
