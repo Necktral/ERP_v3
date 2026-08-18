@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "generated_at": "2026-08-18T19:36:53.238Z",
+  "generated_at": "2026-08-18T20:32:49.057Z",
   "runner": "@playwright/test",
   "checks": [
     "sesión cacheada",

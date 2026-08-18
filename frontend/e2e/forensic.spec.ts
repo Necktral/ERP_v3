@@ -34,6 +34,34 @@ async function login(page: Page, username: string) {
   await expect(page).not.toHaveURL(/#\/login$/);
 }
 
+async function semanticSmoke(page: Page, path: string) {
+  const serverErrors: string[] = [];
+  const onResponse = (response: { status(): number; url(): string }) => {
+    if (response.status() >= 500 && response.url().includes('/api/')) {
+      serverErrors.push(`${response.status()} ${response.url()}`);
+    }
+  };
+  page.on('response', onResponse);
+  await page.goto(`/#${path}`);
+  await expect(page).not.toHaveURL(/login|\/403|forbidden/);
+  await expect(page.locator('#q-app')).toBeVisible();
+  const surface = page.locator('main:visible, [role="main"]:visible, .q-page:visible').first();
+  await expect(surface, `superficie principal visible en ${path}`).toBeVisible();
+  await expect(surface, `contenido principal no vacío en ${path}`).not.toBeEmpty();
+  await expect(page.locator(
+    'h1:visible, h2:visible, h3:visible, .q-table:visible, form:visible, .q-card:visible, '
+      + '[role="alert"]:visible, input:visible, [role="combobox"]:visible, button:visible',
+  ).first(), `control o título semántico visible en ${path}`).toBeVisible();
+  await page.waitForTimeout(350);
+  const tabs = page.locator('.q-tab:visible');
+  if (await tabs.count() > 1) {
+    await tabs.nth(1).click();
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+  }
+  page.off('response', onResponse);
+  expect(serverErrors, `API 5xx en ${path}`).toEqual([]);
+}
+
 test.describe('E2E por rol', () => {
   test('administrador recorre dominios críticos y roles restringidos se aíslan', async ({ browser }) => {
     const admin = await browser.newPage();
@@ -67,6 +95,34 @@ test.describe('E2E por rol', () => {
       'contador permitido contabilidad y denegado HR', 'cajero permitido caja y denegado contabilidad',
     ]);
   });
+
+  test('smoke semántico de dominios activos y dormidos no produce 5xx', async ({ browser }) => {
+    const page = await browser.newPage();
+    await login(page, 'forensic_admin');
+    const domains = [
+      '/recursos-humanos/trabajadores', '/nomina', '/asistencia', '/nomina/sala-de-pago',
+      '/compras', '/inventario/catalogo', '/facturacion', '/ventas', '/caja', '/caja/pagos',
+      '/contabilidad/diario', '/estacion', '/finca/ordenes', '/financiamiento/productores',
+      '/beneficio', '/flota', '/cec', '/conocimiento', '/diagnostico',
+    ];
+    for (const path of domains) await semanticSmoke(page, path);
+
+    // Guard reversible de doble envío: un formulario incompleto mantiene la acción deshabilitada.
+    await page.goto('/#/inventario/catalogo');
+    const newItem = page.getByRole('button', { name: /nuevo art[ií]culo/i }).first();
+    if (await newItem.isVisible()) {
+      await newItem.click();
+      const save = page.getByRole('button', { name: /guardar|crear/i }).last();
+      await expect(save).toBeDisabled();
+      await page.keyboard.press('Escape');
+    }
+    evidence('e2e_by_role.json', [
+      'login y contexto por rol', 'aislamiento de contador y cajero',
+      '19 dominios con superficie y control semántico visibles', 'respuestas API sin 5xx',
+      'interacción reversible de pestañas', 'guard UI contra doble envío inválido',
+    ]);
+    await page.close();
+  });
 });
 
 test.describe('Accesibilidad browser', () => {
@@ -79,9 +135,27 @@ test.describe('Accesibilidad browser', () => {
       await expect(page.locator(':focus')).toBeVisible();
       const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
       expect(result.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''))).toEqual([]);
+      await login(page, 'forensic_admin');
+      for (const path of ['/recursos-humanos/trabajadores', '/nomina', '/compras', '/inventario/catalogo', '/caja', '/contabilidad/diario']) {
+        await page.goto(`/#${path}`);
+        const firstFocusable = page.locator('button:visible, a[href]:visible, input:visible, [tabindex="0"]:visible').first();
+        await expect(firstFocusable, `control enfocable en ${path}`).toBeVisible();
+        await firstFocusable.focus();
+        await expect(page.locator(':focus')).toBeVisible();
+        await page.keyboard.press('Tab');
+        await expect(page.locator(':focus')).toBeVisible();
+        const screenResult = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+        expect(
+          screenResult.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? '')),
+          `${path} @ ${viewport.width}x${viewport.height}`,
+        ).toEqual([]);
+      }
       await context.close();
     }
-    evidence('accessibility_browser.json', ['axe serious/critical=0', 'teclado/foco visible', '360x800', '768x1024', '1440x900']);
+    evidence('accessibility_browser.json', [
+      'axe serious/critical=0 en login + 6 pantallas críticas', 'teclado/foco visible',
+      '360x800', '768x1024', '1440x900',
+    ]);
   });
 });
 

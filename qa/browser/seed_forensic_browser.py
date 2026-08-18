@@ -6,6 +6,7 @@ if os.getenv("FORENSIC_BROWSER_SEED") != "1":
 
 from django.contrib.auth import get_user_model
 from apps.modulos.iam.models import OrgUnit, UserMembership
+from apps.modulos.org.models import CompanyModule
 from apps.modulos.rbac.models import Role, RoleAssignment
 
 User = get_user_model()
@@ -14,6 +15,16 @@ branch = OrgUnit.objects.get(code="FORENSIC-BR")
 password = os.environ.get("FORENSIC_E2E_PASSWORD")
 if not password:
     raise SystemExit("Refusing seed: FORENSIC_E2E_PASSWORD is required")
+
+# Sólo el stack forense activa verticales dormidos para el smoke U27-U29. No se
+# hereda ni escribe en la base demo.
+for module_code in (
+    "inventory", "procurement", "portfolio", "payments", "pos", "fuel", "cec",
+    "finca", "fleet", "financiamiento", "beneficio", "knowledge", "diagnostics",
+):
+    CompanyModule.objects.update_or_create(
+        company=company, module_code=module_code, defaults={"is_enabled": True},
+    )
 
 for username, role_name in (("forensic_contador", "accountant"), ("forensic_cajero", "cashier")):
     user, _ = User.objects.get_or_create(username=username, defaults={"email": f"{username}@forensic.invalid"})

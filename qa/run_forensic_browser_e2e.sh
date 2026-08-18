@@ -5,7 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE=(docker compose -p erpv3_forensic -f "$ROOT_DIR/compose.forensic.yaml" -f "$ROOT_DIR/compose.forensic.browser.yaml")
 : "${FORENSIC_E2E_PASSWORD:?FORENSIC_E2E_PASSWORD is required}"
 
-"${COMPOSE[@]}" up -d db backend frontend
+if [[ "${FORENSIC_E2E_SKIP_COMPOSE_UP:-0}" != "1" ]]; then
+  "${COMPOSE[@]}" up -d db backend frontend
+fi
 if ! "${COMPOSE[@]}" exec -T backend python manage.py seed_dev_environment \
   --allow-non-debug --reset-password --admin-username forensic_admin \
   --admin-password "$FORENSIC_E2E_PASSWORD" --holding-name 'Holding Forense' \

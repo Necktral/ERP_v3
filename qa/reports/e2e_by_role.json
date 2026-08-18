@@ -1,11 +1,13 @@
 {
   "status": "passed",
-  "generated_at": "2026-08-18T19:36:44.639Z",
+  "generated_at": "2026-08-18T20:32:21.379Z",
   "runner": "@playwright/test",
   "checks": [
     "login y contexto por rol",
-    "admin: HR/nómina/compras/inventario/ventas/contabilidad",
-    "contador permitido contabilidad y denegado HR",
-    "cajero permitido caja y denegado contabilidad"
+    "aislamiento de contador y cajero",
+    "19 dominios con superficie y control semántico visibles",
+    "respuestas API sin 5xx",
+    "interacción reversible de pestañas",
+    "guard UI contra doble envío inválido"
   ]
 }
