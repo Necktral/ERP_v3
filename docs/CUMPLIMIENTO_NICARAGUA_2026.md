@@ -1,10 +1,12 @@
-# Contraste normativo Nicaragua — corte 2026-08-08
+# Contraste normativo Nicaragua — corte 2026-08-18
 
 ## Alcance y condición de cierre
 
 Este documento contrasta parámetros implementados con fuentes estatales disponibles. Es una
 verificación técnica, no una opinión legal ni contable. El cierre de cumplimiento requiere firma
 de Wis y revisión de un contador/abogado nicaragüense, especialmente para los puntos `LEGAL-PEND`.
+Las fuentes primarias enlazadas se volvieron a consultar el 2026-08-18; no se encontró una
+resolución MITRAB/Gaceta 2026 firmada que permita cerrar `LEGAL-PEND-003`.
 
 ## Fuentes primarias consultadas
 
