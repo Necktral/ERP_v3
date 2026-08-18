@@ -31,7 +31,6 @@
           Crea primero una receta.
         </span>
       </div>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="orders"
         :columns="orderCols"
@@ -39,7 +38,8 @@
         flat
         bordered
         :loading="loadingOrders"
-        :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }"
+        v-model:pagination="ordersPagination"
+        @request="ordersRequest"
         no-data-label="Sin órdenes de beneficio."
       >
         <template #body-cell-status="props">
@@ -63,7 +63,6 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva receta" @click="abrirAltaReceta" />
       </div>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="recetas"
         :columns="recipeCols"
@@ -71,7 +70,8 @@
         flat
         bordered
         :loading="loadingRecipes"
-        :pagination="{ rowsPerPage: 15, sortBy: 'code' }"
+        v-model:pagination="recipesPagination"
+        @request="recipesRequest"
         no-data-label="Sin recetas de transformación."
       />
     </div>
@@ -160,7 +160,7 @@ import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
 import ItemSelect from 'src/modules/inventory/components/ItemSelect.vue';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { apiErrorMessage } from 'src/core/api';
 import { listWarehouses } from 'src/modules/inventory/api';
 import {
@@ -170,8 +170,9 @@ import {
   closeOrder,
   createOrder,
   createRecipe,
-  listOrders,
+  listOrdersPage,
   listRecipes,
+  listRecipesPage,
   startOrder,
   type OrderRow,
   type OrderStatus,
@@ -180,8 +181,10 @@ import {
 
 const $q = useQuasar();
 const tab = ref<'ordenes' | 'recetas'>('ordenes');
-const { rows: orders, loading: loadingOrders, reload: reloadOrders } = useListado<OrderRow>(() => listOrders());
-const { rows: recetas, loading: loadingRecipes, reload: reloadRecipes } = useListado<RecipeRow>(listRecipes);
+const ordersListado = useListadoServer<OrderRow>(listOrdersPage, { rowsPerPage: 15 });
+const recipesListado = useListadoServer<RecipeRow>(listRecipesPage, { rowsPerPage: 15 });
+const { rows: orders, loading: loadingOrders, pagination: ordersPagination, onRequest: ordersRequest, reload: reloadOrders } = ordersListado;
+const { rows: recetas, loading: loadingRecipes, pagination: recipesPagination, onRequest: recipesRequest, reload: reloadRecipes } = recipesListado;
 
 function reloadAll() {
   void reloadOrders();

@@ -18,15 +18,15 @@
       <template #prepend><q-icon name="search" /></template>
     </q-input>
 
-    <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
     <q-table
-      :rows="filtradas"
+      :rows="rows"
       :columns="cols"
       row-key="id"
       flat
       bordered
       :loading="loading"
-      :pagination="{ rowsPerPage: 20 }"
+      v-model:pagination="pagination"
+      @request="onRequest"
       no-data-label="Aún no hay productores. Creá el primero con «Nuevo productor»."
     >
       <template #body-cell-acciones="props">
@@ -73,35 +73,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
 import PartySelect from 'src/modules/parties/components/PartySelect.vue';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { apiErrorMessage } from 'src/core/api';
 import {
   createProducer,
-  listProducers,
+  listProducersPage,
   producerDeposit,
   type ProducerDeposit,
   type ProducerRow,
 } from 'src/modules/financiamiento/api';
 
 const $q = useQuasar();
-const { rows, loading, reload } = useListado<ProducerRow>(listProducers);
-
 const filtro = ref('');
-const filtradas = computed(() => {
-  const q = filtro.value.trim().toLowerCase();
-  if (!q) return rows.value;
-  return rows.value.filter(
-    (r) =>
-      r.party_name.toLowerCase().includes(q) ||
-      r.acopio_code.toLowerCase().includes(q) ||
-      r.national_id.toLowerCase().includes(q),
-  );
-});
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<ProducerRow>(
+  (page) => listProducersPage(page, filtro.value.trim()),
+  { rowsPerPage: 20, errorMessage: 'No se pudieron cargar los productores.' },
+);
+watch(filtro, () => { void reload(); });
 
 const cols: QTableColumn<ProducerRow>[] = [
   { name: 'acopio_code', label: 'Código', field: 'acopio_code', align: 'left', sortable: true },

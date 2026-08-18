@@ -20,7 +20,6 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva solicitud" @click="abrirAlta" />
       </div>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="apps"
         :columns="appCols"
@@ -28,7 +27,8 @@
         flat
         bordered
         :loading="loadingApps"
-        :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }"
+        v-model:pagination="appsPagination"
+        @request="appsRequest"
         no-data-label="Sin solicitudes."
       >
         <template #body-cell-status="props">
@@ -49,7 +49,6 @@
 
     <!-- ===== PRÉSTAMOS ===== -->
     <div v-else>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="loans"
         :columns="loanCols"
@@ -57,7 +56,8 @@
         flat
         bordered
         :loading="loadingLoans"
-        :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }"
+        v-model:pagination="loansPagination"
+        @request="loansRequest"
         no-data-label="Sin préstamos."
       >
         <template #body-cell-status="props">
@@ -175,7 +175,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { apiErrorMessage } from 'src/core/api';
 import {
   APPLICATION_STATUS_LABELS,
@@ -185,8 +185,8 @@ import {
   approveApplication,
   createApplication,
   disburseApplication,
-  listApplications,
-  listLoans,
+  listApplicationsPage,
+  listLoansPage,
   listProducers,
   loanStatement,
   registerLoanPayment,
@@ -203,8 +203,10 @@ import {
 
 const $q = useQuasar();
 const tab = ref<'solicitudes' | 'prestamos'>('solicitudes');
-const { rows: apps, loading: loadingApps, reload: reloadApps } = useListado<ApplicationRow>(listApplications);
-const { rows: loans, loading: loadingLoans, reload: reloadLoans } = useListado<LoanRow>(() => listLoans());
+const appsListado = useListadoServer<ApplicationRow>(listApplicationsPage, { rowsPerPage: 15 });
+const loansListado = useListadoServer<LoanRow>(listLoansPage, { rowsPerPage: 15 });
+const { rows: apps, loading: loadingApps, pagination: appsPagination, onRequest: appsRequest, reload: reloadApps } = appsListado;
+const { rows: loans, loading: loadingLoans, pagination: loansPagination, onRequest: loansRequest, reload: reloadLoans } = loansListado;
 
 function reloadAll() {
   void reloadApps();

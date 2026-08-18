@@ -35,7 +35,6 @@
       />
     </div>
 
-    <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
     <q-table
       class="app-table"
       :rows="rows"
@@ -43,7 +42,8 @@
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      v-model:pagination="pagination"
+      @request="onRequest"
       no-data-label="Sin órdenes de trabajo."
     >
       <template #body-cell-lote="props">
@@ -204,7 +204,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatQty } from 'src/core/format';
 import {
   addInsumoManual,
@@ -212,7 +212,7 @@ import {
   issueInsumoFromStock,
   listLabors,
   listPlots,
-  listWorkOrders,
+  listWorkOrdersPage,
   updateWorkOrder,
   WORK_ORDER_STATUS_LABELS,
   type Labor,
@@ -234,8 +234,8 @@ const ctx = useContextStore();
 
 const filtroEstado = ref<string | null>(null);
 
-const { rows, loading, reload } = useListado<WorkOrder>(
-  () => listWorkOrders({ ...(filtroEstado.value ? { status: filtroEstado.value } : {}) }),
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<WorkOrder>(
+  (page) => listWorkOrdersPage(page, { ...(filtroEstado.value ? { status: filtroEstado.value } : {}) }),
   { errorMessage: 'No se pudieron cargar las órdenes.' },
 );
 

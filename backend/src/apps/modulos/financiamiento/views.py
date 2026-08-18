@@ -3,6 +3,7 @@ permiso ``financing.*``; los errores de negocio del vertical responden 422 con
 ``error.code`` estable (patrón del módulo ventas)."""
 from __future__ import annotations
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
@@ -106,7 +107,11 @@ class ProducerListCreateView(APIView):
         qs = ProducerProfile.objects.filter(company=company).select_related("party").order_by("acopio_code")
         search = request.query_params.get("search", "").strip()
         if search:
-            qs = qs.filter(party__display_name__icontains=search)
+            qs = qs.filter(
+                Q(party__display_name__icontains=search)
+                | Q(acopio_code__icontains=search)
+                | Q(party__national_id__icontains=search)
+            )
         return _paginated(request, qs, ProducerSerializer)
 
     def post(self, request):

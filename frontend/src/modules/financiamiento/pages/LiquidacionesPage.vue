@@ -20,8 +20,7 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva fijación" @click="abrirFix" />
       </div>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
-      <q-table :rows="fixations" :columns="fixCols" row-key="id" flat bordered :loading="loadingFix" :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }" no-data-label="Sin fijaciones.">
+      <q-table :rows="fixations" :columns="fixCols" row-key="id" flat bordered :loading="loadingFix" v-model:pagination="fixPagination" @request="fixRequest" no-data-label="Sin fijaciones.">
         <template #body-cell-status="props">
           <q-td :props="props">
             <q-chip dense square :color="props.row.status === 'OPEN' ? 'info' : 'positive'" text-color="white" :label="FIXATION_STATUS_LABELS[props.row.status]" />
@@ -35,8 +34,7 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva liquidación" @click="abrirLiq" />
       </div>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
-      <q-table :rows="liquidations" :columns="liqCols" row-key="id" flat bordered :loading="loadingLiq" :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }" no-data-label="Sin liquidaciones." />
+      <q-table :rows="liquidations" :columns="liqCols" row-key="id" flat bordered :loading="loadingLiq" v-model:pagination="liqPagination" @request="liqRequest" no-data-label="Sin liquidaciones." />
     </div>
 
     <!-- Nueva fijación -->
@@ -101,16 +99,16 @@ import { computed, onMounted, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { apiErrorMessage } from 'src/core/api';
 import {
   CURRENCY_LABELS,
   FIXATION_STATUS_LABELS,
   createFixation,
   createLiquidation,
-  listFixations,
+  listFixationsPage,
   listLoans,
-  listLiquidations,
+  listLiquidationsPage,
   listProducers,
   type Currency,
   type FixationRow,
@@ -119,8 +117,10 @@ import {
 
 const $q = useQuasar();
 const tab = ref<'fijaciones' | 'liquidaciones'>('fijaciones');
-const { rows: fixations, loading: loadingFix, reload: reloadFix } = useListado<FixationRow>(listFixations);
-const { rows: liquidations, loading: loadingLiq, reload: reloadLiq } = useListado<LiquidationRow>(listLiquidations);
+const fixListado = useListadoServer<FixationRow>(listFixationsPage, { rowsPerPage: 15 });
+const liqListado = useListadoServer<LiquidationRow>(listLiquidationsPage, { rowsPerPage: 15 });
+const { rows: fixations, loading: loadingFix, pagination: fixPagination, onRequest: fixRequest, reload: reloadFix } = fixListado;
+const { rows: liquidations, loading: loadingLiq, pagination: liqPagination, onRequest: liqRequest, reload: reloadLiq } = liqListado;
 
 function reloadAll() {
   void reloadFix();

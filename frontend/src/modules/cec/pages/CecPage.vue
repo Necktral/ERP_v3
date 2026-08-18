@@ -35,7 +35,6 @@
 
     <q-tab-panels v-model="tab" animated class="cec-panels">
       <q-tab-panel name="corridas" class="q-pa-none">
-        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="corridas"
@@ -43,7 +42,8 @@
           row-key="run_id"
           flat
           :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          v-model:pagination="corridasPagination"
+          @request="corridasRequest"
           no-data-label="Sin corridas de cierre."
         >
           <template #body-cell-estado="props">
@@ -71,7 +71,6 @@
       </q-tab-panel>
 
       <q-tab-panel name="excepciones" class="q-pa-none">
-        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="excepciones"
@@ -79,7 +78,8 @@
           row-key="id"
           flat
           :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          v-model:pagination="excepcionesPagination"
+          @request="excepcionesRequest"
           no-data-label="Sin excepciones — el cierre va limpio."
         >
           <template #body-cell-severidad="props">
@@ -126,10 +126,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDateTime } from 'src/core/format';
 import {
   advanceCloseRun,
@@ -139,8 +140,8 @@ import {
   createCloseRun,
   explainCloseRun,
   getCloseRunSummary,
-  listCecExceptions,
-  listCloseRuns,
+  listCecExceptionsPage,
+  listCloseRunsPage,
   resolveCecException,
   type CecException,
   type CloseRunRow,
@@ -153,9 +154,11 @@ const acl = useAclStore();
 const ctx = useContextStore();
 
 const tab = ref('corridas');
-const cargando = ref(false);
-const corridas = ref<CloseRunRow[]>([]);
-const excepciones = ref<CecException[]>([]);
+const corridasListado = useListadoServer<CloseRunRow>(listCloseRunsPage, { auto: false, errorMessage: 'No se pudieron cargar las corridas.' });
+const excepcionesListado = useListadoServer<CecException>(listCecExceptionsPage, { auto: false, errorMessage: 'No se pudieron cargar las excepciones.' });
+const { rows: corridas, pagination: corridasPagination, onRequest: corridasRequest } = corridasListado;
+const { rows: excepciones, pagination: excepcionesPagination, onRequest: excepcionesRequest } = excepcionesListado;
+const cargando = computed(() => corridasListado.loading.value || excepcionesListado.loading.value);
 
 function puede(code: string): boolean {
   const companyId = ctx.activeCompanyId;
@@ -191,26 +194,7 @@ const columnasExc: QTableColumn<CecException>[] = [
 ];
 
 async function recargar() {
-  cargando.value = true;
-  try {
-    const tareas: Promise<void>[] = [
-      listCloseRuns().then((r) => {
-        corridas.value = r;
-      }),
-    ];
-    if (puede('cec.exception.read')) {
-      tareas.push(
-        listCecExceptions().then((r) => {
-          excepciones.value = r;
-        }),
-      );
-    }
-    await Promise.all(tareas);
-  } catch (e) {
-    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar el CEC.') });
-  } finally {
-    cargando.value = false;
-  }
+  await Promise.all([corridasListado.reload(), ...(puede('cec.exception.read') ? [excepcionesListado.reload()] : [])]);
 }
 
 function crearCorrida() {

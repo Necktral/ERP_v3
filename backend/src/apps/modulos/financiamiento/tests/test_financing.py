@@ -31,6 +31,7 @@ from apps.modulos.financiamiento.models import (
     LoanStatus,
 )
 from apps.modulos.financiamiento.services import FinancingError
+from apps.modulos.financiamiento.views import ProducerListCreateView
 from apps.modulos.iam.models import OrgUnit
 from apps.modulos.org.module_catalog import get_spec
 from apps.modulos.parties.models import Party, PartyRole
@@ -65,6 +66,35 @@ def _producer(company, name="Cooperativa La Esperanza", acopio="01-001"):
         national_id=f"001-{uuid.uuid4().hex[:9]}",
     )
     return fin.create_producer(company=company, party=party, acopio_code=acopio)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("term", ["Especial", "AC-UNICO", "999-UNICO"])
+def test_producer_search_is_multifield_paginated_and_tenant_scoped(term):
+    _, company, _ = _scope()
+    _, other_company, _ = _scope()
+    party = Party.objects.create(
+        company=company,
+        party_type=Party.PartyType.NATURAL,
+        display_name="Productor Especial",
+        national_id="999-UNICO",
+    )
+    producer = fin.create_producer(company=company, party=party, acopio_code="AC-UNICO")
+    other_party = Party.objects.create(
+        company=other_company,
+        party_type=Party.PartyType.NATURAL,
+        display_name="Productor Especial",
+        national_id="999-UNICO",
+    )
+    fin.create_producer(company=other_company, party=other_party, acopio_code="AC-UNICO")
+    request = SimpleNamespace(company=company, query_params={"search": term, "limit": "1", "offset": "0"})
+
+    response = ProducerListCreateView().get(request)
+
+    assert response.status_code == 200
+    assert response.data["count"] == 1
+    assert len(response.data["results"]) == 1
+    assert response.data["results"][0]["id"] == producer.id
 
 
 def _setup_acopio(req, company, branch, actor):

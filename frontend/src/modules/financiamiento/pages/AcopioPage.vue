@@ -73,7 +73,6 @@
       </q-card-section>
     </q-card>
 
-    <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
     <q-table
       :rows="rows"
       :columns="cols"
@@ -81,7 +80,8 @@
       flat
       bordered
       :loading="loading"
-      :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }"
+      v-model:pagination="pagination"
+      @request="onRequest"
       no-data-label="Aún no hay recibos de café."
     >
       <template #body-cell-physical_state="props">
@@ -101,13 +101,13 @@ import { computed, onMounted, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { apiErrorMessage } from 'src/core/api';
 import {
   createReception,
   listProducers,
   listQualities,
-  listReceptions,
+  listReceptionsPage,
   PHYSICAL_STATE_LABELS,
   type PhysicalState,
   type ReceptionRow,
@@ -119,7 +119,7 @@ const $q = useQuasar();
 const acl = useAclStore();
 const ctx = useContextStore();
 const empresaNombre = computed(() => acl.companyName(ctx.activeCompanyId) ?? 'Empresa');
-const { rows, loading, reload } = useListado<ReceptionRow>(listReceptions);
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<ReceptionRow>(listReceptionsPage, { rowsPerPage: 15 });
 
 interface Opt {
   label: string;
