@@ -36,12 +36,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** accounting/certificación Phase7 / gate final
 - **Fecha:** 2026-08-18
 - **Severidad:** alta operativa
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** ejecutar `certify_phase7_gl_run --expect-blocked` sin configuración FX después de habilitar el retry de estados BLOCKED.
 - **Esperado:** dos evaluaciones bloqueadas sobre el mismo run, sin asientos ni cambios de balance, constituyen replay determinista y la certificación pasa.
 - **Actual:** el certificador exige `reval_second.idempotent=True`; el retry recuperable vuelve a evaluar y devuelve `False`, por lo que el comando falla aunque persista el mismo run bloqueado sin efectos financieros.
 - **Impacto:** el gate Phase7 produce un falso rojo y bloquea despliegues después de BUG-058.
-- **Causa raíz / fix:** pendiente; el certificador conserva el contrato anterior donde BLOCKED era terminal.
+- **Causa raíz / fix:** el certificador conservaba el contrato anterior donde BLOCKED era terminal. **Fix:** para un resultado bloqueado exige mismo `run_id`, mismo estado y ausencia de cambios contables; para un resultado exitoso conserva la idempotencia estricta. Regresión Phase7 y las dos rutas auth concurrentes: 3/3 verdes. Commit `7fbf957`.
 
 ### BUG-063 — Indicador “En línea” no alcanza contraste en la barra superior
 
