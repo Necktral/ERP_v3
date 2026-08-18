@@ -36,12 +36,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** ventas/POS / U18 y lente L2
 - **Fecha:** 2026-08-18
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** enviar en paralelo dos ventas POS idénticas con la misma `idempotency_key` sobre PostgreSQL.
 - **Esperado:** un envío crea la venta y el otro devuelve replay; una sola factura, salida de inventario y entrada de caja.
 - **Actual:** un hilo completa la venta y el otro propaga `IntegrityError` por `uniq_bill_idempotency_per_company`, resultando en HTTP 500.
 - **Impacto:** un doble toque/reintento de red concurrente parece una caída, induce nuevos reintentos y rompe el contrato explícito de idempotencia del POS.
-- **Causa raíz / fix:** pendiente; `create_draft` hace consulta y creación sin serializar por empresa+clave, por lo que ambos hilos observan ausencia antes del INSERT único.
+- **Causa raíz / fix:** `create_draft` consultaba y creaba sin serializar por empresa+clave. **Fix:** advisory lock transaccional por `company+idempotency_key`, seguido de lectura bloqueada; el segundo hilo reutiliza el documento confirmado. La regresión PostgreSQL concurrente y 35 pruebas POS/stock/autoservicio verifican una sola factura, salida de inventario y entrada de caja.
 
 ### BUG-054 — El rol cajero no puede acceder al POS que debe operar
 
