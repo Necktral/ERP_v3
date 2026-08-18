@@ -436,6 +436,19 @@ def _allocate_document_number(*, doc: BillingDocument) -> None:
         defaults={"next_number": 1, "updated_at": timezone.now()},
     )
     number = int(seq.next_number)
+    # PositiveIntegerField usa INTEGER en PostgreSQL. El valor máximo todavía
+    # cabría en el documento, pero no permite persistir el siguiente cursor;
+    # tratarlo como secuencia agotada evita un DataError/HTTP 500.
+    if number <= 0 or number >= 2_147_483_647:
+        raise BillingConflictError("secuencia fiscal agotada o fuera de rango")
+    if BillingDocument.objects.filter(
+        company=doc.company,
+        branch=doc.branch,
+        doc_type=doc.doc_type,
+        series=doc.series,
+        number=number,
+    ).exclude(pk=doc.pk).exists():
+        raise BillingConflictError("el siguiente número fiscal ya está asignado")
     seq.next_number = number + 1
     seq.updated_at = timezone.now()
     seq.save(update_fields=["next_number", "updated_at"])

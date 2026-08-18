@@ -321,6 +321,8 @@ class DocIssueView(APIView):
             )
         except BillingNotFoundError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except BillingConflictError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
         except BillingError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(out, status=status.HTTP_200_OK)
