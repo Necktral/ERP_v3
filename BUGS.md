@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-061 — Tooltip global de Quasar no alcanza contraste mínimo
+
+- **Módulo / paso del ROADMAP:** frontend/accesibilidad / L4
+- **Fecha:** 2026-08-18
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** abrir `/nomina` a 360 px, navegar por teclado hasta el control del encabezado que muestra tooltip y ejecutar axe.
+- **Esperado:** texto y fondo del tooltip mantienen contraste WCAG AA de al menos 4.5:1.
+- **Actual:** el tooltip usa `#fdfcf9` sobre un fondo efectivo `#bebdbb`, contraste 1.82:1; axe reporta `color-contrast` serio.
+- **Impacto:** la ayuda contextual resulta ilegible para personas con baja visión en pantallas críticas.
+- **Causa raíz / fix:** pendiente; el tema no fija una combinación opaca y estable para `.q-tooltip`.
+
 ### BUG-060 — Región desplazable de tabla vacía no es alcanzable por teclado en móvil
 
 - **Módulo / paso del ROADMAP:** frontend/accesibilidad / L4
