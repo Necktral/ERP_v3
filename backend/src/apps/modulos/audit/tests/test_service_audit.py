@@ -1,11 +1,14 @@
 """Tests del helper estándar de auditoría de servicio."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 import uuid
 
 import pytest
+from django.db import close_old_connections, connections
 
-from apps.modulos.audit.models import AuditEvent
+from apps.modulos.audit.models import AuditChainHeadV2, AuditEvent
 from apps.modulos.audit.service_audit import ServiceAuditRequest, build_audit_request, emit_service_event
 from apps.modulos.iam.models import OrgUnit
 
@@ -47,3 +50,38 @@ def test_emit_service_event_writes_audit_with_partition():
     # Integridad: el evento queda firmado/encadenado por el writer.
     assert ev.event_hash and ev.signature
     assert AuditEvent.objects.filter(pk=ev.pk).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_audit_chain_is_linear_under_concurrent_writers():
+    """U4: el lock por particion conserva una unica cadena sin bifurcaciones."""
+    company = _mk_company()
+    barrier = Barrier(4)
+
+    def emit(index: int):
+        close_old_connections()
+        barrier.wait(timeout=10)
+        event = emit_service_event(
+            company=company,
+            module="ORG",
+            event_type="ORG_COMPANY_CREATED",
+            reason_code="ORG_OK",
+            subject_type="COMPANY",
+            subject_id=str(company.id),
+            metadata={"writer": index},
+        )
+        close_old_connections()
+        return event.event_hash
+
+    try:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            hashes = set(pool.map(emit, range(4)))
+    finally:
+        connections.close_all()
+
+    partition = f"COMPANY:{company.id}"
+    rows = list(AuditEvent.objects.filter(partition_key=partition))
+    head = AuditChainHeadV2.objects.get(partition_key=partition)
+    assert len(rows) == 4
+    assert {row.event_hash for row in rows} == hashes
+    assert {row.prev_event_hash for row in rows} == ({""} | (hashes - {head.last_event_hash}))
