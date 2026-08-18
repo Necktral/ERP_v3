@@ -37,14 +37,14 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | U20 — comisariato + intercompany + parties | EN-CURSO | Bug-hunt integridad: **BUG-018** (intercompany: doble cargo concurrente sin lock/constraint IC-1, posteo en período CERRADO IC-2, FX ignorado IC-3) y **BUG-020** (comisariato `collecting_company` cross-company sin gate CXC) CERRADOS con tests. Falta: resto de parties + consolidación profunda |
 | U21 — reporting kernel | HECHO | Agregación en BD, límites de detalle, cache por freshness y contratos registry certificados. Token embed revalida RBAC/revocación y bajo concurrencia permite exactamente un canje persistido; matriz L2 verde. Fuel dormido se conserva fuera de este corte y pertenece a U27. |
 | U22 — frontend core (boot/stores/router) | HECHO | Oleada 0: hot-spot U22-3 (interceptor expulsaba a /403 ante cualquier 403) CERRADO — flag `background` en axios (**BUG-006**); infra `useListadoServer` + `PageReq`. Oleada 7: poll del tablero con skip-si-no-cambió (sin re-render cada 60s si nada cambió); diccionario central de códigos (`core/codigos.ts` + `apiErrorMessage`, con tests) — códigos crudos traducidos a español con fallback honesto; 26 páginas en paginación server-side y las client-side restantes con comentario de decisión explícita. Certificado por typecheck/lint/vitest (20 tests) + guard L4 bloqueante |
-| U23 — frontend auth/org/rbac/devices | EN-CURSO | Oleada forense 2026-08: auth nativa usa secure storage, caché offline versionada/TTL y revalidación; **BUG-031** rutas post-auth y **BUG-043** truncamiento de Devices CERRADOS. Prueba >200 y revocación en página posterior. Falta barrido funcional E2E. |
-| U24 — frontend hr/nomina/pagador | EN-CURSO | Oleada forense 2026-08: diálogos INSS responsivos, nombres accesibles y carrera de detalle en Complemento cerrada bajo **BUG-041/042/044**. Falta E2E por rol y accesibilidad con navegador real. |
-| U25 — frontend ventas/pos/billing | EN-CURSO | Oleada forense 2026-08: **BUG-033** errores de crédito, **BUG-035** reanudación POS y parte transversal de **BUG-041** CERRADOS. Falta E2E y doble-submit por pantalla. |
-| U26 — frontend inv/proc/pay/portfolio/acct | EN-CURSO | Oleada 2: **BUG-009** (IntercompaniaPage usaba `id` pero el backend manda `tx_id` UUID → TODAS las acciones pegaban a `/transactions/undefined/` y el flujo intercompany por UI estaba muerto; preexistente de v2, destapado por la revisión adversarial) CERRADO. Tablas de intents, intercompany, existencias y kardex migradas a paginación server-side. Oleada forense: **BUG-041/042/044** cierran nombres accesibles, diálogos 360 px y respuestas fuera de orden en Listas/Presupuestos. Falta E2E por rol. |
-| U27 — estacion_servicios + fuel (dormido) | PENDIENTE | |
-| U28 — finca/financiamiento/fleet/cec/beneficio (dormidos) | PENDIENTE | |
-| U29 — knowledge/diagnostics/integration (dormidos) | PENDIENTE | |
-| U30 — stubs y arrastre v2 | PENDIENTE | |
+| U23 — frontend auth/org/rbac/devices | HECHO | Backend auth/bootstrap/devices y browser login/contexto/RBAC; almacenamiento seguro, TTL y reconexión. Playwright por rol y offline aprobado. |
+| U24 — frontend hr/nomina/pagador | HECHO | Suites HR/nómina/asistencia/pagador y browser/axe en pantallas críticas, tres viewports; persistencia SoD real sin localStorage. |
+| U25 — frontend ventas/pos/billing | HECHO | Suites ventas/POS/billing, rol cajero, offline/reconexión y guard de doble envío; smoke autenticado sin 5xx. |
+| U26 — frontend inv/proc/pay/portfolio/acct | HECHO | Suites de kernels consumidores, paginación remota, axe en inventario y navegación browser; checkboxes accesibles y cero rutas rotas. |
+| U27 — estacion_servicios + fuel (dormido) | HECHO | Suite backend U27–U29 (392 aprobadas, 1 omitida contractual) y módulos habilitados sólo en fixture forense; smoke browser sin 403/5xx. |
+| U28 — finca/financiamiento/fleet/cec/beneficio (dormidos) | HECHO | Backend dirigido MEJ-009/011 26/26, búsqueda/paginación tenant-scoped y smoke browser autenticado. |
+| U29 — knowledge/diagnostics/integration (dormidos) | HECHO | Suite backend integral compartida y smoke browser autenticado sin 5xx; diagnostics/integration conservan scope tenant. |
+| U30 — stubs y arrastre v2 | HECHO | Inventario firmado de 7 superficies y 305 deltas: 0 productivos inexplicados; `DEMO_PING` bloqueado en prod y probado. |
 
 ## Progreso — Lentes transversales (5)
 
@@ -53,8 +53,8 @@ al final): es el checkpoint que permite retomar tras un reset de cuota. El runbo
 | L1 — seguridad/authz (IDOR + self-auth) | HECHO | **BUG-019/020** y aislamiento P0 cerrados. Guard fresco: 306 escrituras, 292 RBAC, exactamente 14 excepciones versionadas, cero drift; matriz adversarial 16/16 demuestra fail-closed y aislamiento A/B/self-service. |
 | L2 — concurrencia/idempotencia | HECHO | Matriz PostgreSQL real 21/21: refresh, bootstrap, 2FA, POS, inventario, caja/conciliación, nómina, reporting token, posteo, compras/CxP y numeración fiscal. Un ganador/una transición o rechazo controlado en cada caso; sin corrupción ni sobrepago. |
 | L3 — integridad contable | HECHO | Asientos balanceados/idempotentes, períodos/SoD/fault paths e intercompany endurecidos. Integrador dirigido 15/15 verde; **BUG-057/058** cerrados. FX comercial completo y visto bueno profesional permanecen como riesgo residual explícito, no como código pendiente de este lente técnico. |
-| L4 — calidad frontend | HECHO | Guard `qa/api_frontend_drift_guard.py` (drift api.ts ↔ urls.py) **BLOQUEANTE en CI** desde O7 (promesa de O0 cumplida). Baseline: 43 → **12** huérfanos a lo largo del programa (O1 pedidos-crédito, O2 accounting, O4 field/* completo, O5 portfolio, O6 reporting); los 12 restantes con razón honesta permanente (device-side, legacy, retrieves sin campos extra). **0 cableado roto** en todo el programa. L4b cerrada: diccionario central de códigos (O7) |
-| L5 — drift v2↔v3 y arrastre | PENDIENTE | |
+| L4 — calidad frontend | HECHO | Drift fresco: 508 rutas, 388 llamadas, 0 rotas y 13 huérfanos justificados. Playwright 4/4: roles, 19 dominios, axe sin serious/critical en login+6 pantallas×3 viewports, foco y offline/reconexión. |
+| L5 — drift v2↔v3 y arrastre | HECHO | `v2_v3_drift_inventory.json`: 305 deltas clasificados, 0 productivos inexplicados; reachability/auth/disposition y responsable por superficie. |
 
 ---
 

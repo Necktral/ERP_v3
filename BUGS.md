@@ -36,60 +36,60 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** frontend/conectividad/accesibilidad / L4
 - **Fecha:** 2026-08-18
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** abrir `/recursos-humanos/trabajadores` a 768×1024 con conexión activa y ejecutar axe.
 - **Esperado:** la etiqueta de estado mantiene contraste WCAG AA de al menos 4.5:1 sobre la barra clara.
 - **Actual:** `.conn__label` usa `#21ba45` sobre `#fffdf8`, contraste 2.52:1; axe reporta `color-contrast` serio.
 - **Impacto:** personas con baja visión no distinguen de forma fiable el estado de conectividad.
-- **Causa raíz / fix:** pendiente; el verde semántico se usa directamente como color de texto sin variante oscura accesible.
+- **Causa raíz / fix:** se usaba el verde semántico directamente como texto. **Fix:** variante `#137333` con contraste AA y regresión estática; axe pasó en 3 viewports. Commit `1425d1e`.
 
 ### BUG-062 — Checkboxes de selección del catálogo no tienen nombre accesible
 
 - **Módulo / paso del ROADMAP:** inventario/frontend/accesibilidad / L4
 - **Fecha:** 2026-08-18
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** abrir `/inventario/catalogo` a 360 px y ejecutar axe sobre la tabla con selección.
 - **Esperado:** el checkbox de selección masiva y cada checkbox de fila exponen un nombre específico mediante texto, `aria-label` o `aria-labelledby`.
 - **Actual:** QTable genera `.q-checkbox[role=checkbox]` con estado ARIA pero sin nombre; axe reporta `aria-toggle-field-name` serio.
 - **Impacto:** usuarios de lector de pantalla no pueden distinguir la selección masiva ni qué fila están seleccionando.
-- **Causa raíz / fix:** pendiente; los slots de selección no proporcionan etiquetas accesibles.
+- **Causa raíz / fix:** los slots de selección no proporcionaban etiquetas. **Fix:** etiquetas ARIA específicas para selección masiva y por fila, con regresión. Commit `1425d1e`.
 
 ### BUG-061 — Tooltip global de Quasar no alcanza contraste mínimo
 
 - **Módulo / paso del ROADMAP:** frontend/accesibilidad / L4
 - **Fecha:** 2026-08-18
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** abrir `/nomina` a 360 px, navegar por teclado hasta el control del encabezado que muestra tooltip y ejecutar axe.
 - **Esperado:** texto y fondo del tooltip mantienen contraste WCAG AA de al menos 4.5:1.
 - **Actual:** el tooltip usa `#fdfcf9` sobre un fondo efectivo `#bebdbb`, contraste 1.82:1; axe reporta `color-contrast` serio.
 - **Impacto:** la ayuda contextual resulta ilegible para personas con baja visión en pantallas críticas.
-- **Causa raíz / fix:** pendiente; el tema no fija una combinación opaca y estable para `.q-tooltip`.
+- **Causa raíz / fix:** el tema no fijaba una combinación opaca estable. **Fix:** estilo global de tooltip con colores AA y regresión. Commit `1425d1e`.
 
 ### BUG-060 — Región desplazable de tabla vacía no es alcanzable por teclado en móvil
 
 - **Módulo / paso del ROADMAP:** frontend/accesibilidad / L4
 - **Fecha:** 2026-08-18
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** abrir Trabajadores a 360 px sin filas y ejecutar axe o recorrer las regiones desplazables con teclado.
 - **Esperado:** toda región desplazable es enfocable o no se anuncia como región desplazable cuando está vacía.
 - **Actual:** `.q-table__middle.scroll` queda sin foco y axe reporta `scrollable-region-focusable` serio.
 - **Impacto:** usuarios de teclado no pueden alcanzar ni controlar de forma fiable el contenedor de la tabla en viewport móvil.
-- **Causa raíz / fix:** pendiente; falta normalizar accesibilidad de las regiones scroll creadas por QTable.
+- **Causa raíz / fix:** las regiones scroll creadas por QTable no se normalizaban. **Fix:** boot accesible asigna foco y nombre a regiones de tabla, con regresión. Commit `1425d1e`.
 
 ### BUG-059 — Navegación autenticada viola la estructura ARIA de listas
 
 - **Módulo / paso del ROADMAP:** frontend/AppLayout / L4
 - **Fecha:** 2026-08-18
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** iniciar sesión, abrir cualquier pantalla con drawer y ejecutar axe.
 - **Esperado:** los hijos directos de un contenedor `role=list` exponen `role=listitem` o se usa una semántica de navegación compatible.
 - **Actual:** AppLayout genera `.q-list[role=list]` con enlaces enfocables hijos sin `role=listitem`; axe reporta `aria-required-children` crítico.
 - **Impacto:** lectores de pantalla reciben una jerarquía inválida en toda la navegación autenticada.
-- **Causa raíz / fix:** pendiente; la composición QList/QItem no conserva la estructura ARIA requerida.
+- **Causa raíz / fix:** la composición QList/QItem exponía una lista ARIA inválida. **Fix:** navegación etiquetada con semántica compatible y regresión. Commit `1425d1e`.
 
 ### BUG-058 — Una revaluación FX bloqueada nunca puede reintentarse
 
