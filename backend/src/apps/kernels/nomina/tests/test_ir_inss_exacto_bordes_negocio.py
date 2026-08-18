@@ -4,7 +4,7 @@ Ataca el invariante legal NM-01 (la base del IR resta el INSS laboral, art. 21 L
 con NÚMEROS CONCRETOS, no triviales, y la anualización por frecuencia real:
   - Mensual quincenal (×24) de salario alto → tramo 5 del IR.
   - El INSS patronal toma el tramo correcto según el conteo REAL de trabajadores
-    (BUG-7): ≤50 = 21.5%, >50 = 22.5%.
+    (política configurada actual): <50 = 21.5%, >=50 = 22.5%.
   - Trabajador SIN INSS: INSS laboral/patronal/INATEC = 0 e IR sobre el bruto.
   - Jornalero de salario mínimo agro → IR = 0 (no tributa).
 
@@ -132,6 +132,41 @@ def test_inss_patronal_tramo_grande_con_mas_de_50_trabajadores(ctx):
     assert entry.inss_patronal == Decimal("5625.00"), (
         f"BUG-7: patronal con >50 trab esperado 5625.00 (22.5%), obtenido {entry.inss_patronal}"
     )
+
+
+@pytest.mark.parametrize(
+    ("worker_count", "expected_patronal"),
+    [
+        (49, Decimal("5375.00")),
+        (50, Decimal("5625.00")),
+        (51, Decimal("5625.00")),
+    ],
+)
+def test_inss_ir_golden_frontera_politica_configurada(ctx, worker_count, expected_patronal):
+    """Congela la política técnica vigente; su validez legal sigue en LEGAL-PEND-002."""
+    period = _period(ctx.company)
+    sheet = _sheet(period, ctx.branch, has_inss=True)
+    entry = PayrollEntry.objects.create(
+        sheet=sheet,
+        employee=_employee(ctx.company),
+        full_name="Trab Test",
+        has_inss=True,
+        salary_type=SalaryType.MONTHLY,
+        payment_frequency=PeriodType.FIRST_HALF,
+        base_salary_nio=Decimal("50000.00"),
+        days_in_period=15,
+        days_worked=Decimal("15"),
+    )
+
+    compute_entry(entry=entry, worker_count=worker_count)
+    entry.refresh_from_db()
+
+    assert entry.quincenal_salary == Decimal("25000.00")
+    assert entry.inss_laboral == Decimal("1750.00")
+    assert entry.inss_patronal == expected_patronal
+    assert entry.ir_amount == Decimal("4162.50")
+    assert entry.total_deductions == Decimal("5912.50")
+    assert entry.net_to_pay == Decimal("19087.50")
 
 
 def test_sin_inss_no_retiene_inss_e_ir_sobre_bruto(ctx):
