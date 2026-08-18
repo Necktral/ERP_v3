@@ -27,6 +27,9 @@
 - **MEJ-008 — HECHA:** cada request reporting revalida RBAC y usa la intersección con el techo firmado del token; revocaciones aplican de inmediato y altas posteriores no expanden la capability.
 - **MEJ-009 — EN CURSO:** Devices ya conserva metadatos y pagina server-side con prueba del registro 201; continúa la medición de tablas restantes.
 - **MEJ-010:** query budgets, EXPLAIN e índices sólo con volumen representativo.
+- **MEJ-011 — EN CURSO:** `DEMO_PING` se conserva sólo como sonda de pipeline en dev/test y
+  debe quedar rechazado explícitamente en producción; el inventario U30 prueba su alcanzabilidad
+  y el gate por entorno.
 
 ## Matriz de ejecución
 
