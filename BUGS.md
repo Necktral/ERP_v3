@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-057 — Consolidación intercompany elimina moneda extranjera como si fuera NIO
+
+- **Módulo / paso del ROADMAP:** accounting/intercompany / L3 integridad contable
+- **Fecha:** 2026-08-18
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** introducir por importación/legacy una transacción intercompany CONFIRMED/CLOSED en USD y ejecutar `run_consolidation`.
+- **Esperado:** conversión FX completa y auditable o rechazo fail-closed de moneda no funcional.
+- **Actual:** la consolidación usa `tx.amount` nominal sin validar `tx.currency` ni convertir; elimina USD como NIO.
+- **Impacto:** eliminaciones y estados consolidados pueden quedar materialmente falsos sin alerta.
+- **Causa raíz / fix:** pendiente; el loop de consolidación confía en que todo origen fue creado por el flujo NIO y no protege registros legacy/importados.
+
 ### BUG-056 — Exportaciones de reporting no tienen límites de memoria ni tamaño
 
 - **Módulo / paso del ROADMAP:** reporting / U21 y rendimiento L5
