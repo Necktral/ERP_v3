@@ -31,6 +31,30 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-053 — La barra global de carga no tiene nombre accesible
+
+- **Módulo / paso del ROADMAP:** frontend / accesibilidad U23–U26
+- **Fecha:** 2026-08-18
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** iniciar una navegación o petición que active la barra global de Quasar y ejecutar axe/inspeccionar el árbol accesible.
+- **Esperado:** el elemento `role=progressbar` expone un nombre accesible en español.
+- **Actual:** la barra global aparece sin nombre; axe lo clasifica como impacto serio.
+- **Impacto:** usuarios de lector de pantalla reciben un indicador de progreso sin propósito identificable.
+- **Causa raíz / fix:** pendiente; falta etiquetar la instancia global de loading bar o proveer un indicador equivalente accesible.
+
+### BUG-052 — La configuración móvil impide ampliar la interfaz
+
+- **Módulo / paso del ROADMAP:** frontend / accesibilidad móvil U23–U26
+- **Fecha:** 2026-08-18
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** abrir la SPA en viewport móvil e inspeccionar el meta viewport o ejecutar axe.
+- **Esperado:** el usuario puede ampliar el contenido conforme WCAG 1.4.4.
+- **Actual:** el viewport generado contiene `user-scalable=no`/`maximum-scale=1`; axe lo clasifica como crítico.
+- **Impacto:** personas con baja visión no pueden usar zoom del navegador y parte de la interfaz resulta inaccesible.
+- **Causa raíz / fix:** pendiente; la configuración de Quasar genera restricciones de escala incompatibles con accesibilidad.
+
 ### BUG-051 — Colisión o agotamiento de numeración fiscal termina en HTTP 500
 
 - **Módulo / paso del ROADMAP:** facturación / U9 numeración y contingencia fiscal
