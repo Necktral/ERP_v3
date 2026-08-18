@@ -31,6 +31,24 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-066 — El contexto Docker incluye secretos y artefactos locales
+
+- **Módulo:** Docker / supply chain
+- **Fecha:** 2026-08-18 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** construir las imágenes desde la raíz del repositorio sin `.dockerignore`; Docker envía `.env`, `.git`, reportes, cachés, dependencias y builds locales al daemon.
+- **Esperado:** secretos y artefactos locales quedan fuera del contexto; la compilación recibe sólo fuentes y manifiestos necesarios.
+- **Actual:** el contexto superaba 800 MiB, exponía `.env` al daemon y el build forense fallaba al resolver el symlink de ese archivo.
+- **Causa raíz / fix:** faltaba `.dockerignore`. Se agregó una política que excluye secretos, Git, cachés, dependencias, builds y evidencias QA; el contexto quedó reducido a ~21 MiB y la imagen compila sin incluir `.env`.
+
+### BUG-065 — Una prueba de throttling contamina las tasas globales de DRF
+
+- **Módulo:** auth / QA
+- **Fecha:** 2026-08-18 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** ejecutar la suite completa; `test_me_and_context_throttling_scopes` recarga `api_settings` y `SimpleRateThrottle.THROTTLE_RATES` con un mapa parcial. Después del `override_settings`, esos caches siguen sin `auth_logout`/`auth_refresh`.
+- **Esperado:** cada prueba restaura la configuración global; logout ajeno responde 403 y refresh concurrente produce `[200, 401]`.
+- **Actual:** ambos endpoints lanzaban `ImproperlyConfigured` y el handler los convertía en HTTP 500.
+- **Causa raíz / fix:** el override restauraba Django settings, pero no los caches de DRF. Un fixture autouse recarga ambos después de la prueba; las regresiones auth se ejecutan también después del test contaminante.
+
 ### BUG-064 — Certificador Phase7 rechaza un bloqueo recuperable determinista
 
 - **Módulo / paso del ROADMAP:** accounting/certificación Phase7 / gate final

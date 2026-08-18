@@ -11,6 +11,14 @@ from apps.modulos.iam.models import OrgUnit, UserMembership
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def _restore_drf_throttle_settings():
+    """Evita que los caches globales de DRF escapen de este módulo."""
+    yield
+    api_settings.reload()
+    SimpleRateThrottle.THROTTLE_RATES = api_settings.DEFAULT_THROTTLE_RATES
+
+
 def _demo_pwd() -> str:
     return "Aa!9_Throttle_Zx7"
 
