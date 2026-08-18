@@ -36,12 +36,12 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** financiamiento/acopio / MEJ-009 y U28
 - **Fecha:** 2026-08-18
 - **Severidad:** media
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** abrir un selector de productor y buscar un registro existente únicamente por `acopio_code` o `party.national_id`.
 - **Esperado:** la búsqueda remota conserva el contrato visible de nombre, código de acopio y cédula, siempre dentro de la empresa activa.
 - **Actual:** `ProducerListCreateView` sólo filtra `party.display_name`; migrar el selector a server-side haría invisibles coincidencias por código/cédula que antes estaban disponibles en el conjunto local.
 - **Impacto:** el operador puede no encontrar al productor correcto durante recepción, préstamo o fijación, bloqueando una operación válida.
-- **Causa raíz / fix:** filtro remoto más estrecho que el contrato de la UI. Se ampliará con OR sobre nombre/código/cédula, conservando scope tenant, orden y paginación; prueba de regresión cubrirá los tres campos y una coincidencia cross-tenant.
+- **Causa raíz / fix:** filtro remoto más estrecho que el contrato de la UI. **Fix:** búsqueda OR por nombre, `acopio_code` y `national_id`, siempre company-scoped y paginada. La regresión parametrizada cubre los tres campos y exclusión cross-tenant. Los historiales de Financiamiento, Beneficio, CEC, Finca y Diagnostics quedaron además en QTable server-side, sin `collect-all`.
 
 ### BUG-049 — La reconciliación operacional del cierre ejecuta una consulta por asiento
 
