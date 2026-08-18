@@ -55,8 +55,8 @@ def test_list_drivers_and_maintenance_catalogs_scoped():
     MaintenancePlan.objects.create(company=company, name="Plan camiones")
 
     r = client.get("/api/fleet/drivers/")
-    assert r.status_code == 200 and len(r.data) == 1
-    assert r.data[0]["full_name"] == "Carlos Conductor"
+    assert r.status_code == 200 and len(r.data["results"]) == 1
+    assert r.data["results"][0]["full_name"] == "Carlos Conductor"
 
     r = client.get("/api/fleet/maintenance/types/")
     assert r.status_code == 200 and len(r.data) == 1 and r.data[0]["code"] == "OIL"
@@ -71,6 +71,31 @@ def test_list_drivers_requires_read_perm():
     sin_perm = _client(company=company, branch=branch, perms=("fleet.asset.read",))
     assert sin_perm.get("/api/fleet/drivers/").status_code == 403
     assert sin_perm.get("/api/fleet/maintenance/types/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_assets_and_drivers_search_are_bounded_and_tenant_scoped():
+    _, company, branch = _mk_org()
+    _, other, _ = _mk_org()
+    client = _client(company=company, branch=branch, perms=("fleet.asset.read", "fleet.driver.read"))
+    FleetAsset.objects.bulk_create([
+        FleetAsset(company=company, asset_type=AssetType.VEHICLE, code=f"TR-{i:03d}", name=f"Camión {i}")
+        for i in range(30)
+    ])
+    FleetAsset.objects.create(company=other, asset_type=AssetType.VEHICLE, code="TR-AJENO", name="Camión ajeno")
+    Driver.objects.create(company=company, full_name="Ana Local", license_number="LIC-LOCAL")
+    Driver.objects.create(company=other, full_name="Ana Ajena", license_number="LIC-AJENA")
+
+    assets = client.get("/api/fleet/assets/?limit=5&offset=0&search=TR-")
+    assert assets.status_code == 200
+    assert assets.data["count"] == 30
+    assert len(assets.data["results"]) == 5
+    assert all(row["code"] != "TR-AJENO" for row in assets.data["results"])
+
+    drivers = client.get("/api/fleet/drivers/?limit=25&offset=0&search=Ana")
+    assert drivers.status_code == 200
+    assert drivers.data["count"] == 1
+    assert drivers.data["results"][0]["license_number"] == "LIC-LOCAL"
 
 
 @pytest.mark.django_db

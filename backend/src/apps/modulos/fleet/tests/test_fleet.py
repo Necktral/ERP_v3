@@ -278,4 +278,4 @@ def test_asset_endpoint_create_and_list_http():
     assert r.data["asset_type"] == "MACHINERY"
     r2 = api.get("/api/fleet/assets/")
     assert r2.status_code == 200
-    assert any(a["code"] == "T1" for a in r2.data)
+    assert any(a["code"] == "T1" for a in r2.data["results"])

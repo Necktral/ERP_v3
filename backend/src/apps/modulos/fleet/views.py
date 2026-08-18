@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.modulos.common.pagination import coerce_int_param
+from apps.modulos.common.pagination import coerce_int_param, get_limit_offset, paginate_queryset
 from apps.modulos.common.permissions import rbac_permission
 from apps.modulos.hr.models import Employee
 from apps.modulos.iam.models import OrgUnit
@@ -73,7 +74,15 @@ class AssetView(APIView):
         rows = FleetAsset.objects.filter(company=company).order_by("code")
         if request.query_params.get("asset_type"):
             rows = rows.filter(asset_type=request.query_params["asset_type"])
-        return Response([_asset_payload(a) for a in rows], status=status.HTTP_200_OK)
+        search = request.query_params.get("search", "").strip()
+        if search:
+            rows = rows.filter(Q(code__icontains=search) | Q(name__icontains=search) | Q(plate__icontains=search))
+        limit, offset = get_limit_offset(request)
+        total, page = paginate_queryset(rows, limit=limit, offset=offset)
+        return Response(
+            {"count": total, "limit": limit, "offset": offset, "results": [_asset_payload(a) for a in page]},
+            status=status.HTTP_200_OK,
+        )
 
     def post(self, request):
         company = _company(request)
@@ -100,8 +109,15 @@ class DriverView(APIView):
         rows = Driver.objects.filter(company=company).order_by("full_name")
         if request.query_params.get("status"):
             rows = rows.filter(status=request.query_params["status"])
+        search = request.query_params.get("search", "").strip()
+        if search:
+            rows = rows.filter(
+                Q(full_name__icontains=search) | Q(national_id__icontains=search) | Q(license_number__icontains=search)
+            )
+        limit, offset = get_limit_offset(request)
+        total, rows = paginate_queryset(rows, limit=limit, offset=offset)
         return Response(
-            [
+            {"count": total, "limit": limit, "offset": offset, "results": [
                 {
                     "id": d.id,
                     "full_name": d.full_name,
@@ -113,7 +129,7 @@ class DriverView(APIView):
                     "employee_id": d.employee_id,
                 }
                 for d in rows
-            ],
+            ]},
             status=status.HTTP_200_OK,
         )
 

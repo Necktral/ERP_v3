@@ -318,6 +318,9 @@ class LoanListView(APIView):
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(Q(reference__icontains=search) | Q(producer__party__display_name__icontains=search))
         return _paginated(request, qs.order_by("-id"), LoanSerializer)
 
 

@@ -135,6 +135,9 @@ class PlotListCreateView(MethodThrottleScopeMixin, APIView):
         finca_id = request.query_params.get("finca_id")
         if finca_id:
             qs = qs.filter(finca_id=finca_id)
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(Q(code__icontains=search) | Q(name__icontains=search) | Q(crop__icontains=search))
         limit, offset = get_limit_offset(request)
         total, rows = paginate_queryset(qs, limit=limit, offset=offset)
         return Response(
