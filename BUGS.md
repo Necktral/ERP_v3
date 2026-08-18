@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-051 — Colisión o agotamiento de numeración fiscal termina en HTTP 500
+
+- **Módulo / paso del ROADMAP:** facturación / U9 numeración y contingencia fiscal
+- **Fecha:** 2026-08-18
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** preparar una secuencia cuyo próximo número ya exista, o cuyo `next_number` sea `2147483647`, e intentar emitir una factura.
+- **Esperado:** conflicto de dominio controlado, transacción revertida y documento todavía en borrador, sin consumir el número.
+- **Actual:** la colisión propaga `IntegrityError` y el agotamiento `DataError`; la vista no captura esas excepciones y responde HTTP 500.
+- **Impacto:** una condición fiscal operable se presenta como caída interna, impide una recuperación guiada y puede generar reintentos inseguros del operador.
+- **Causa raíz / fix:** pendiente; la asignación no traduce errores de unicidad/rango de PostgreSQL a `BillingConflictError` ni valida el límite antes de incrementar.
+
 ### BUG-050 — La búsqueda server-side de productores omite código de acopio y cédula
 
 - **Módulo / paso del ROADMAP:** financiamiento/acopio / MEJ-009 y U28
