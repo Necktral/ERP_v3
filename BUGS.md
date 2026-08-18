@@ -36,24 +36,24 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 - **Módulo / paso del ROADMAP:** accounting / revaluación FX L3
 - **Fecha:** 2026-08-18
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** ejecutar revaluación sin tasa/config, obtener BLOCKED, corregir la causa y repetir el mismo período/scope.
 - **Esperado:** el retry reevalúa idempotentemente y completa una sola vez con la configuración ya corregida.
 - **Actual:** `run_fx_revaluation` considera BLOCKED terminal igual que COMPLETED y devuelve el bloqueo anterior sin volver a evaluar.
 - **Impacto:** el cierre queda atascado aun después de reparar la causa; requiere manipulación manual de estado.
-- **Causa raíz / fix:** pendiente; el fast-path de idempotencia agrupa estados terminales exitosos y recuperables.
+- **Causa raíz / fix:** el fast-path de idempotencia agrupaba estados exitosos y recuperables. **Fix:** sólo `COMPLETED` es terminal; `BLOCKED` vuelve a evaluar tras corregir la causa, sin duplicar run ni auditoría. Regresión dirigida incluida en el lote U13/L3: 15/15 pruebas verdes. Commit `d3e1d90`.
 
 ### BUG-057 — Consolidación intercompany elimina moneda extranjera como si fuera NIO
 
 - **Módulo / paso del ROADMAP:** accounting/intercompany / L3 integridad contable
 - **Fecha:** 2026-08-18
 - **Severidad:** alta
-- **Estado:** ABIERTO
+- **Estado:** CERRADO
 - **Pasos para reproducir:** introducir por importación/legacy una transacción intercompany CONFIRMED/CLOSED en USD y ejecutar `run_consolidation`.
 - **Esperado:** conversión FX completa y auditable o rechazo fail-closed de moneda no funcional.
 - **Actual:** la consolidación usa `tx.amount` nominal sin validar `tx.currency` ni convertir; elimina USD como NIO.
 - **Impacto:** eliminaciones y estados consolidados pueden quedar materialmente falsos sin alerta.
-- **Causa raíz / fix:** pendiente; el loop de consolidación confía en que todo origen fue creado por el flujo NIO y no protege registros legacy/importados.
+- **Causa raíz / fix:** el loop confiaba en que todo origen era NIO. **Fix:** valida cada transacción contra la moneda funcional y bloquea de forma atómica cualquier moneda no soportada, incluso con `strict=False`, antes de persistir enlaces de eliminación. Regresión dirigida incluida en el lote U13/L3: 15/15 pruebas verdes. Commit `d3e1d90`.
 
 ### BUG-056 — Exportaciones de reporting no tienen límites de memoria ni tamaño
 
