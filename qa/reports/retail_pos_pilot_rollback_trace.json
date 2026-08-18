@@ -3,17 +3,41 @@
     "name": "login",
     "request": {
       "method": "POST",
-      "url": "http://localhost:8000/api/auth/login/",
+      "url": "http://127.0.0.1:18080/api/auth/login/",
       "payload": {
-        "username": "qa_pos_pilot_36504377",
+        "username": "qa_pos_pilot_1a3194ff",
         "password": "pass12345"
       }
     },
     "response": {
       "http_status": 200,
       "body": {
-        "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc0NTY4NDA5LCJpYXQiOjE3NzQ1Njc4MDksImp0aSI6IjgxOGFkODQwN2Q2ZjQyMDY4YTc5NDBiOWYwZDBhNDg3IiwidXNlcl9pZCI6IjE2In0.HcvI0iE7J4T4xMeMrn3_RXuE1MAksWGXZtzJIUhAysA",
-        "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3NTE3MjYwOSwiaWF0IjoxNzc0NTY3ODA5LCJqdGkiOiI4MGY2NWY4Y2Y0OTk0Mjg1ODc3MDUzMjU5OGY4YjY2OCIsInVzZXJfaWQiOiIxNiJ9.8_MCgw_lAaF6heLuL_RCeGCbQUG4wjyeZAC651-Uw68"
+        "access": "[REDACTED]",
+        "refresh": "[REDACTED]"
+      }
+    }
+  },
+  {
+    "name": "kill_switch_revoked_device",
+    "request": {
+      "method": "GET",
+      "url": "http://127.0.0.1:18080/api/retail/pos/cockpit/",
+      "payload": {}
+    },
+    "response": {
+      "http_status": 403,
+      "body": {
+        "error": {
+          "code": "DEVICE_REVOKED",
+          "http_status": 403,
+          "message": "Este dispositivo fue revocado. Contactá al administrador.",
+          "details": {
+            "detail": "Este dispositivo fue revocado. Contactá al administrador."
+          },
+          "request_id": "c100f979beb5441f9b8cf1632766e62e",
+          "timestamp": "2026-08-18T19:48:00.884615Z",
+          "retryable": false
+        }
       }
     }
   },
@@ -21,7 +45,7 @@
     "name": "open_shift",
     "request": {
       "method": "POST",
-      "url": "http://localhost:8000/api/fuel/shifts/open/",
+      "url": "http://127.0.0.1:18080/api/fuel/shifts/open/",
       "payload": {
         "note": "pilot-pos-smoke"
       }
@@ -29,9 +53,9 @@
     "response": {
       "http_status": 201,
       "body": {
-        "id": 5,
+        "id": 6,
         "status": "OPEN",
-        "opened_at": "2026-03-26T17:30:09.604466-06:00",
+        "opened_at": "2026-08-18T13:48:01.034210-06:00",
         "closed_at": null,
         "note": "pilot-pos-smoke"
       }
@@ -41,7 +65,7 @@
     "name": "open_session",
     "request": {
       "method": "POST",
-      "url": "http://localhost:8000/api/retail/pos/sessions/open/",
+      "url": "http://127.0.0.1:18080/api/retail/pos/sessions/open/",
       "payload": {
         "opening_amount": "25.00",
         "note": "pilot-open"
@@ -50,11 +74,11 @@
     "response": {
       "http_status": 201,
       "body": {
-        "id": 2,
+        "id": 6,
         "status": "OPEN",
-        "cash_session_id": 2,
+        "cash_session_id": 6,
         "opening_amount": "25.00",
-        "opened_at": "2026-03-26T23:30:09.984413Z"
+        "opened_at": "2026-08-18T19:48:01.185996Z"
       }
     }
   },
@@ -62,9 +86,9 @@
     "name": "open_ticket",
     "request": {
       "method": "POST",
-      "url": "http://localhost:8000/api/retail/pos/tickets/",
+      "url": "http://127.0.0.1:18080/api/retail/pos/tickets/",
       "payload": {
-        "shift_id": 5,
+        "shift_id": 6,
         "idempotency_key": "pilot-ticket-001",
         "external_ref": "PILOT-001",
         "payment_method": "CASH"
@@ -73,22 +97,24 @@
     "response": {
       "http_status": 201,
       "body": {
-        "id": 2,
+        "id": 6,
         "status": "CART_OPEN",
-        "session_id": 2,
-        "shift_id": 5,
+        "session_id": 6,
+        "shift_id": 6,
         "external_ref": "PILOT-001",
-        "correlation_id": "pos-ticket-2-775eb06c61bc4ece8bdf",
+        "correlation_id": "pos-ticket-6-5ad14471fabd46aea5f7",
         "sale_type": "PUBLIC",
         "payment_method": "CASH",
         "total_amount": "0.00",
         "customer_name": "",
         "customer_ref": "",
+        "customer_party_id": null,
+        "customer_party_display_name": "",
         "sale_id": null,
         "payment_intent_id": "",
         "cash_movement_id": null,
-        "created_at": "2026-03-26T23:30:10.489534Z",
-        "updated_at": "2026-03-26T23:30:10.489751Z",
+        "created_at": "2026-08-18T19:48:01.358728Z",
+        "updated_at": "2026-08-18T19:48:01.359067Z",
         "checkout_started_at": null,
         "paid_at": null,
         "closed_at": null,
@@ -108,7 +134,7 @@
     "name": "checkout_ticket",
     "request": {
       "method": "POST",
-      "url": "http://localhost:8000/api/retail/pos/tickets/2/checkout/",
+      "url": "http://127.0.0.1:18080/api/retail/pos/tickets/6/checkout/",
       "payload": {
         "line": {
           "product": "DIESEL",
@@ -125,25 +151,27 @@
     "response": {
       "http_status": 200,
       "body": {
-        "id": 2,
+        "id": 6,
         "status": "CLOSED",
-        "session_id": 2,
-        "shift_id": 5,
+        "session_id": 6,
+        "shift_id": 6,
         "external_ref": "PILOT-001",
-        "correlation_id": "pos-ticket-2-775eb06c61bc4ece8bdf",
+        "correlation_id": "pos-ticket-6-5ad14471fabd46aea5f7",
         "sale_type": "PUBLIC",
         "payment_method": "CASH",
         "total_amount": "200.00",
         "customer_name": "",
         "customer_ref": "",
-        "sale_id": 2,
-        "payment_intent_id": "cd820e7a-8238-4721-921e-754fbcad6d65",
-        "cash_movement_id": 2,
-        "created_at": "2026-03-26T23:30:10.489534Z",
-        "updated_at": "2026-03-26T23:30:11.069157Z",
-        "checkout_started_at": "2026-03-26T23:30:10.873194Z",
-        "paid_at": "2026-03-26T23:30:11.069005Z",
-        "closed_at": "2026-03-26T23:30:11.069005Z",
+        "customer_party_id": null,
+        "customer_party_display_name": "",
+        "sale_id": 6,
+        "payment_intent_id": "acef48f6-d974-45cd-a189-8a32afbd2b02",
+        "cash_movement_id": 8,
+        "created_at": "2026-08-18T19:48:01.358728Z",
+        "updated_at": "2026-08-18T19:48:01.810320Z",
+        "checkout_started_at": "2026-08-18T19:48:01.539395Z",
+        "paid_at": "2026-08-18T19:48:01.810134Z",
+        "closed_at": "2026-08-18T19:48:01.810134Z",
         "voided_at": null,
         "void_reason": "",
         "last_error": "",
@@ -151,10 +179,10 @@
         "compensation_attempts": 0,
         "compensation_last_error": "",
         "compensation_next_retry_at": null,
-        "last_compensation_at": "2026-03-26T23:30:11.069005Z",
+        "last_compensation_at": "2026-08-18T19:48:01.810134Z",
         "lines": [
           {
-            "id": 2,
+            "id": 6,
             "line_no": 1,
             "line_type": "FUEL",
             "product": "DIESEL",
@@ -175,18 +203,18 @@
     "name": "cockpit_read",
     "request": {
       "method": "GET",
-      "url": "http://localhost:8000/api/retail/pos/cockpit/",
+      "url": "http://127.0.0.1:18080/api/retail/pos/cockpit/",
       "payload": {}
     },
     "response": {
       "http_status": 200,
       "body": {
         "session": {
-          "id": 2,
+          "id": 6,
           "status": "OPEN",
-          "cash_session_id": 2,
-          "opened_at": "2026-03-26T23:30:09.984413Z",
-          "opened_by": 16,
+          "cash_session_id": 6,
+          "opened_at": "2026-08-18T19:48:01.185996Z",
+          "opened_by": 13,
           "opening_amount": "25.00"
         },
         "tickets": {
@@ -197,7 +225,21 @@
         "compensation": {
           "pending": 0,
           "overdue": 0,
-          "max_pending_age_min": 0
+          "max_pending_age_min": 0,
+          "queue": {
+            "retryable_count": 0,
+            "due_count": 0,
+            "scheduled_count": 0,
+            "exhausted_count": 0,
+            "stale_count": 0,
+            "unknown_inconsistent_count": 0,
+            "oldest_age_minutes": 0,
+            "failed_last_errors_top": [],
+            "operator_attention_sample": [],
+            "resolved_closed_count": 1,
+            "voided_count": 0,
+            "stale_after_minutes": 30
+          }
         },
         "peripherals": {
           "total": 0,
@@ -212,7 +254,7 @@
     "name": "void_ticket",
     "request": {
       "method": "POST",
-      "url": "http://localhost:8000/api/retail/pos/voids/2/",
+      "url": "http://127.0.0.1:18080/api/retail/pos/voids/6/",
       "payload": {
         "reason": "PILOT_ROLLBACK"
       }
@@ -220,36 +262,38 @@
     "response": {
       "http_status": 200,
       "body": {
-        "id": 2,
+        "id": 6,
         "status": "VOIDED",
-        "session_id": 2,
-        "shift_id": 5,
+        "session_id": 6,
+        "shift_id": 6,
         "external_ref": "PILOT-001",
-        "correlation_id": "pos-ticket-2-775eb06c61bc4ece8bdf",
+        "correlation_id": "pos-ticket-6-5ad14471fabd46aea5f7",
         "sale_type": "PUBLIC",
         "payment_method": "CASH",
         "total_amount": "200.00",
         "customer_name": "",
         "customer_ref": "",
-        "sale_id": 2,
-        "payment_intent_id": "cd820e7a-8238-4721-921e-754fbcad6d65",
-        "cash_movement_id": 2,
-        "created_at": "2026-03-26T23:30:10.489534Z",
-        "updated_at": "2026-03-26T23:30:11.779057Z",
-        "checkout_started_at": "2026-03-26T23:30:10.873194Z",
-        "paid_at": "2026-03-26T23:30:11.069005Z",
-        "closed_at": "2026-03-26T23:30:11.069005Z",
-        "voided_at": "2026-03-26T23:30:11.778865Z",
+        "customer_party_id": null,
+        "customer_party_display_name": "",
+        "sale_id": 6,
+        "payment_intent_id": "acef48f6-d974-45cd-a189-8a32afbd2b02",
+        "cash_movement_id": 8,
+        "created_at": "2026-08-18T19:48:01.358728Z",
+        "updated_at": "2026-08-18T19:48:02.235765Z",
+        "checkout_started_at": "2026-08-18T19:48:01.539395Z",
+        "paid_at": "2026-08-18T19:48:01.810134Z",
+        "closed_at": "2026-08-18T19:48:01.810134Z",
+        "voided_at": "2026-08-18T19:48:02.235617Z",
         "void_reason": "PILOT_ROLLBACK",
         "last_error": "",
         "compensation_pending": false,
         "compensation_attempts": 0,
         "compensation_last_error": "",
         "compensation_next_retry_at": null,
-        "last_compensation_at": "2026-03-26T23:30:11.069005Z",
+        "last_compensation_at": "2026-08-18T19:48:01.810134Z",
         "lines": [
           {
-            "id": 2,
+            "id": 6,
             "line_no": 1,
             "line_type": "FUEL",
             "product": "DIESEL",
@@ -270,7 +314,7 @@
     "name": "close_session",
     "request": {
       "method": "POST",
-      "url": "http://localhost:8000/api/retail/pos/sessions/2/close/",
+      "url": "http://127.0.0.1:18080/api/retail/pos/sessions/6/close/",
       "payload": {
         "counted_amount": "25.00",
         "note": "pilot-close"
@@ -279,11 +323,11 @@
     "response": {
       "http_status": 200,
       "body": {
-        "id": 2,
+        "id": 6,
         "status": "CLOSED",
         "counted_amount": "25.00",
         "difference_amount": "0.00",
-        "closed_at": "2026-03-26T23:30:12.119091Z"
+        "closed_at": "2026-08-18T19:48:02.372770Z"
       }
     }
   }
