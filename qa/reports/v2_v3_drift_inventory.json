@@ -1,0 +1,3776 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-18T20:35:01.804913+00:00",
+  "v2_root": "/home/wis/dev/ERP_v2",
+  "v3_commit": "e0147f047ea81b6e050c6171749134748f0a50a4",
+  "filters": {
+    "ignored_parts": [
+      ".pytest_cache",
+      "__pycache__",
+      "dist",
+      "node_modules",
+      "test-results"
+    ],
+    "ignored_suffixes": [
+      ".map",
+      ".pyc",
+      ".pyo"
+    ]
+  },
+  "summary": {
+    "deltas": 305,
+    "mapped_to_tracking_id": 141,
+    "productive_unexplained": 0,
+    "by_classification": {
+      "expected_v3": 183,
+      "generated": 10,
+      "legacy_removed": 1,
+      "new_feature": 29,
+      "test": 80,
+      "tooling": 2
+    }
+  },
+  "closure_status": "passed",
+  "u30_surfaces": [
+    {
+      "surface": "apps.modulos.accounting",
+      "kind": "compatibility_shim",
+      "reachable": true,
+      "auth_scope": "hereda el consumidor canónico",
+      "disposition": "compat; retirar sólo tras eliminar imports",
+      "owner": "kernels/accounting"
+    },
+    {
+      "surface": "apps.modulos.facturacion",
+      "kind": "compatibility_shim",
+      "reachable": true,
+      "auth_scope": "hereda el consumidor canónico",
+      "disposition": "compat; retirar sólo tras eliminar imports",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "surface": "apps.modulos.inventarios",
+      "kind": "compatibility_shim",
+      "reachable": true,
+      "auth_scope": "hereda el consumidor canónico",
+      "disposition": "compat; retirar sólo tras eliminar imports",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "surface": "apps.kernels.facturacion.urls_legacy",
+      "kind": "legacy_routes",
+      "reachable": true,
+      "auth_scope": "permisos de las views canónicas",
+      "disposition": "compat; inventariar consumidores antes de remover",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "surface": "apps.modulos.sync_engine.handlers_demo.DEMO_PING",
+      "kind": "demo_handler",
+      "reachable": false,
+      "auth_scope": "dispatch exige SYNC_DEMO_COMMANDS_ENABLED explícito; producción lo fuerza false",
+      "disposition": "prod-gated; habilitado deliberadamente sólo en dev/test",
+      "owner": "modulos/sync_engine"
+    },
+    {
+      "surface": "accounting phase7/phase7b/phase8 and certification*",
+      "kind": "cutover_tooling",
+      "reachable": true,
+      "auth_scope": "CLI/management command; no endpoint público directo",
+      "disposition": "tooling operativo; conservar con tests",
+      "owner": "kernels/accounting"
+    },
+    {
+      "surface": "apps.modulos.sync",
+      "kind": "legacy_migration_only_namespace",
+      "reachable": false,
+      "auth_scope": "no instalado ni montado; sync_engine es el namespace activo",
+      "disposition": "conservar sólo si el historial de migración externo lo exige; en otro caso remover",
+      "owner": "modulos/sync"
+    }
+  ],
+  "deltas": [
+    {
+      "path": "backend/src/apps/kernels/accounting/migrations/0016_intercompanytransaction_uq_acc_ic_tx_ref.py",
+      "delta": "only_v3",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/migrations/0016_intercompanytransaction_uq_acc_ic_tx_source_target_reference.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/models.py",
+      "delta": "changed",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-014",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/phase7.py",
+      "delta": "changed",
+      "commit": "d3e1d90982728c06be4c0f9019c45f2ad7a74f8e",
+      "subject": "fix(accounting): cerrar recuperación FX BUG-057 BUG-058",
+      "tracking_ids": [
+        "BUG-057",
+        "BUG-058"
+      ],
+      "mapped": true,
+      "classification": "tooling",
+      "reason": "herramienta de operación/certificación",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/phase7b.py",
+      "delta": "changed",
+      "commit": "d3e1d90982728c06be4c0f9019c45f2ad7a74f8e",
+      "subject": "fix(accounting): cerrar recuperación FX BUG-057 BUG-058",
+      "tracking_ids": [
+        "BUG-057",
+        "BUG-058"
+      ],
+      "mapped": true,
+      "classification": "tooling",
+      "reason": "herramienta de operación/certificación",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/services.py",
+      "delta": "changed",
+      "commit": "82a875e3f8dd4a619dc31625a133522835eccda1",
+      "subject": "fix(accounting): eliminar N+1 del cierre BUG-049",
+      "tracking_ids": [
+        "BUG-049"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-049",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/tests/test_accounting_fx_revaluation_audit.py",
+      "delta": "changed",
+      "commit": "d3e1d90982728c06be4c0f9019c45f2ad7a74f8e",
+      "subject": "fix(accounting): cerrar recuperación FX BUG-057 BUG-058",
+      "tracking_ids": [
+        "BUG-057",
+        "BUG-058"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/tests/test_accounting_services.py",
+      "delta": "changed",
+      "commit": "e2a21cc4b4e5838c7db1888e459f966e2e4abff7",
+      "subject": "test(kernels): certificar concurrencia U1-U7",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/tests/test_coa_cycles.py",
+      "delta": "only_v3",
+      "commit": "b4ef8ff3c159a760e3bf82d9ff3c15adb2f36d59",
+      "subject": "fix(dinero): cerrar BUG-022..024, BUG-032 y BUG-034",
+      "tracking_ids": [
+        "BUG-022",
+        "BUG-032",
+        "BUG-034"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/accounting/views.py",
+      "delta": "changed",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "owner": "kernels/accounting"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/migrations/0011_billingpayment_idempotency_key_and_more.py",
+      "delta": "only_v3",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/migrations/0012_alter_billingpayment_idempotency_key.py",
+      "delta": "only_v3",
+      "commit": "b4ef8ff3c159a760e3bf82d9ff3c15adb2f36d59",
+      "subject": "fix(dinero): cerrar BUG-022..024, BUG-032 y BUG-034",
+      "tracking_ids": [
+        "BUG-022",
+        "BUG-032",
+        "BUG-034"
+      ],
+      "mapped": true,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/models.py",
+      "delta": "changed",
+      "commit": "b4ef8ff3c159a760e3bf82d9ff3c15adb2f36d59",
+      "subject": "fix(dinero): cerrar BUG-022..024, BUG-032 y BUG-034",
+      "tracking_ids": [
+        "BUG-022",
+        "BUG-032",
+        "BUG-034"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-022, BUG-032, BUG-034",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/serializers.py",
+      "delta": "changed",
+      "commit": "b4ef8ff3c159a760e3bf82d9ff3c15adb2f36d59",
+      "subject": "fix(dinero): cerrar BUG-022..024, BUG-032 y BUG-034",
+      "tracking_ids": [
+        "BUG-022",
+        "BUG-032",
+        "BUG-034"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-022, BUG-032, BUG-034",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/services.py",
+      "delta": "changed",
+      "commit": "ab1dffd33fc104c3dda7baea1de84820d74d0d04",
+      "subject": "fix(sales): serializar idempotencia POS BUG-055",
+      "tracking_ids": [
+        "BUG-055"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-055",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/tests/test_billing_part2_api.py",
+      "delta": "changed",
+      "commit": "b4ef8ff3c159a760e3bf82d9ff3c15adb2f36d59",
+      "subject": "fix(dinero): cerrar BUG-022..024, BUG-032 y BUG-034",
+      "tracking_ids": [
+        "BUG-022",
+        "BUG-032",
+        "BUG-034"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/tests/test_billing_void_f08.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/tests/test_cobro_idempotente.py",
+      "delta": "only_v3",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/tests/test_fiscal_sequence_concurrency.py",
+      "delta": "only_v3",
+      "commit": "9369ee54732528449b4bcb8c37438208634e233e",
+      "subject": "test(billing): registrar agotamiento fiscal BUG-051",
+      "tracking_ids": [
+        "BUG-051"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/tests/test_golden_lineas_bulk.py",
+      "delta": "only_v3",
+      "commit": "ae1d5ec2d21ee83e8bd27689d8b5d644c6cc9069",
+      "subject": "feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/tests/test_void_bloquea_con_efectos.py",
+      "delta": "only_v3",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/urls.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-039, BUG-040",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/views.py",
+      "delta": "changed",
+      "commit": "33bda9df3efb2dfa46669803506a5ea37c7953c8",
+      "subject": "fix(billing): controlar secuencia fiscal BUG-051",
+      "tracking_ids": [
+        "BUG-051"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-051",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/facturacion/void_sod.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "kernels/facturacion"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/counting.py",
+      "delta": "changed",
+      "commit": "ae1d5ec2d21ee83e8bd27689d8b5d644c6cc9069",
+      "subject": "feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/remisiones.py",
+      "delta": "changed",
+      "commit": "ae1d5ec2d21ee83e8bd27689d8b5d644c6cc9069",
+      "subject": "feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/serializers.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/services.py",
+      "delta": "changed",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-014",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/tests/test_adjust_lot_balance_f07.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/tests/test_adjust_lotes.py",
+      "delta": "only_v3",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/tests/test_transfer_avg_cost_f06.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/tests/test_transfer_costeo.py",
+      "delta": "only_v3",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/tests/test_u8_idempotencia_y_transferencias.py",
+      "delta": "only_v3",
+      "commit": "ae1d5ec2d21ee83e8bd27689d8b5d644c6cc9069",
+      "subject": "feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/inventarios/views.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "kernels/inventarios"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/accounting_link.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-039, BUG-040",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/biometric/models_biometric.py",
+      "delta": "changed",
+      "commit": "52a5a7a4688d77c8c33c63d7080cb0b0c1518794",
+      "subject": "fix(biometria): proteger tokens e imports BUG-036 y BUG-037",
+      "tracking_ids": [
+        "BUG-036",
+        "BUG-037"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-036, BUG-037",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/biometric/services_biometric.py",
+      "delta": "changed",
+      "commit": "e2d874b28c708a2031818ef87bf96f54cee5e0cd",
+      "subject": "feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/biometric/tabular_reader.py",
+      "delta": "changed",
+      "commit": "52a5a7a4688d77c8c33c63d7080cb0b0c1518794",
+      "subject": "fix(biometria): proteger tokens e imports BUG-036 y BUG-037",
+      "tracking_ids": [
+        "BUG-036",
+        "BUG-037"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-036, BUG-037",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/biometric/views_biometric.py",
+      "delta": "changed",
+      "commit": "52a5a7a4688d77c8c33c63d7080cb0b0c1518794",
+      "subject": "fix(biometria): proteger tokens e imports BUG-036 y BUG-037",
+      "tracking_ids": [
+        "BUG-036",
+        "BUG-037"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-036, BUG-037",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/field/serializers_field.py",
+      "delta": "changed",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(attendance): persistir lectura y aprobación de campo U15",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/migrations/0020_hash_biometric_device_tokens.py",
+      "delta": "only_v3",
+      "commit": "52a5a7a4688d77c8c33c63d7080cb0b0c1518794",
+      "subject": "fix(biometria): proteger tokens e imports BUG-036 y BUG-037",
+      "tracking_ids": [
+        "BUG-036",
+        "BUG-037"
+      ],
+      "mapped": true,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/migrations/0021_retire_plaintext_biometric_tokens.py",
+      "delta": "only_v3",
+      "commit": "52a5a7a4688d77c8c33c63d7080cb0b0c1518794",
+      "subject": "fix(biometria): proteger tokens e imports BUG-036 y BUG-037",
+      "tracking_ids": [
+        "BUG-036",
+        "BUG-037"
+      ],
+      "mapped": true,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/models.py",
+      "delta": "changed",
+      "commit": "e2d874b28c708a2031818ef87bf96f54cee5e0cd",
+      "subject": "feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/services.py",
+      "delta": "changed",
+      "commit": "e2d874b28c708a2031818ef87bf96f54cee5e0cd",
+      "subject": "feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/tests/test_biometric.py",
+      "delta": "changed",
+      "commit": "52a5a7a4688d77c8c33c63d7080cb0b0c1518794",
+      "subject": "fix(biometria): proteger tokens e imports BUG-036 y BUG-037",
+      "tracking_ids": [
+        "BUG-036",
+        "BUG-037"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/tests/test_field_attendance_api.py",
+      "delta": "changed",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/tests/test_field_attendance_bridge.py",
+      "delta": "changed",
+      "commit": "03d9e75753f22882cb168940d9df422e5b236656",
+      "subject": "feat(oleada-4): asistencia de campo — UI completa del flujo field/* y U15 certificada",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/tests/test_golden_compute_sheet_bulk.py",
+      "delta": "only_v3",
+      "commit": "e2d874b28c708a2031818ef87bf96f54cee5e0cd",
+      "subject": "feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/tests/test_ir_inss_exacto_bordes_negocio.py",
+      "delta": "changed",
+      "commit": "0815fc05fdb49ce54b39f151b23377ac9179d1c1",
+      "subject": "test(nomina): fijar bordes patronales 49 50 51",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/tests/test_nomina_accounting.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/urls.py",
+      "delta": "changed",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(attendance): persistir lectura y aprobación de campo U15",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/nomina/views_field.py",
+      "delta": "changed",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(attendance): persistir lectura y aprobación de campo U15",
+      "owner": "kernels/nomina"
+    },
+    {
+      "path": "backend/src/apps/kernels/payments/reconciliation.py",
+      "delta": "changed",
+      "commit": "efeed07e35aa4c82712a5227adc6ab858c24870d",
+      "subject": "feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "owner": "kernels/payments"
+    },
+    {
+      "path": "backend/src/apps/kernels/payments/services.py",
+      "delta": "changed",
+      "commit": "efeed07e35aa4c82712a5227adc6ab858c24870d",
+      "subject": "feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "owner": "kernels/payments"
+    },
+    {
+      "path": "backend/src/apps/kernels/payments/tests/test_cash_audit.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/payments"
+    },
+    {
+      "path": "backend/src/apps/kernels/payments/tests/test_u10_u11_concurrencia.py",
+      "delta": "only_v3",
+      "commit": "efeed07e35aa4c82712a5227adc6ab858c24870d",
+      "subject": "feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/payments"
+    },
+    {
+      "path": "backend/src/apps/kernels/portfolio/collections.py",
+      "delta": "changed",
+      "commit": "bbf604e07254243da523062da55250d076609c39",
+      "subject": "feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "owner": "kernels/portfolio"
+    },
+    {
+      "path": "backend/src/apps/kernels/portfolio/services.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-039, BUG-040",
+      "owner": "kernels/portfolio"
+    },
+    {
+      "path": "backend/src/apps/kernels/portfolio/tests/test_billing_to_receivable.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/portfolio"
+    },
+    {
+      "path": "backend/src/apps/kernels/portfolio/tests/test_portfolio_readonly_f01.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/portfolio"
+    },
+    {
+      "path": "backend/src/apps/kernels/portfolio/tests/test_portfolio_services.py",
+      "delta": "changed",
+      "commit": "b952c1789af094e10d3e1b569428f0307eb6ff4c",
+      "subject": "fix(portfolio): re-valida outstanding dentro del lock — cierra BUG-005",
+      "tracking_ids": [
+        "BUG-005"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/portfolio"
+    },
+    {
+      "path": "backend/src/apps/kernels/portfolio/tests/test_viewsets_readonly.py",
+      "delta": "only_v3",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/portfolio"
+    },
+    {
+      "path": "backend/src/apps/kernels/portfolio/views.py",
+      "delta": "changed",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-014",
+      "owner": "kernels/portfolio"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/authentication.py",
+      "delta": "changed",
+      "commit": "5cce219f310dda8dd9a22b2deb2ac759e4a58b84",
+      "subject": "fix(reporting): aplicar revocación RBAC inmediata",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(reporting): aplicar revocación RBAC inmediata",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/domain_adapters/accounting.py",
+      "delta": "changed",
+      "commit": "efeed07e35aa4c82712a5227adc6ab858c24870d",
+      "subject": "feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/domain_adapters/hr.py",
+      "delta": "changed",
+      "commit": "944c8dfbc0f417cf89a3ec07c987f160ac730cab",
+      "subject": "feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/domain_adapters/inventory.py",
+      "delta": "changed",
+      "commit": "944c8dfbc0f417cf89a3ec07c987f160ac730cab",
+      "subject": "feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/execution.py",
+      "delta": "changed",
+      "commit": "944c8dfbc0f417cf89a3ec07c987f160ac730cab",
+      "subject": "feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/exports.py",
+      "delta": "changed",
+      "commit": "3c91959e56e5ae7778bf5ea995e09a69ea1a7cea",
+      "subject": "fix(reporting): acotar exportaciones BUG-056",
+      "tracking_ids": [
+        "BUG-056"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-056",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/permissions.py",
+      "delta": "changed",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/services.py",
+      "delta": "changed",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/tests/test_cache_lineage.py",
+      "delta": "only_v3",
+      "commit": "3c91959e56e5ae7778bf5ea995e09a69ea1a7cea",
+      "subject": "fix(reporting): acotar exportaciones BUG-056",
+      "tracking_ids": [
+        "BUG-056"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/tests/test_export_limits.py",
+      "delta": "only_v3",
+      "commit": "3c91959e56e5ae7778bf5ea995e09a69ea1a7cea",
+      "subject": "fix(reporting): acotar exportaciones BUG-056",
+      "tracking_ids": [
+        "BUG-056"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/kernels/reporting/tests/test_exports_injection_f13.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "kernels/reporting"
+    },
+    {
+      "path": "backend/src/apps/modulos/accounts/tests/test_2fa_concurrency.py",
+      "delta": "only_v3",
+      "commit": "e2a21cc4b4e5838c7db1888e459f966e2e4abff7",
+      "subject": "test(kernels): certificar concurrencia U1-U7",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/accounts"
+    },
+    {
+      "path": "backend/src/apps/modulos/accounts/tests/test_refresh_concurrency.py",
+      "delta": "only_v3",
+      "commit": "2ca8fbccbc74282845f18744c0caad3139b58b9d",
+      "subject": "fix(auth): serializar credenciales y bootstrap BUG-028..030",
+      "tracking_ids": [
+        "BUG-028"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/accounts"
+    },
+    {
+      "path": "backend/src/apps/modulos/accounts/views.py",
+      "delta": "changed",
+      "commit": "2ca8fbccbc74282845f18744c0caad3139b58b9d",
+      "subject": "fix(auth): serializar credenciales y bootstrap BUG-028..030",
+      "tracking_ids": [
+        "BUG-028"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-028",
+      "owner": "modulos/accounts"
+    },
+    {
+      "path": "backend/src/apps/modulos/audit/contracts.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-039, BUG-040",
+      "owner": "modulos/audit"
+    },
+    {
+      "path": "backend/src/apps/modulos/audit/tests/test_service_audit.py",
+      "delta": "changed",
+      "commit": "66e8d6a6bde7aa0e80ee0db90b4a93a8fdb6e414",
+      "subject": "test(audit): certificar cadena concurrente U4",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/audit"
+    },
+    {
+      "path": "backend/src/apps/modulos/beneficio/views.py",
+      "delta": "changed",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-045, BUG-047",
+      "owner": "modulos/beneficio"
+    },
+    {
+      "path": "backend/src/apps/modulos/comisariato/services.py",
+      "delta": "changed",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-014",
+      "owner": "modulos/comisariato"
+    },
+    {
+      "path": "backend/src/apps/modulos/comisariato/tests/test_comisariato.py",
+      "delta": "changed",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/comisariato"
+    },
+    {
+      "path": "backend/src/apps/modulos/common/permissions.py",
+      "delta": "changed",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "owner": "modulos/common"
+    },
+    {
+      "path": "backend/src/apps/modulos/compras/serializers.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "modulos/compras"
+    },
+    {
+      "path": "backend/src/apps/modulos/compras/services.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "modulos/compras"
+    },
+    {
+      "path": "backend/src/apps/modulos/compras/tests/test_compras_api.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/compras"
+    },
+    {
+      "path": "backend/src/apps/modulos/compras/tests/test_compras_services.py",
+      "delta": "changed",
+      "commit": "c9f3258ede7b1674408220d381751cc5aeb49d9f",
+      "subject": "test(procurement): certificar concurrencia U17",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/compras"
+    },
+    {
+      "path": "backend/src/apps/modulos/compras/tests/test_pay_payable.py",
+      "delta": "changed",
+      "commit": "c9f3258ede7b1674408220d381751cc5aeb49d9f",
+      "subject": "test(procurement): certificar concurrencia U17",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/compras"
+    },
+    {
+      "path": "backend/src/apps/modulos/compras/tests/test_purchase_orders.py",
+      "delta": "changed",
+      "commit": "c9f3258ede7b1674408220d381751cc5aeb49d9f",
+      "subject": "test(procurement): certificar concurrencia U17",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/compras"
+    },
+    {
+      "path": "backend/src/apps/modulos/compras/views_orders.py",
+      "delta": "changed",
+      "commit": "5476c25dc36edbde7579c6f56608a94650765cb7",
+      "subject": "fix(openapi): restaurar preflight de producción BUG-048",
+      "tracking_ids": [
+        "BUG-048"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-048",
+      "owner": "modulos/compras"
+    },
+    {
+      "path": "backend/src/apps/modulos/dashboard/services.py",
+      "delta": "changed",
+      "commit": "2ca8fbccbc74282845f18744c0caad3139b58b9d",
+      "subject": "fix(auth): serializar credenciales y bootstrap BUG-028..030",
+      "tracking_ids": [
+        "BUG-028"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-028",
+      "owner": "modulos/dashboard"
+    },
+    {
+      "path": "backend/src/apps/modulos/dashboard/tests/test_api.py",
+      "delta": "changed",
+      "commit": "5cce219f310dda8dd9a22b2deb2ac759e4a58b84",
+      "subject": "fix(reporting): aplicar revocación RBAC inmediata",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/dashboard"
+    },
+    {
+      "path": "backend/src/apps/modulos/dashboard/tests/test_dashboard_services.py",
+      "delta": "changed",
+      "commit": "2ca8fbccbc74282845f18744c0caad3139b58b9d",
+      "subject": "fix(auth): serializar credenciales y bootstrap BUG-028..030",
+      "tracking_ids": [
+        "BUG-028"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/dashboard"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/diagnose.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-025",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/migrations/0006_error_event_tenant_scope.py",
+      "delta": "only_v3",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/models.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-025",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/services.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-025",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/tests/test_ai_diagnosis.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/tests/test_diagnose.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/tests/test_diagnostics.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/tests/test_triage.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/diagnostics/views.py",
+      "delta": "changed",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-045, BUG-047",
+      "owner": "modulos/diagnostics"
+    },
+    {
+      "path": "backend/src/apps/modulos/documents/migrations/0004_repair_cross_company_branches.py",
+      "delta": "only_v3",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "modulos/documents"
+    },
+    {
+      "path": "backend/src/apps/modulos/documents/models.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-025",
+      "owner": "modulos/documents"
+    },
+    {
+      "path": "backend/src/apps/modulos/documents/services.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-025",
+      "owner": "modulos/documents"
+    },
+    {
+      "path": "backend/src/apps/modulos/documents/tests/test_tenant_isolation.py",
+      "delta": "only_v3",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/documents"
+    },
+    {
+      "path": "backend/src/apps/modulos/documents/views.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-025",
+      "owner": "modulos/documents"
+    },
+    {
+      "path": "backend/src/apps/modulos/financiamiento/tests/test_financing.py",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/financiamiento"
+    },
+    {
+      "path": "backend/src/apps/modulos/financiamiento/views.py",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modulos/financiamiento"
+    },
+    {
+      "path": "backend/src/apps/modulos/finca/views.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "modulos/finca"
+    },
+    {
+      "path": "backend/src/apps/modulos/fleet/tests/test_fleet.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/fleet"
+    },
+    {
+      "path": "backend/src/apps/modulos/fleet/tests/test_fleet_list_api.py",
+      "delta": "changed",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/fleet"
+    },
+    {
+      "path": "backend/src/apps/modulos/fleet/views.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "modulos/fleet"
+    },
+    {
+      "path": "backend/src/apps/modulos/fleet/views_costs.py",
+      "delta": "changed",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-045, BUG-047",
+      "owner": "modulos/fleet"
+    },
+    {
+      "path": "backend/src/apps/modulos/hr/serializers.py",
+      "delta": "changed",
+      "commit": "1d240069212a7b92cd533a2487334c032f9a3869",
+      "subject": "fix(hr): retirar superusuario bootstrap BUG-002",
+      "tracking_ids": [
+        "BUG-002"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-002",
+      "owner": "modulos/hr"
+    },
+    {
+      "path": "backend/src/apps/modulos/hr/services.py",
+      "delta": "changed",
+      "commit": "1d240069212a7b92cd533a2487334c032f9a3869",
+      "subject": "fix(hr): retirar superusuario bootstrap BUG-002",
+      "tracking_ids": [
+        "BUG-002"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-002",
+      "owner": "modulos/hr"
+    },
+    {
+      "path": "backend/src/apps/modulos/hr/tests/test_hr.py",
+      "delta": "changed",
+      "commit": "1d240069212a7b92cd533a2487334c032f9a3869",
+      "subject": "fix(hr): retirar superusuario bootstrap BUG-002",
+      "tracking_ids": [
+        "BUG-002"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/hr"
+    },
+    {
+      "path": "backend/src/apps/modulos/hr/urls.py",
+      "delta": "changed",
+      "commit": "1d240069212a7b92cd533a2487334c032f9a3869",
+      "subject": "fix(hr): retirar superusuario bootstrap BUG-002",
+      "tracking_ids": [
+        "BUG-002"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-002",
+      "owner": "modulos/hr"
+    },
+    {
+      "path": "backend/src/apps/modulos/hr/views.py",
+      "delta": "changed",
+      "commit": "1d240069212a7b92cd533a2487334c032f9a3869",
+      "subject": "fix(hr): retirar superusuario bootstrap BUG-002",
+      "tracking_ids": [
+        "BUG-002"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-002",
+      "owner": "modulos/hr"
+    },
+    {
+      "path": "backend/src/apps/modulos/iam/apps.py",
+      "delta": "changed",
+      "commit": "5476c25dc36edbde7579c6f56608a94650765cb7",
+      "subject": "fix(openapi): restaurar preflight de producción BUG-048",
+      "tracking_ids": [
+        "BUG-048"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-048",
+      "owner": "modulos/iam"
+    },
+    {
+      "path": "backend/src/apps/modulos/iam/schema.py",
+      "delta": "only_v3",
+      "commit": "5476c25dc36edbde7579c6f56608a94650765cb7",
+      "subject": "fix(openapi): restaurar preflight de producción BUG-048",
+      "tracking_ids": [
+        "BUG-048"
+      ],
+      "mapped": true,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modulos/iam"
+    },
+    {
+      "path": "backend/src/apps/modulos/integration/migrations/0004_inbox_tenant_scope.py",
+      "delta": "only_v3",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "modulos/integration"
+    },
+    {
+      "path": "backend/src/apps/modulos/integration/models.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-025",
+      "owner": "modulos/integration"
+    },
+    {
+      "path": "backend/src/apps/modulos/integration/services.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-039, BUG-040",
+      "owner": "modulos/integration"
+    },
+    {
+      "path": "backend/src/apps/modulos/integration/tests/test_integration.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/integration"
+    },
+    {
+      "path": "backend/src/apps/modulos/integration/urls.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-039, BUG-040",
+      "owner": "modulos/integration"
+    },
+    {
+      "path": "backend/src/apps/modulos/integration/views.py",
+      "delta": "changed",
+      "commit": "8aad2580a7a02134fde290718f8ce41554a9dbe8",
+      "subject": "fix(recovery): reparar consecuencias cross-kernel BUG-039 BUG-040",
+      "tracking_ids": [
+        "BUG-039",
+        "BUG-040"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-039, BUG-040",
+      "owner": "modulos/integration"
+    },
+    {
+      "path": "backend/src/apps/modulos/intercompany/services.py",
+      "delta": "changed",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-014",
+      "owner": "modulos/intercompany"
+    },
+    {
+      "path": "backend/src/apps/modulos/intercompany/tests/test_intercompany_ops.py",
+      "delta": "changed",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/intercompany"
+    },
+    {
+      "path": "backend/src/apps/modulos/rbac/seed_v01.py",
+      "delta": "changed",
+      "commit": "d09152279c0dd872a29e838b35caa0a6a943bec9",
+      "subject": "fix(rbac): habilitar POS mínimo al cajero BUG-054",
+      "tracking_ids": [
+        "BUG-054"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-054",
+      "owner": "modulos/rbac"
+    },
+    {
+      "path": "backend/src/apps/modulos/rbac/selectors.py",
+      "delta": "changed",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "owner": "modulos/rbac"
+    },
+    {
+      "path": "backend/src/apps/modulos/rbac/tests/test_seed_roles.py",
+      "delta": "changed",
+      "commit": "d09152279c0dd872a29e838b35caa0a6a943bec9",
+      "subject": "fix(rbac): habilitar POS mínimo al cajero BUG-054",
+      "tracking_ids": [
+        "BUG-054"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/rbac"
+    },
+    {
+      "path": "backend/src/apps/modulos/sync_engine/handlers_billing.py",
+      "delta": "changed",
+      "commit": "b4ef8ff3c159a760e3bf82d9ff3c15adb2f36d59",
+      "subject": "fix(dinero): cerrar BUG-022..024, BUG-032 y BUG-034",
+      "tracking_ids": [
+        "BUG-022",
+        "BUG-032",
+        "BUG-034"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-022, BUG-032, BUG-034",
+      "owner": "modulos/sync_engine"
+    },
+    {
+      "path": "backend/src/apps/modulos/sync_engine/services.py",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modulos/sync_engine"
+    },
+    {
+      "path": "backend/src/apps/modulos/sync_engine/tests/test_sync_robustez.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/sync_engine"
+    },
+    {
+      "path": "backend/src/apps/modulos/ventas/migrations/0002_posoverridegrant.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "generated",
+      "reason": "historial de esquema Django; validar por migration guard",
+      "owner": "modulos/ventas"
+    },
+    {
+      "path": "backend/src/apps/modulos/ventas/models.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "modulos/ventas"
+    },
+    {
+      "path": "backend/src/apps/modulos/ventas/services.py",
+      "delta": "changed",
+      "commit": "b4ef8ff3c159a760e3bf82d9ff3c15adb2f36d59",
+      "subject": "fix(dinero): cerrar BUG-022..024, BUG-032 y BUG-034",
+      "tracking_ids": [
+        "BUG-022",
+        "BUG-032",
+        "BUG-034"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-022, BUG-032, BUG-034",
+      "owner": "modulos/ventas"
+    },
+    {
+      "path": "backend/src/apps/modulos/ventas/tests/test_pos_override.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/ventas"
+    },
+    {
+      "path": "backend/src/apps/modulos/ventas/tests/test_pos_sale.py",
+      "delta": "changed",
+      "commit": "ca8e71eacfed5c3ff4d20a863a3bf5a7dc9628b9",
+      "subject": "test(sales): registrar carrera POS BUG-055",
+      "tracking_ids": [
+        "BUG-055"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modulos/ventas"
+    },
+    {
+      "path": "backend/src/apps/modulos/ventas/views.py",
+      "delta": "changed",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "owner": "modulos/ventas"
+    },
+    {
+      "path": "backend/src/config/settings/base.py",
+      "delta": "changed",
+      "commit": "3c91959e56e5ae7778bf5ea995e09a69ea1a7cea",
+      "subject": "fix(reporting): acotar exportaciones BUG-056",
+      "tracking_ids": [
+        "BUG-056"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-056",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/config/settings/dev.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/config/settings/guards.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "legacy_removed",
+      "reason": "presente sólo en v2; requiere decisión de retirada",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/config/settings/prod.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/config/settings/test.py",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/perf/__init__.py",
+      "delta": "only_v3",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/perf/test_query_budgets.py",
+      "delta": "only_v3",
+      "commit": "bbf604e07254243da523062da55250d076609c39",
+      "subject": "feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/test_bootstrap_api.py",
+      "delta": "changed",
+      "commit": "2ca8fbccbc74282845f18744c0caad3139b58b9d",
+      "subject": "fix(auth): serializar credenciales y bootstrap BUG-028..030",
+      "tracking_ids": [
+        "BUG-028"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/test_edge_secret_guard_f14.py",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/test_openapi_schema_generation.py",
+      "delta": "only_v3",
+      "commit": "5476c25dc36edbde7579c6f56608a94650765cb7",
+      "subject": "fix(openapi): restaurar preflight de producción BUG-048",
+      "tracking_ids": [
+        "BUG-048"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/test_phase2_cec_integration_api.py",
+      "delta": "changed",
+      "commit": "1bc6412b9d01fbf525d64afcea70eb4f35302b8a",
+      "subject": "fix(tenant): cerrar BUG-025..027 en documents, inbox y diagnostics",
+      "tracking_ids": [
+        "BUG-025"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/test_phase7b_intercompany_consolidation.py",
+      "delta": "changed",
+      "commit": "d3e1d90982728c06be4c0f9019c45f2ad7a74f8e",
+      "subject": "fix(accounting): cerrar recuperación FX BUG-057 BUG-058",
+      "tracking_ids": [
+        "BUG-057",
+        "BUG-058"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/test_rbac_exception_adversarial_matrix.py",
+      "delta": "only_v3",
+      "commit": "0ad1cf7e108d92e0b5565bd95c4799ae839eb5f9",
+      "subject": "test(rbac): cerrar matriz adversarial L1",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "backend/src/tests/test_robustez_hot_endpoints.py",
+      "delta": "changed",
+      "commit": "daae3ed83bed14d6fead73073488849a733ca2b3",
+      "subject": "fix(integridad): 7 bugs de inventario, facturación, intercompany y portfolio (BUG-014..020)",
+      "tracking_ids": [
+        "BUG-014"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "backend/platform"
+    },
+    {
+      "path": "frontend/src/app/nav.ts",
+      "delta": "changed",
+      "commit": "944c8dfbc0f417cf89a3ec07c987f160ac730cab",
+      "subject": "feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/boot/__tests__/axios.spec.ts",
+      "delta": "only_v2",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/boot/accessibility.ts",
+      "delta": "only_v3",
+      "commit": "b254de41325a0f44a16c9e44b25ecc7b87ae3668",
+      "subject": "fix(frontend): restaurar zoom y progreso accesible BUG-052 BUG-053",
+      "tracking_ids": [
+        "BUG-052",
+        "BUG-053"
+      ],
+      "mapped": true,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/boot/axios.ts",
+      "delta": "changed",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/boot/secure-auth.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/components/ConnectivityDot.vue",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/components/DataReport.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/components/PageHeader.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/core/__tests__/codigos.spec.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/__tests__/context-switch.spec.ts",
+      "delta": "only_v3",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/__tests__/latest-request.spec.ts",
+      "delta": "only_v3",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/__tests__/pagination.spec.ts",
+      "delta": "only_v3",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/__tests__/ux-static.spec.ts",
+      "delta": "only_v3",
+      "commit": "b254de41325a0f44a16c9e44b25ecc7b87ae3668",
+      "subject": "fix(frontend): restaurar zoom y progreso accesible BUG-052 BUG-053",
+      "tracking_ids": [
+        "BUG-052",
+        "BUG-053"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/api/index.ts",
+      "delta": "changed",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-045, BUG-047",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/codigos.ts",
+      "delta": "only_v3",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/composables/useListadoServer.ts",
+      "delta": "only_v3",
+      "commit": "7fe535ea0faf634d763abde6d7f5690aeb7d9e53",
+      "subject": "feat(oleada-0): infra transversal de rendimiento y cableado de kernels",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/connectivity.ts",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/context-switch.ts",
+      "delta": "only_v3",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/latest-request.ts",
+      "delta": "only_v3",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/storage/__tests__/session-cache.spec.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/storage/auth.ts",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/core/storage/session-cache.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "frontend/core"
+    },
+    {
+      "path": "frontend/src/css/app.scss",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/layouts/AppLayout.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/modules/accounting/api.ts",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/accounting"
+    },
+    {
+      "path": "frontend/src/modules/accounting/pages/ConsolidacionPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/accounting"
+    },
+    {
+      "path": "frontend/src/modules/accounting/pages/ContabilidadHomePage.vue",
+      "delta": "changed",
+      "commit": "efeed07e35aa4c82712a5227adc6ab858c24870d",
+      "subject": "feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "owner": "modules/accounting"
+    },
+    {
+      "path": "frontend/src/modules/accounting/pages/DiarioPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/accounting"
+    },
+    {
+      "path": "frontend/src/modules/accounting/pages/IntercompaniaPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/accounting"
+    },
+    {
+      "path": "frontend/src/modules/accounting/pages/MonedasPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/accounting"
+    },
+    {
+      "path": "frontend/src/modules/accounting/pages/PresupuestosPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/accounting"
+    },
+    {
+      "path": "frontend/src/modules/accounting/pages/ReconciliacionOperativaPage.vue",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/accounting"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/__tests__/persistence-api.spec.ts",
+      "delta": "only_v3",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/api.ts",
+      "delta": "changed",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(attendance): persistir lectura y aprobación de campo U15",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/pages/AprobacionesCampoPage.vue",
+      "delta": "only_v3",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/pages/AsistenciaPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/pages/CapturaCampoPage.vue",
+      "delta": "only_v3",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/pages/JornadaDetallePage.vue",
+      "delta": "only_v3",
+      "commit": "aa9dca256894d2664aef83e4f1432fbf1a838cd2",
+      "subject": "feat(attendance): persistir lectura y aprobación de campo U15",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/pages/JornadasCampoPage.vue",
+      "delta": "only_v3",
+      "commit": "03d9e75753f22882cb168940d9df422e5b236656",
+      "subject": "feat(oleada-4): asistencia de campo — UI completa del flujo field/* y U15 certificada",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/pages/ReporteCuadrillaPage.vue",
+      "delta": "only_v3",
+      "commit": "03d9e75753f22882cb168940d9df422e5b236656",
+      "subject": "feat(oleada-4): asistencia de campo — UI completa del flujo field/* y U15 certificada",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/asistencia/ui.ts",
+      "delta": "only_v3",
+      "commit": "03d9e75753f22882cb168940d9df422e5b236656",
+      "subject": "feat(oleada-4): asistencia de campo — UI completa del flujo field/* y U15 certificada",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/asistencia"
+    },
+    {
+      "path": "frontend/src/modules/audit/api.ts",
+      "delta": "changed",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-021",
+      "owner": "modules/audit"
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/navigation.spec.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modules/auth"
+    },
+    {
+      "path": "frontend/src/modules/auth/navigation.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/auth"
+    },
+    {
+      "path": "frontend/src/modules/auth/pages/BootstrapWizardPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/auth"
+    },
+    {
+      "path": "frontend/src/modules/auth/pages/ForcePasswordChangePage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/auth"
+    },
+    {
+      "path": "frontend/src/modules/auth/pages/LoginPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/auth"
+    },
+    {
+      "path": "frontend/src/modules/auth/pages/TwoFactorPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/auth"
+    },
+    {
+      "path": "frontend/src/modules/beneficio/api.ts",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/beneficio"
+    },
+    {
+      "path": "frontend/src/modules/beneficio/pages/BeneficioPage.vue",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/beneficio"
+    },
+    {
+      "path": "frontend/src/modules/billing/api.ts",
+      "delta": "changed",
+      "commit": "ae1d5ec2d21ee83e8bd27689d8b5d644c6cc9069",
+      "subject": "feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "owner": "modules/billing"
+    },
+    {
+      "path": "frontend/src/modules/billing/pages/AprobacionesCreditoPage.vue",
+      "delta": "only_v3",
+      "commit": "ae1d5ec2d21ee83e8bd27689d8b5d644c6cc9069",
+      "subject": "feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/billing"
+    },
+    {
+      "path": "frontend/src/modules/billing/pages/FacturacionPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/billing"
+    },
+    {
+      "path": "frontend/src/modules/billing/pages/PedidosPage.vue",
+      "delta": "only_v3",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/billing"
+    },
+    {
+      "path": "frontend/src/modules/biometrico/api.ts",
+      "delta": "changed",
+      "commit": "e2d874b28c708a2031818ef87bf96f54cee5e0cd",
+      "subject": "feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "owner": "modules/biometrico"
+    },
+    {
+      "path": "frontend/src/modules/biometrico/pages/BiometricoPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/biometrico"
+    },
+    {
+      "path": "frontend/src/modules/cec/api.ts",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/cec"
+    },
+    {
+      "path": "frontend/src/modules/cec/pages/CecPage.vue",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/cec"
+    },
+    {
+      "path": "frontend/src/modules/comisariato/api.ts",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/comisariato"
+    },
+    {
+      "path": "frontend/src/modules/comisariato/pages/ComisariatoPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/comisariato"
+    },
+    {
+      "path": "frontend/src/modules/comisariato/pages/VentaComisariatoPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/comisariato"
+    },
+    {
+      "path": "frontend/src/modules/controls/api.ts",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/controls"
+    },
+    {
+      "path": "frontend/src/modules/controls/pages/ControlesPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/controls"
+    },
+    {
+      "path": "frontend/src/modules/dashboard/api.ts",
+      "delta": "changed",
+      "commit": "944c8dfbc0f417cf89a3ec07c987f160ac730cab",
+      "subject": "feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "owner": "modules/dashboard"
+    },
+    {
+      "path": "frontend/src/modules/dashboard/pages/AnaliticaPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/dashboard"
+    },
+    {
+      "path": "frontend/src/modules/dashboard/pages/TableroPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/dashboard"
+    },
+    {
+      "path": "frontend/src/modules/devices/__tests__/api.spec.ts",
+      "delta": "only_v3",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modules/devices"
+    },
+    {
+      "path": "frontend/src/modules/devices/api.ts",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/devices"
+    },
+    {
+      "path": "frontend/src/modules/devices/pages/DispositivosPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/devices"
+    },
+    {
+      "path": "frontend/src/modules/devices/pages/EnrolarDispositivoPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/devices"
+    },
+    {
+      "path": "frontend/src/modules/diagnostics/api.ts",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/diagnostics"
+    },
+    {
+      "path": "frontend/src/modules/diagnostics/pages/DiagnosticoPage.vue",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/diagnostics"
+    },
+    {
+      "path": "frontend/src/modules/financiamiento/__tests__/pagination.spec.ts",
+      "delta": "only_v3",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modules/financiamiento"
+    },
+    {
+      "path": "frontend/src/modules/financiamiento/api.ts",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/financiamiento"
+    },
+    {
+      "path": "frontend/src/modules/financiamiento/pages/AcopioPage.vue",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/financiamiento"
+    },
+    {
+      "path": "frontend/src/modules/financiamiento/pages/FinanciamientoHomePage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/financiamiento"
+    },
+    {
+      "path": "frontend/src/modules/financiamiento/pages/LiquidacionesPage.vue",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/financiamiento"
+    },
+    {
+      "path": "frontend/src/modules/financiamiento/pages/PrestamosPage.vue",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/financiamiento"
+    },
+    {
+      "path": "frontend/src/modules/financiamiento/pages/ProductoresPage.vue",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/financiamiento"
+    },
+    {
+      "path": "frontend/src/modules/financiamiento/pages/RiesgoCarteraPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/financiamiento"
+    },
+    {
+      "path": "frontend/src/modules/finca/__tests__/pagination.spec.ts",
+      "delta": "only_v3",
+      "commit": null,
+      "subject": null,
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modules/finca"
+    },
+    {
+      "path": "frontend/src/modules/finca/api.ts",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/finca"
+    },
+    {
+      "path": "frontend/src/modules/finca/pages/FincaPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/finca"
+    },
+    {
+      "path": "frontend/src/modules/finca/pages/OrdenesTrabajoPage.vue",
+      "delta": "changed",
+      "commit": "3beb6814cc2bf0872564c5dc90df462b583a0979",
+      "subject": "perf(frontend): completar paginación server-side MEJ-009",
+      "tracking_ids": [
+        "MEJ-009"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por MEJ-009",
+      "owner": "modules/finca"
+    },
+    {
+      "path": "frontend/src/modules/finca/pages/PresupuestoFincaPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/finca"
+    },
+    {
+      "path": "frontend/src/modules/fleet/__tests__/cost-pagination.spec.ts",
+      "delta": "only_v3",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modules/fleet"
+    },
+    {
+      "path": "frontend/src/modules/fleet/api.ts",
+      "delta": "changed",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-045, BUG-047",
+      "owner": "modules/fleet"
+    },
+    {
+      "path": "frontend/src/modules/fleet/pages/ConductoresPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/fleet"
+    },
+    {
+      "path": "frontend/src/modules/fleet/pages/CostosFlotaPage.vue",
+      "delta": "changed",
+      "commit": "4ea09081d2bc00e5e8985b3a22ee7f8cce858015",
+      "subject": "fix(pagination): eliminar truncamientos BUG-045 a BUG-047",
+      "tracking_ids": [
+        "BUG-045",
+        "BUG-047"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-045, BUG-047",
+      "owner": "modules/fleet"
+    },
+    {
+      "path": "frontend/src/modules/fleet/pages/FlotaPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/fleet"
+    },
+    {
+      "path": "frontend/src/modules/fleet/pages/MantenimientoPage.vue",
+      "delta": "changed",
+      "commit": "cc9d431f264561e05fe4c0c4e09810896cdb707c",
+      "subject": "baseline: copia de v2 + paso 1 (bootstrap/fix BUG-001) + tooling qa",
+      "tracking_ids": [
+        "BUG-001"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-001",
+      "owner": "modules/fleet"
+    },
+    {
+      "path": "frontend/src/modules/fuel/pages/TurnosPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/fuel"
+    },
+    {
+      "path": "frontend/src/modules/hr/api.ts",
+      "delta": "changed",
+      "commit": "1d240069212a7b92cd533a2487334c032f9a3869",
+      "subject": "fix(hr): retirar superusuario bootstrap BUG-002",
+      "tracking_ids": [
+        "BUG-002"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-002",
+      "owner": "modules/hr"
+    },
+    {
+      "path": "frontend/src/modules/hr/pages/HrHomePage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/hr"
+    },
+    {
+      "path": "frontend/src/modules/hr/pages/NuevoTrabajadorPage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/hr"
+    },
+    {
+      "path": "frontend/src/modules/hr/pages/PuestosPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/hr"
+    },
+    {
+      "path": "frontend/src/modules/hr/pages/TrabajadorPerfilPage.vue",
+      "delta": "changed",
+      "commit": "1d240069212a7b92cd533a2487334c032f9a3869",
+      "subject": "fix(hr): retirar superusuario bootstrap BUG-002",
+      "tracking_ids": [
+        "BUG-002"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-002",
+      "owner": "modules/hr"
+    },
+    {
+      "path": "frontend/src/modules/hr/pages/TrabajadoresPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/hr"
+    },
+    {
+      "path": "frontend/src/modules/inventory/api.ts",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/inventory"
+    },
+    {
+      "path": "frontend/src/modules/inventory/pages/CatalogoInventarioPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/inventory"
+    },
+    {
+      "path": "frontend/src/modules/inventory/pages/ConteoFisicoPage.vue",
+      "delta": "changed",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-021",
+      "owner": "modules/inventory"
+    },
+    {
+      "path": "frontend/src/modules/inventory/pages/ExistenciasPage.vue",
+      "delta": "changed",
+      "commit": "ae1d5ec2d21ee83e8bd27689d8b5d644c6cc9069",
+      "subject": "feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "owner": "modules/inventory"
+    },
+    {
+      "path": "frontend/src/modules/inventory/pages/KardexPage.vue",
+      "delta": "changed",
+      "commit": "ae1d5ec2d21ee83e8bd27689d8b5d644c6cc9069",
+      "subject": "feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-1): facturación + inventarios — perf de la ruta de venta, U8 y pedido-con-crédito",
+      "owner": "modules/inventory"
+    },
+    {
+      "path": "frontend/src/modules/inventory/pages/ListasPreciosPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/inventory"
+    },
+    {
+      "path": "frontend/src/modules/knowledge/pages/ConocimientoPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/knowledge"
+    },
+    {
+      "path": "frontend/src/modules/knowledge/pages/DevFeedbackPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/knowledge"
+    },
+    {
+      "path": "frontend/src/modules/nomina/api.ts",
+      "delta": "changed",
+      "commit": "e2d874b28c708a2031818ef87bf96f54cee5e0cd",
+      "subject": "feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-3): nómina — planilla con bulk_update, tramos IR cacheados, dedupe biométrico por lote",
+      "owner": "modules/nomina"
+    },
+    {
+      "path": "frontend/src/modules/nomina/pages/ComplementoPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/nomina"
+    },
+    {
+      "path": "frontend/src/modules/nomina/pages/NominaPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/nomina"
+    },
+    {
+      "path": "frontend/src/modules/nomina/pages/PeriodoDetallePage.vue",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/nomina"
+    },
+    {
+      "path": "frontend/src/modules/nomina/pages/RegimenInssPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/nomina"
+    },
+    {
+      "path": "frontend/src/modules/parties/api.ts",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/parties"
+    },
+    {
+      "path": "frontend/src/modules/parties/pages/TercerosPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/parties"
+    },
+    {
+      "path": "frontend/src/modules/payments/api.ts",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/payments"
+    },
+    {
+      "path": "frontend/src/modules/payments/pages/BancosPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/payments"
+    },
+    {
+      "path": "frontend/src/modules/payments/pages/IntentosPagoPage.vue",
+      "delta": "changed",
+      "commit": "efeed07e35aa4c82712a5227adc6ab858c24870d",
+      "subject": "feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-2): payments + accounting — posteo sin N+1, GL agregado en BD, conciliación batch, U10/U11",
+      "owner": "modules/payments"
+    },
+    {
+      "path": "frontend/src/modules/payments/pages/SesionesCajaPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/payments"
+    },
+    {
+      "path": "frontend/src/modules/portfolio/api.ts",
+      "delta": "changed",
+      "commit": "bbf604e07254243da523062da55250d076609c39",
+      "subject": "feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "owner": "modules/portfolio"
+    },
+    {
+      "path": "frontend/src/modules/portfolio/components/CreditoDetalleDialog.vue",
+      "delta": "only_v3",
+      "commit": "bbf604e07254243da523062da55250d076609c39",
+      "subject": "feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/portfolio"
+    },
+    {
+      "path": "frontend/src/modules/portfolio/pages/CarteraPage.vue",
+      "delta": "changed",
+      "commit": "bbf604e07254243da523062da55250d076609c39",
+      "subject": "feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "owner": "modules/portfolio"
+    },
+    {
+      "path": "frontend/src/modules/portfolio/pages/ConfiguracionCarteraPage.vue",
+      "delta": "only_v3",
+      "commit": "bbf604e07254243da523062da55250d076609c39",
+      "subject": "feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/portfolio"
+    },
+    {
+      "path": "frontend/src/modules/portfolio/pages/CreditosPage.vue",
+      "delta": "changed",
+      "commit": "bbf604e07254243da523062da55250d076609c39",
+      "subject": "feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-5): portfolio — cartera sargable en BD, doble-CxC blindado y cableado de intereses/settings",
+      "owner": "modules/portfolio"
+    },
+    {
+      "path": "frontend/src/modules/portfolio/pages/InteresesPage.vue",
+      "delta": "only_v3",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/portfolio"
+    },
+    {
+      "path": "frontend/src/modules/pos/api.ts",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/pos"
+    },
+    {
+      "path": "frontend/src/modules/pos/pages/TicketsPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/pos"
+    },
+    {
+      "path": "frontend/src/modules/procurement/api.ts",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/procurement"
+    },
+    {
+      "path": "frontend/src/modules/procurement/components/OrdenesTab.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/procurement"
+    },
+    {
+      "path": "frontend/src/modules/procurement/components/PreciosProveedorTab.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/procurement"
+    },
+    {
+      "path": "frontend/src/modules/procurement/components/RequisicionesTab.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/procurement"
+    },
+    {
+      "path": "frontend/src/modules/procurement/pages/ComprasPage.vue",
+      "delta": "changed",
+      "commit": "2a74101c9995a52b0ebc6e538d92f56f18926fc9",
+      "subject": "feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-7): sync con chunking, diccionario de códigos y cierre del programa de oleadas",
+      "owner": "modules/procurement"
+    },
+    {
+      "path": "frontend/src/modules/reportes/api.ts",
+      "delta": "only_v3",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/reportes"
+    },
+    {
+      "path": "frontend/src/modules/reportes/components/FiltrosDataset.vue",
+      "delta": "only_v3",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/reportes"
+    },
+    {
+      "path": "frontend/src/modules/reportes/labels.ts",
+      "delta": "only_v3",
+      "commit": "944c8dfbc0f417cf89a3ec07c987f160ac730cab",
+      "subject": "feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/reportes"
+    },
+    {
+      "path": "frontend/src/modules/reportes/pages/CatalogoReportesPage.vue",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/reportes"
+    },
+    {
+      "path": "frontend/src/modules/reportes/pages/EjecucionesPage.vue",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/reportes"
+    },
+    {
+      "path": "frontend/src/modules/reportes/pages/SnapshotsPage.vue",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/reportes"
+    },
+    {
+      "path": "frontend/src/modules/ventas/__tests__/credit-account.spec.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modules/ventas"
+    },
+    {
+      "path": "frontend/src/modules/ventas/__tests__/held-ticket.spec.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "modules/ventas"
+    },
+    {
+      "path": "frontend/src/modules/ventas/api.ts",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "modules/ventas"
+    },
+    {
+      "path": "frontend/src/modules/ventas/held-ticket.ts",
+      "delta": "only_v3",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "modules/ventas"
+    },
+    {
+      "path": "frontend/src/modules/ventas/pages/AutoFacturaPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/ventas"
+    },
+    {
+      "path": "frontend/src/modules/ventas/pages/CajaVentaPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/ventas"
+    },
+    {
+      "path": "frontend/src/modules/ventas/pages/HistorialVentasPage.vue",
+      "delta": "changed",
+      "commit": "f31e0dd8d22580a649326f7b12af8dbb6cafb24b",
+      "subject": "fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): cerrar accesibilidad paginación y carreras UI",
+      "owner": "modules/ventas"
+    },
+    {
+      "path": "frontend/src/router/__tests__/access.spec.ts",
+      "delta": "only_v3",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/router/access.ts",
+      "delta": "only_v3",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "new_feature",
+      "reason": "superficie nueva de v3",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/router/index.ts",
+      "delta": "changed",
+      "commit": "10e66be9a828c5a957a6109771a13b547f54a738",
+      "subject": "fix(frontend): restablecer gates reales y cerrar BUG-021",
+      "tracking_ids": [
+        "BUG-021"
+      ],
+      "mapped": true,
+      "classification": "expected_v3",
+      "reason": "delta trazado por BUG-021",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/router/routes.ts",
+      "delta": "changed",
+      "commit": "944c8dfbc0f417cf89a3ec07c987f160ac730cab",
+      "subject": "feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: feat(oleada-6): reporting — adaptadores agregando en BD, cache near-realtime por contrato y módulo de reportes en UI",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/stores/__tests__/auth.store.spec.ts",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "test",
+      "reason": "cobertura/regresión v3",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/stores/auth.store.ts",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "frontend/platform"
+    },
+    {
+      "path": "frontend/src/stores/session-bootstrap.store.ts",
+      "delta": "changed",
+      "commit": "78e22e030e8310edbeec3cc9cbda6c377f5d4525",
+      "subject": "fix(frontend): endurecer auth offline y flujos POS",
+      "tracking_ids": [],
+      "mapped": false,
+      "classification": "expected_v3",
+      "reason": "delta trazado por commit convencional: fix(frontend): endurecer auth offline y flujos POS",
+      "owner": "frontend/platform"
+    }
+  ]
+}
