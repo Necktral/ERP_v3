@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 function vueFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -10,6 +10,13 @@ function vueFiles(dir: string): string[] {
 }
 
 describe('guardas UX estáticas', () => {
+  it('permite zoom móvil y nombra la barra global de carga', () => {
+    const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
+    const boot = readFileSync(resolve(process.cwd(), 'src/boot/accessibility.ts'), 'utf8');
+    expect(html).not.toContain('user-scalable=no');
+    expect(html).not.toContain('maximum-scale=1');
+    expect(boot).toContain("setAttribute('aria-label', 'Cargando página')");
+  });
   it('todo q-btn redondo con icono tiene nombre accesible', () => {
     const offenders: string[] = [];
     for (const file of vueFiles(join(process.cwd(), 'src/modules'))) {
