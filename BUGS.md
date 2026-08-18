@@ -31,6 +31,30 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-060 — Región desplazable de tabla vacía no es alcanzable por teclado en móvil
+
+- **Módulo / paso del ROADMAP:** frontend/accesibilidad / L4
+- **Fecha:** 2026-08-18
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** abrir Trabajadores a 360 px sin filas y ejecutar axe o recorrer las regiones desplazables con teclado.
+- **Esperado:** toda región desplazable es enfocable o no se anuncia como región desplazable cuando está vacía.
+- **Actual:** `.q-table__middle.scroll` queda sin foco y axe reporta `scrollable-region-focusable` serio.
+- **Impacto:** usuarios de teclado no pueden alcanzar ni controlar de forma fiable el contenedor de la tabla en viewport móvil.
+- **Causa raíz / fix:** pendiente; falta normalizar accesibilidad de las regiones scroll creadas por QTable.
+
+### BUG-059 — Navegación autenticada viola la estructura ARIA de listas
+
+- **Módulo / paso del ROADMAP:** frontend/AppLayout / L4
+- **Fecha:** 2026-08-18
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** iniciar sesión, abrir cualquier pantalla con drawer y ejecutar axe.
+- **Esperado:** los hijos directos de un contenedor `role=list` exponen `role=listitem` o se usa una semántica de navegación compatible.
+- **Actual:** AppLayout genera `.q-list[role=list]` con enlaces enfocables hijos sin `role=listitem`; axe reporta `aria-required-children` crítico.
+- **Impacto:** lectores de pantalla reciben una jerarquía inválida en toda la navegación autenticada.
+- **Causa raíz / fix:** pendiente; la composición QList/QItem no conserva la estructura ARIA requerida.
+
 ### BUG-058 — Una revaluación FX bloqueada nunca puede reintentarse
 
 - **Módulo / paso del ROADMAP:** accounting / revaluación FX L3
