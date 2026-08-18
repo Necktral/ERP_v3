@@ -8,6 +8,7 @@ from io import BytesIO, StringIO
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from django.conf import settings
 from django.utils import timezone
 
 from .enums import ExportStatus, RunStatus
@@ -31,6 +32,53 @@ def _resolve_columns(payload: dict[str, Any]) -> list[str]:
     rows = payload.get("rows") or []
     dynamic = sorted({str(k) for row in rows for k in (row or {}).keys() if str(k) not in ordered})
     return ordered + dynamic
+
+
+def _configured_positive_limit(name: str) -> int:
+    value = int(getattr(settings, name))
+    if value <= 0:
+        raise ReportingValidationError(f"Configuración inválida: {name} debe ser mayor que cero.")
+    return value
+
+
+def _validate_export_shape(payload: dict[str, Any]) -> None:
+    rows = list(payload.get("rows") or [])
+    columns = _resolve_columns(payload)
+    row_count = len(rows)
+    cell_count = row_count * len(columns)
+    max_rows = _configured_positive_limit("REPORTING_EXPORT_MAX_ROWS")
+    max_cells = _configured_positive_limit("REPORTING_EXPORT_MAX_CELLS")
+    max_cell_bytes = _configured_positive_limit("REPORTING_EXPORT_MAX_CELL_BYTES")
+    max_input_bytes = _configured_positive_limit("REPORTING_EXPORT_MAX_INPUT_BYTES")
+    if row_count > max_rows:
+        raise ReportingValidationError(
+            f"Export excede el límite de filas ({row_count} > {max_rows}). Aplique filtros más restrictivos."
+        )
+    if cell_count > max_cells:
+        raise ReportingValidationError(
+            f"Export excede el límite de celdas ({cell_count} > {max_cells}). Aplique filtros más restrictivos."
+        )
+    input_bytes = sum(len(column.encode("utf-8")) for column in columns)
+    for row in rows:
+        for column in columns:
+            value_bytes = len(str("" if row.get(column) is None else row.get(column)).encode("utf-8"))
+            if value_bytes > max_cell_bytes:
+                raise ReportingValidationError(
+                    f"Export contiene una celda que excede el límite ({value_bytes} > {max_cell_bytes} bytes)."
+                )
+            input_bytes += value_bytes
+            if input_bytes > max_input_bytes:
+                raise ReportingValidationError(
+                    f"Export excede el presupuesto de entrada ({input_bytes} > {max_input_bytes} bytes)."
+                )
+
+
+def _validate_output_size(binary: bytes) -> None:
+    max_bytes = _configured_positive_limit("REPORTING_EXPORT_MAX_OUTPUT_BYTES")
+    if len(binary) > max_bytes:
+        raise ReportingValidationError(
+            f"Export excede el límite de tamaño ({len(binary)} > {max_bytes} bytes)."
+        )
 
 
 def _to_json_bytes(payload: dict[str, Any]) -> bytes:
@@ -159,7 +207,9 @@ def create_export_from_run(*, run: ReportRun, requested_by, export_format: str) 
         delivery_channel="INLINE_API",
     )
     try:
+        _validate_export_shape(payload)
         binary, mime_type = _export_bytes(export_format=normalized, payload=payload)
+        _validate_output_size(binary)
         digest = hashlib.sha256(binary).hexdigest()
         export.status = ExportStatus.SUCCEEDED
         export.output_hash = digest
