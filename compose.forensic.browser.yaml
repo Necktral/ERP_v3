@@ -1,0 +1,24 @@
+services:
+  backend:
+    ports:
+      - "127.0.0.1:${FORENSIC_BACKEND_PORT:-18080}:8000"
+
+  frontend:
+    image: node:22-bullseye-slim
+    working_dir: /app/frontend
+    environment:
+      HOME: /tmp
+      VITE_API_BASE_URL: /api
+    command: >-
+      bash -lc "npm ci && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      backend:
+        condition: service_started
+    volumes:
+      - ./:/app
+      - forensic_frontend_node_modules:/app/frontend/node_modules
+    ports:
+      - "127.0.0.1:${FORENSIC_FRONTEND_PORT:-13000}:3000"
+
+volumes:
+  forensic_frontend_node_modules:
