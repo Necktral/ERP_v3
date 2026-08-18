@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "generated_at": "2026-08-08T19:20:00-06:00",
+  "min_paths": 851,
+  "max_warning_lines": 23,
+  "max_serializer_error_lines": 452,
+  "max_operation_id_collisions": 64,
+  "forbidden_patterns": [
+    "could not resolve authenticator <class 'apps.modulos.iam.authentication.JWTAuthWithOrgContext'>",
+    "attribute name must be string, not 'function'"
+  ],
+  "notes": [
+    "Forensic 2026 ratchet: schema generation failures and regressions fail the gate.",
+    "The remaining serializer gaps are historical debt; the ratchet permits only reductions."
+  ]
+}
