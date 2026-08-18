@@ -82,6 +82,15 @@
           </div>
         </div>
         <div class="perfil-head__actions">
+          <q-btn
+            v-if="profile.can_claim_bootstrap_admin"
+            outline
+            no-caps
+            color="negative"
+            icon="security"
+            label="Retirar superusuario"
+            @click="openAdminDemotion"
+          />
           <template v-if="profile.employment_status === 'ACTIVO'">
             <q-btn outline no-caps color="warning" icon="pause_circle" label="Suspender" @click="suspendOpen = true" />
             <q-btn outline no-caps color="negative" icon="person_off" label="Dar de baja" @click="bajaOpen = true" />
@@ -673,6 +682,42 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="adminDemotionOpen" persistent>
+      <q-card style="width: min(560px, 92vw)">
+        <q-card-section>
+          <div class="text-h6">Vincular este expediente y retirar superusuario</div>
+          <p class="q-mt-md q-mb-sm">
+            Esta operación vincula tu usuario actual a este trabajador y elimina los privilegios
+            globales de superusuario. Conservarás únicamente los permisos RBAC de
+            <strong>company_admin</strong> en esta empresa.
+          </p>
+          <q-banner rounded class="bg-orange-1 text-orange-10 q-mb-md">
+            Verificá que este sea tu expediente. La operación no crea otro usuario y no se puede
+            revertir desde esta pantalla.
+          </q-banner>
+          <q-input
+            v-model="adminDemotionConfirmation"
+            outlined
+            autofocus
+            label="Escribí DESPROMOVER para confirmar"
+            autocomplete="off"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Cancelar" :disable="adminDemotionSaving" @click="adminDemotionOpen = false" />
+          <q-btn
+            unelevated
+            no-caps
+            color="negative"
+            label="Vincular y retirar privilegio"
+            :loading="adminDemotionSaving"
+            :disable="adminDemotionConfirmation !== 'DESPROMOVER'"
+            @click="demoteBootstrapAdmin"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -685,6 +730,7 @@ import { apiErrorMessage } from 'src/core/api';
 import {
   annulContract,
   annulMemo,
+  claimBootstrapAdminEmployee,
   createContract,
   createMemo,
   deleteEmployeeDocument,
@@ -717,11 +763,13 @@ import EmployeeAvatar from 'src/modules/hr/components/EmployeeAvatar.vue';
 import RoleMultiSelect from 'src/modules/hr/components/RoleMultiSelect.vue';
 import { useAclStore } from 'src/stores/acl.store';
 import { useContextStore } from 'src/stores/context.store';
+import { useSessionBootstrapStore } from 'src/stores/session-bootstrap.store';
 
 const $q = useQuasar();
 const route = useRoute();
 const acl = useAclStore();
 const ctx = useContextStore();
+const sessionBootstrap = useSessionBootstrapStore();
 const employeeId = computed(() => Number(route.params.id));
 
 function puede(code: string): boolean {
@@ -735,6 +783,36 @@ const profile = ref<EmployeeProfile | null>(null);
 const catalogs = ref<HrCatalogs | null>(null);
 const positions = ref<Position[]>([]);
 const tab = ref('datos');
+const adminDemotionOpen = ref(false);
+const adminDemotionSaving = ref(false);
+const adminDemotionConfirmation = ref('');
+
+function openAdminDemotion() {
+  adminDemotionConfirmation.value = '';
+  adminDemotionOpen.value = true;
+}
+
+async function demoteBootstrapAdmin() {
+  if (adminDemotionConfirmation.value !== 'DESPROMOVER') return;
+  adminDemotionSaving.value = true;
+  try {
+    await claimBootstrapAdminEmployee(employeeId.value, adminDemotionConfirmation.value);
+    await sessionBootstrap.loadSession({ force: true });
+    await reload();
+    adminDemotionOpen.value = false;
+    $q.notify({
+      type: 'positive',
+      message: 'Usuario vinculado. Privilegio global retirado y permisos RBAC actualizados.',
+    });
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: apiErrorMessage(error, 'No se pudo retirar el privilegio de forma segura.'),
+    });
+  } finally {
+    adminDemotionSaving.value = false;
+  }
+}
 
 const today = () => new Date().toISOString().slice(0, 10);
 

@@ -9,13 +9,16 @@ API: positions list/create con permisos rbac.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import uuid
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db import close_old_connections, connections
 from rest_framework.test import APIClient
 
+from apps.modulos.audit.models import AuditEvent
 from apps.modulos.hr.models import Employee, EmploymentAssignment, JobPosition, PositionRoleMap
 from apps.modulos.hr.services import (
     end_assignment,
@@ -27,7 +30,7 @@ from apps.modulos.hr.services import (
     set_employee_role_maps,
     set_position_role_maps,
 )
-from apps.modulos.iam.models import OrgUnit, UserMembership
+from apps.modulos.iam.models import AdminGrant, OrgUnit, UserMembership
 from apps.modulos.parties.models import Party, PartyRole
 from apps.modulos.rbac.models import Permission, Role, RoleAssignment, RolePermission
 
@@ -318,6 +321,221 @@ def _client_with_perms(*, company, branch, perm_codes):
     client.defaults["HTTP_X_COMPANY_ID"] = str(company.id)
     client.defaults["HTTP_X_BRANCH_ID"] = str(branch.id)
     return client
+
+
+def _bootstrap_admin_case():
+    _, company, branch = _mk_org()
+    username = f"bootstrap_{uuid.uuid4().hex[:8]}"
+    user = User.objects.create_superuser(
+        username=username,
+        email=f"{username}@test.local",
+        password="pass12345",
+    )
+    UserMembership.objects.create(user=user, org_unit=company, is_active=True)
+    company_admin = Role.objects.create(name="company_admin", is_active=True)
+    for code in (
+        "hr.employee.read",
+        "hr.employee.update",
+        "iam.users.create",
+        "rbac.assignments.read",
+        "rbac.assignments.update",
+    ):
+        permission = Permission.objects.create(code=code, description=code, is_active=True)
+        RolePermission.objects.create(role=company_admin, permission=permission)
+    RoleAssignment.objects.create(
+        user=user,
+        role=company_admin,
+        org_unit=company,
+        origin=RoleAssignment.Origin.SYSTEM,
+        origin_ref="bootstrap",
+        is_active=True,
+    )
+    for capability in AdminGrant.Capability.values:
+        AdminGrant.objects.create(
+            user=user,
+            org_unit=company,
+            capability=capability,
+            applies_to_subtree=True,
+            is_active=True,
+            granted_by=user,
+        )
+    employee = _mk_employee(company)
+    position = JobPosition.objects.create(company=company, name=f"Administrador {uuid.uuid4().hex[:4]}")
+    EmploymentAssignment.objects.create(employee=employee, position=position, branch=branch, is_active=True)
+
+    client = APIClient()
+    login = client.post("/api/auth/login/", {"username": username, "password": "pass12345"}, format="json")
+    assert login.status_code == 200, login.data
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+    client.defaults["HTTP_X_COMPANY_ID"] = str(company.id)
+    client.defaults["HTTP_X_BRANCH_ID"] = str(branch.id)
+    return client, user, employee, company, branch
+
+
+@pytest.mark.django_db
+def test_bootstrap_admin_claim_links_existing_user_demotes_and_preserves_rbac_access():
+    client, user, employee, company, branch = _bootstrap_admin_case()
+    users_before = User.objects.count()
+    other_employee = _mk_employee(company)
+    other_position = JobPosition.objects.create(company=company, name=f"Otro {uuid.uuid4().hex[:4]}")
+    EmploymentAssignment.objects.create(
+        employee=other_employee,
+        position=other_position,
+        branch=branch,
+        is_active=True,
+    )
+
+    response = client.post(
+        f"/api/hr/employees/{employee.id}/claim-bootstrap-admin/",
+        {"confirmation": "DESPROMOVER"},
+        format="json",
+    )
+    assert response.status_code == 200, response.data
+    assert response.data["is_superuser"] is False
+    assert response.data["replayed"] is False
+    assert "hr.employee.read" in response.data["preserved_permissions"]
+
+    user.refresh_from_db()
+    employee.refresh_from_db()
+    assert user.is_superuser is False
+    assert user.is_staff is False
+    assert employee.linked_user_id == user.id
+    assert User.objects.count() == users_before
+
+    # El mismo JWT sigue autenticando, pero ahora exclusivamente por RBAC scoped.
+    profile = client.get(f"/api/hr/employees/{employee.id}/profile/")
+    assert profile.status_code == 200, profile.data
+    assert profile.data["linked_user_id"] == user.id
+    assert profile.data["can_claim_bootstrap_admin"] is False
+    acl = client.get("/api/auth/me/acl/")
+    assert acl.status_code == 200, acl.data
+    company_acl = next(c for c in acl.data["companies"] if str(c["company_id"]) == str(company.id))
+    assert "hr.employee.read" in company_acl["permissions"]
+    assert AuditEvent.objects.filter(
+        event_type="HR_BOOTSTRAP_ADMIN_DEMOTED",
+        subject_type="EMPLOYEE",
+        subject_id=str(employee.id),
+        actor_user=user,
+    ).exists()
+
+    audit_count = AuditEvent.objects.filter(event_type="HR_BOOTSTRAP_ADMIN_DEMOTED").count()
+    # Repetición segura: responde éxito idempotente, sin otra mutación ni auditoría.
+    repeated = client.post(
+        f"/api/hr/employees/{employee.id}/claim-bootstrap-admin/",
+        {"confirmation": "DESPROMOVER"},
+        format="json",
+    )
+    assert repeated.status_code == 200, repeated.data
+    assert repeated.data["replayed"] is True
+    assert AuditEvent.objects.filter(event_type="HR_BOOTSTRAP_ADMIN_DEMOTED").count() == audit_count
+    assert User.objects.count() == users_before
+
+    different_employee = client.post(
+        f"/api/hr/employees/{other_employee.id}/claim-bootstrap-admin/",
+        {"confirmation": "DESPROMOVER"},
+        format="json",
+    )
+    assert different_employee.status_code == 409
+    assert different_employee.data["error"]["code"] == "NOT_SUPERUSER"
+
+
+@pytest.mark.django_db
+def test_bootstrap_admin_claim_rejects_weak_confirmation_cross_tenant_and_linked_employee():
+    client, user, employee, _, _ = _bootstrap_admin_case()
+    weak = client.post(
+        f"/api/hr/employees/{employee.id}/claim-bootstrap-admin/",
+        {"confirmation": "confirmo"},
+        format="json",
+    )
+    assert weak.status_code == 422
+
+    _, other_company, _ = _mk_org()
+    other_employee = _mk_employee(other_company)
+    cross_tenant = client.post(
+        f"/api/hr/employees/{other_employee.id}/claim-bootstrap-admin/",
+        {"confirmation": "DESPROMOVER"},
+        format="json",
+    )
+    assert cross_tenant.status_code == 404
+
+    employee.linked_user = _mk_user("other")
+    employee.save(update_fields=["linked_user"])
+    linked = client.post(
+        f"/api/hr/employees/{employee.id}/claim-bootstrap-admin/",
+        {"confirmation": "DESPROMOVER"},
+        format="json",
+    )
+    assert linked.status_code == 409
+    assert linked.data["error"]["code"] == "EMPLOYEE_ALREADY_LINKED"
+    user.refresh_from_db()
+    assert user.is_superuser is True
+
+
+@pytest.mark.django_db
+def test_bootstrap_admin_claim_fails_closed_if_admin_grants_are_incomplete():
+    client, user, employee, company, _ = _bootstrap_admin_case()
+    AdminGrant.objects.filter(
+        user=user,
+        org_unit=company,
+        capability=AdminGrant.Capability.MANAGE_USERS,
+    ).update(is_active=False)
+
+    response = client.post(
+        f"/api/hr/employees/{employee.id}/claim-bootstrap-admin/",
+        {"confirmation": "DESPROMOVER"},
+        format="json",
+    )
+    assert response.status_code == 409
+    assert response.data["error"]["code"] == "MISSING_ADMIN_GRANTS"
+    user.refresh_from_db()
+    employee.refresh_from_db()
+    assert user.is_superuser is True
+    assert employee.linked_user_id is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_bootstrap_admin_claim_concurrent_has_one_transition_and_one_safe_replay():
+    """BUG-002: dos solicitudes simultaneas serializan una unica despromocion."""
+    client, user, employee, company, branch = _bootstrap_admin_case()
+    username = user.username
+
+    def claim():
+        close_old_connections()
+        worker = APIClient()
+        login = worker.post(
+            "/api/auth/login/",
+            {"username": username, "password": "pass12345"},
+            format="json",
+        )
+        assert login.status_code == 200, login.data
+        worker.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        response = worker.post(
+            f"/api/hr/employees/{employee.id}/claim-bootstrap-admin/",
+            {"confirmation": "DESPROMOVER"},
+            format="json",
+            HTTP_X_COMPANY_ID=str(company.id),
+            HTTP_X_BRANCH_ID=str(branch.id),
+        )
+        close_old_connections()
+        return response.status_code, response.data
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: claim(), range(2)))
+    finally:
+        connections.close_all()
+
+    assert [status for status, _ in results] == [200, 200]
+    assert sorted(payload["replayed"] for _, payload in results) == [False, True]
+    assert {payload["employee_id"] for _, payload in results} == {employee.id}
+    assert AuditEvent.objects.filter(
+        event_type="HR_BOOTSTRAP_ADMIN_DEMOTED",
+        subject_id=str(employee.id),
+    ).count() == 1
+    user.refresh_from_db()
+    employee.refresh_from_db()
+    assert user.is_superuser is False
+    assert employee.linked_user_id == user.id
 
 
 @pytest.mark.django_db

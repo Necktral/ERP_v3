@@ -16,6 +16,15 @@ class EmployeeRevokeAccessSerializer(serializers.Serializer):
     disable_user = serializers.BooleanField(required=False, default=False)
 
 
+class BootstrapAdminDemotionSerializer(serializers.Serializer):
+    confirmation = serializers.CharField(max_length=32)
+
+    def validate_confirmation(self, value):
+        if value != "DESPROMOVER":
+            raise serializers.ValidationError("Escribí DESPROMOVER exactamente para confirmar.")
+        return value
+
+
 class PositionCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     code = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
