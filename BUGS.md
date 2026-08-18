@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-054 — El rol cajero no puede acceder al POS que debe operar
+
+- **Módulo / paso del ROADMAP:** RBAC/ventas / E2E por rol U18 y L1
+- **Fecha:** 2026-08-18
+- **Severidad:** alta
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** asignar el rol seed `cashier`, iniciar sesión y abrir `/ventas`.
+- **Esperado:** el cajero puede leer catálogo/bodega y ejecutar la venta POS, sin permisos de supervisión.
+- **Actual:** `cashier` sólo recibe permisos de factura/reporte; la ruta exige `sales.pos.sell` y responde 403. Ese permiso existe únicamente en roles más privilegiados.
+- **Impacto:** el rol operativo estándar queda bloqueado del flujo principal de caja o fuerza a otorgar privilegios excesivos.
+- **Causa raíz / fix:** pendiente; la matriz seed del rol no evolucionó junto con el endpoint y el guard de ruta POS.
+
 ### BUG-053 — La barra global de carga no tiene nombre accesible
 
 - **Módulo / paso del ROADMAP:** frontend / accesibilidad U23–U26
