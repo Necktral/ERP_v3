@@ -31,6 +31,18 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-063 — Indicador “En línea” no alcanza contraste en la barra superior
+
+- **Módulo / paso del ROADMAP:** frontend/conectividad/accesibilidad / L4
+- **Fecha:** 2026-08-18
+- **Severidad:** media
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** abrir `/recursos-humanos/trabajadores` a 768×1024 con conexión activa y ejecutar axe.
+- **Esperado:** la etiqueta de estado mantiene contraste WCAG AA de al menos 4.5:1 sobre la barra clara.
+- **Actual:** `.conn__label` usa `#21ba45` sobre `#fffdf8`, contraste 2.52:1; axe reporta `color-contrast` serio.
+- **Impacto:** personas con baja visión no distinguen de forma fiable el estado de conectividad.
+- **Causa raíz / fix:** pendiente; el verde semántico se usa directamente como color de texto sin variante oscura accesible.
+
 ### BUG-062 — Checkboxes de selección del catálogo no tienen nombre accesible
 
 - **Módulo / paso del ROADMAP:** inventario/frontend/accesibilidad / L4
