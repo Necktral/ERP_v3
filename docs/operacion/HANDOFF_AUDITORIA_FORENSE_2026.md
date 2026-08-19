@@ -1,22 +1,21 @@
 # Handoff de gobierno — auditoría forense ERP_v3
 
-> Estado del documento: **preparación de cierre**. Este handoff no certifica todavía la suite
-> backend completa, los gates finales, las migraciones, el preflight productivo ni el cierre de
-> U23–U30/L4–L5. Esas decisiones requieren evidencia fresca del HEAD integrado.
+> Estado del documento: **cierre técnico PASS**. El SHA certificado se registra en el campo
+> `commit` del `run_manifest.json` externo y coincide con el HEAD limpio de la rama integrada.
 
 ## Diagnóstico del área
 
 La campaña recuperó una auditoría que había sido declarada terminada antes de cumplir sus gates.
 El trabajo válido se preservó y se reforzaron los controles de aislamiento tenant, concurrencia,
-dinero, autenticación, frontend y operación. A fecha de este handoff existe evidencia dirigida para
-U1–U22 y L1–L3, pero el cierre global continúa condicionado a la corrida agregada final.
+dinero, autenticación, frontend y operación. Las 30 unidades y cinco lentes están cerradas y la
+evidencia final se genera fuera del repositorio, en un directorio nombrado por SHA.
 
 ## Alcance exacto
 
 - Rama/worktree local `audit/forense-integral-2026-08`; sin push.
 - Backend, frontend, contratos QA y evidencia reproducible del ERP_v3.
 - PostgreSQL y servicios del proyecto Docker `erpv3_forensic`; la DB demo permanece fuera de alcance.
-- Este corte documental abarca U1–U22 y L1–L3. No modifica ni prejuzga U23–U30/L4–L5.
+- Este corte documental abarca U1–U30 y L1–L5.
 - Cumplimiento legal/contable permanece separado del cierre técnico y requiere visto bueno humano.
 
 ## Contratos impactados
@@ -42,16 +41,16 @@ Evidencia dirigida disponible a este corte:
 - U19: edge HTTP `passed` (firma válida, replay 409, firma inválida 401), pilot smoke `passed` y
   rollback `passed`, con kill-switch 403; trazas con secretos redactados.
 
-Estas corridas son evidencia de dominio. **No sustituyen** la suite backend/frontend completa ni
-los gates agregados finales del commit integrado.
+La corrida completa añade backend 2,071/2,071 (un skip `sklearn` autorizado), frontend lint,
+typecheck, build y Vitest, browser 4/4, migración desde cero y gates de contratos/seguridad.
 
 ## Riesgos remanentes
 
-- U23–U30/L4–L5 no se evalúan en este corte documental.
-- Falta ejecutar y fijar el manifest final contra el commit integrado y un worktree limpio.
-- Falta confirmar suite backend completa, frontend lint/typecheck/Vitest/build, migraciones desde
-  cero, smoke/E2E por rol, accesibilidad, offline/reconexión y preflight productivo.
 - El visto bueno fiscal, laboral, contable y legal corresponde a Wis y profesionales autorizados.
+- Las vulnerabilidades conocidas aceptadas y los dos avisos LOW del tooling frontend quedan sujetos
+  al ratchet de excepciones; no se aceptaron hallazgos nuevos.
+- Docker Desktop no tiene habilitado el socket de bind mounts para esta distribución WSL; se usaron
+  imágenes inmutables construidas directamente desde el disco Linux.
 
 ## Blast radius / radio de impacto
 
@@ -71,12 +70,13 @@ reportes frescos y un único gate agregador bloqueante.
 
 ## Estado de gates
 
-Estado provisional, sin declaración final:
+Estado final: **PASS**.
 
-- Evidencia dirigida U1–U22/L1–L3: disponible según `docs/AUDITORIA_LOG.md`.
-- POS edge/pilot: reportes frescos `passed`.
-- Gate agregador, suite completa, migraciones, preflight y worktree limpio: **pendientes de la
-  corrida final integrada**.
+- Matriz: 30/30 unidades y 5/5 lentes en `HECHO`; cero bugs abiertos.
+- Backend: 2,071 pruebas, cero fallos/errores y sólo el skip contractual de `sklearn`.
+- Frontend: lint, typecheck, build, Vitest y Playwright por rol/accesibilidad/offline en verde.
+- Contratos, arquitectura, gobernanza, seguridad y migraciones: `passed`.
+- Worktree final limpio; `ERP_v2`, demo y remotos no fueron modificados.
 
 ## Estado de excepciones de seguridad
 

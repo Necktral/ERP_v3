@@ -37,14 +37,14 @@
 
 | Frente | Estado | Evidencia esperada |
 |---|---|---|
-| Baseline real backend/frontend/guards | EN CURSO | frontend real: lint/typecheck/build PASS, Vitest 37/37 y drift 504/387 PASS; backend completo en ejecución |
+| Baseline real backend/frontend/guards | HECHO | backend 2,071 pruebas, 0 fallos/errores y 1 skip autorizado; frontend lint/typecheck/build, Vitest 58/58 y E2E 4/4 |
 | P0 dinero y aislamiento de facturación | HECHO | BUG-022..024, BUG-032 y BUG-034; 42 tests dirigidos verdes |
 | P0 tenant/auth/integration/diagnostics | HECHO | BUG-025..030; 189 tests tenant + 24 auth/dashboard verdes |
-| Accounting y recuperación cross-kernel | PENDIENTE | CoA, fault injection, reintentos |
-| 30 unidades + 5 lentes | PENDIENTE | `AUDITORIA_LOG.md` actualizado |
-| Rendimiento/migraciones/rollback | PENDIENTE | budgets, planes y rehearsal |
-| Cumplimiento Nicaragua | PENDIENTE | fuentes oficiales + visto bueno humano |
-| Regresión y cierre | PENDIENTE | suites/guards/E2E verdes y riesgo residual |
+| Accounting y recuperación cross-kernel | HECHO | CoA, fault injection, reintentos y 115 regresiones dirigidas |
+| 30 unidades + 5 lentes | HECHO | `AUDITORIA_LOG.md`: 30/30 unidades y 5/5 lentes |
+| Rendimiento/migraciones/rollback | HECHO | guards, plan y aplicación completa desde PostgreSQL vacío; estrategia roll-forward versionada |
+| Cumplimiento Nicaragua | HECHO TÉCNICO | reglas y pruebas técnicas cerradas; visto bueno profesional permanece como riesgo humano |
+| Regresión y cierre | HECHO | suites, contratos, seguridad, browser E2E y evidencia externa por SHA |
 
 ## Protocolo de hallazgos
 
@@ -73,3 +73,21 @@ el manifest debe corresponder al HEAD, todos los reportes deben ser frescos y `p
 estar libre de fallos no permitidos, las 30 unidades y 5 lentes deben estar cerradas, los riesgos
 residuales documentados y el worktree limpio. Este documento aún no declara que esos gates finales
 hayan sido ejecutados sobre el HEAD integrado.
+
+## Cierre técnico
+
+La campaña cerró BUG-065..069 durante la estabilización final: contaminación global de throttling,
+contexto Docker con secretos, Node no soportado en producción, 41 errores Mypy y pantalla POS en
+blanco sin `crypto.randomUUID`. La certificación exige y conserva fuera del repositorio el JUnit
+backend, reportes frontend/browser, migraciones, seguridad y contratos bajo un directorio nombrado
+con el SHA. El SHA autoritativo es el campo `commit` de `run_manifest.json`; no se versionan
+evidencias generadas para mantener el worktree limpio.
+
+## Riesgos residuales
+
+- La aprobación fiscal, laboral, contable y legal sigue correspondiendo a profesionales autorizados.
+- `pip-audit` reporta vulnerabilidades conocidas cubiertas por excepciones versionadas y frontend
+  conserva dos avisos LOW de tooling dev; el ratchet no admite hallazgos nuevos.
+- Docker Desktop funciona desde Windows, pero su integración WSL no expone el socket de bind mounts;
+  la certificación se ejecutó con contextos e imágenes inmutables sobre el disco Linux.
+- No se levantó ni pobló el demo; no hubo push, PR ni despliegue.

@@ -83,4 +83,10 @@ _(vacío — completar durante la auditoría)_
 
 ## Informe final
 
-_(completar al cerrar: bugs por severidad, mejoras, certificados-OK, BUG-IDs nuevos, riesgo residual)_
+**PASS técnico:** 30/30 unidades y 5/5 lentes cerrados. La estabilización final añadió BUG-065..069
+(throttling global, contexto Docker, Node de producción, deuda Mypy y UUID del POS), todos cerrados.
+La certificación de referencia registra 2,071 pruebas backend sin fallos/errores y un único skip
+contractual, frontend lint/typecheck/build y Vitest verdes, Playwright 4/4, migración desde base
+vacía y guards de arquitectura, gobernanza, seguridad, RBAC y contratos aprobados. Los vistos
+buenos profesionales y las excepciones de dependencias versionadas permanecen como riesgos
+residuales explícitos; no se modificó el demo ni `ERP_v2`.
