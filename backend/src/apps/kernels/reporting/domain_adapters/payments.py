@@ -30,12 +30,12 @@ def _collection_payload(*, company, branch, filters: dict[str, Any]) -> dict[str
         .annotate(payment_count=Count("id"), amount_sum=Sum("amount"))
         .order_by("status")
     )
-    for row in grouped:
-        key = str(row.get("status") or "")
+    for grouped_row in grouped:
+        key = str(grouped_row.get("status") or "")
         agg[key] = {
             "status": key,
-            "count": int(row.get("payment_count") or 0),
-            "amount": Decimal(row.get("amount_sum") or Decimal("0.00")),
+            "count": int(grouped_row.get("payment_count") or 0),
+            "amount": Decimal(grouped_row.get("amount_sum") or Decimal("0.00")),
         }
 
     rows: list[dict[str, Any]] = []
@@ -43,14 +43,14 @@ def _collection_payload(*, company, branch, filters: dict[str, Any]) -> dict[str
     total_amount = Decimal("0.00")
 
     for key in sorted(agg.keys()):
-        row = agg[key]
-        total_count += int(row["count"])
-        total_amount += row["amount"]
+        aggregate_row = agg[key]
+        total_count += int(aggregate_row["count"])
+        total_amount += aggregate_row["amount"]
         rows.append(
             {
-                "status": row["status"],
-                "payment_count": int(row["count"]),
-                "amount": q2(row["amount"]),
+                "status": aggregate_row["status"],
+                "payment_count": int(aggregate_row["count"]),
+                "amount": q2(aggregate_row["amount"]),
             }
         )
 

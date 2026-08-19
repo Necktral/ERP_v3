@@ -858,13 +858,15 @@ def reconcile_issued_credit_documents_receivables(
     verified = []
     for event in events:
         data = event.payload.get("data", {}) if isinstance(event.payload, dict) else {}
-        doc = docs_by_id.get(data.get("doc_id")) if isinstance(data, dict) else None
+        raw_doc_id = data.get("doc_id") if isinstance(data, dict) else None
+        doc_id = int(raw_doc_id) if raw_doc_id is not None else None
+        doc = docs_by_id.get(doc_id) if doc_id is not None else None
         if doc is None:
             continue
         try:
             snapshot_matches = (
                 str(data.get("credit_status") or "").upper() == str(doc.credit_status).upper()
-                and int(data.get("customer_party_id") or 0) == int(doc.customer_party_id)
+                and int(data.get("customer_party_id") or 0) == int(doc.customer_party_id or 0)
                 and Decimal(str(data.get("total") or "0")) == doc.total
                 and str(data.get("currency") or "") == doc.currency
             )

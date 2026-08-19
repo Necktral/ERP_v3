@@ -188,7 +188,8 @@ def upsert_chart_of_accounts(
         )
         code_by_id = {row.id: row.code for row in locked_accounts}
         proposed_parent: dict[str, str] = {
-            row.code: code_by_id.get(row.parent_id, "") for row in locked_accounts
+            row.code: code_by_id.get(row.parent_id, "") if row.parent_id is not None else ""
+            for row in locked_accounts
         }
         proposed_parent.update({row["code"]: row["parent_code"] for row in clean_rows})
         visiting: set[str] = set()

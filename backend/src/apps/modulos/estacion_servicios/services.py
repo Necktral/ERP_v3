@@ -371,16 +371,16 @@ def build_shift_close_report(*, company, branch, shift: FuelShift) -> dict:
     sales_by_type = list(
         sales_active.values("sale_type").annotate(count=Count("id"), total=Sum("total_amount")).order_by("sale_type")
     )
-    for row in sales_by_type:
-        row["total"] = f"{_money(Decimal(row.get('total') or 0)):.2f}"
+    for sales_type_row in sales_by_type:
+        sales_type_row["total"] = f"{_money(Decimal(str(sales_type_row.get('total') or 0))):.2f}"
 
     sales_by_payment_method = list(
         sales_active.values("payment_method")
         .annotate(count=Count("id"), total=Sum("total_amount"))
         .order_by("payment_method")
     )
-    for row in sales_by_payment_method:
-        row["total"] = f"{_money(Decimal(row.get('total') or 0)):.2f}"
+    for payment_row in sales_by_payment_method:
+        payment_row["total"] = f"{_money(Decimal(str(payment_row.get('total') or 0))):.2f}"
 
     amount_delta_abs_sum = disp_qs.aggregate(x=Sum("amount_delta"))
     alerts = {
@@ -446,16 +446,16 @@ def build_daily_close_report(*, company, branch, report_date: date) -> dict:
     sales_by_type = list(
         sales_active.values("sale_type").annotate(count=Count("id"), total=Sum("total_amount")).order_by("sale_type")
     )
-    for row in sales_by_type:
-        row["total"] = f"{_money(Decimal(row.get('total') or 0)):.2f}"
+    for sales_type_row in sales_by_type:
+        sales_type_row["total"] = f"{_money(Decimal(str(sales_type_row.get('total') or 0))):.2f}"
 
     sales_by_payment_method = list(
         sales_active.values("payment_method")
         .annotate(count=Count("id"), total=Sum("total_amount"))
         .order_by("payment_method")
     )
-    for row in sales_by_payment_method:
-        row["total"] = f"{_money(Decimal(row.get('total') or 0)):.2f}"
+    for payment_row in sales_by_payment_method:
+        payment_row["total"] = f"{_money(Decimal(str(payment_row.get('total') or 0))):.2f}"
 
     amount_delta_sum = disp_qs.aggregate(x=Sum("amount_delta"))
     alerts = {

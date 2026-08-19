@@ -31,6 +31,15 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-068 — El gate Mypy acumula errores de nulabilidad e inferencia en agregaciones
+
+- **Módulo:** backend / calidad estática
+- **Fecha:** 2026-08-18 · **Severidad:** media · **Estado:** CERRADO
+- **Reproducir:** ejecutar `mypy --config-file mypy.ini backend/src` con el entorno Django de test; reporta 41 errores en 11 archivos.
+- **Esperado:** el gate estático termina sin errores y expresa correctamente nulabilidad, tipos de configuración y filas agregadas.
+- **Actual:** accesos opcionales no estrechados, un caché dinámico y nombres `row` reutilizados hacían que Mypy propagara `TypedDict` incompatibles.
+- **Causa raíz / fix:** faltaban estrechamientos explícitos y nombres locales distintos entre resultados ORM y payloads normalizados. Se añadieron guards/annotations, `setattr` para el caché de instancia y variables de agregación inequívocas, sin alterar respuestas públicas. Mypy queda en 0 errores sobre 962 archivos.
+
 ### BUG-067 — La imagen frontend de producción usa una versión de Node no soportada
 
 - **Módulo:** frontend / Docker producción

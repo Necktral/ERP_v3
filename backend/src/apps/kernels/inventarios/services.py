@@ -365,7 +365,8 @@ def _assert_lot_matches(
             _idempotency_conflict()
         return
     if lot_number:
-        existing_number = existing.lot.lot_number if existing.lot_id else ""
+        existing_lot = existing.lot if existing.lot_id is not None else None
+        existing_number = existing_lot.lot_number if existing_lot is not None else ""
         if existing_number != lot_number:
             _idempotency_conflict()
         return

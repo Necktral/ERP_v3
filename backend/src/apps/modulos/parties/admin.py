@@ -42,7 +42,7 @@ class ReadOnlyMasterDataAdminMixin:
 
 
 @admin.register(Party)
-class PartyAdmin(ReadOnlyMasterDataAdminMixin, admin.ModelAdmin):
+class PartyAdmin(ReadOnlyMasterDataAdminMixin, admin.ModelAdmin):  # type: ignore[misc]
     list_display = ("id", "display_name", "party_type", "status", "company", "tax_id", "national_id", "updated_at")
     list_filter = ("party_type", "status", "company")
     search_fields = ("display_name", "legal_name", "tax_id", "national_id", "email", "phone")
@@ -51,7 +51,7 @@ class PartyAdmin(ReadOnlyMasterDataAdminMixin, admin.ModelAdmin):
 
 
 @admin.register(PartyRole)
-class PartyRoleAdmin(ReadOnlyMasterDataAdminMixin, admin.ModelAdmin):
+class PartyRoleAdmin(ReadOnlyMasterDataAdminMixin, admin.ModelAdmin):  # type: ignore[misc]
     list_display = ("id", "party", "role", "is_active", "valid_from", "valid_to")
     list_filter = ("role", "is_active")
     search_fields = ("party__display_name", "party__legal_name", "party__tax_id", "party__national_id")

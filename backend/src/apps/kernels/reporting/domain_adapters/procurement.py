@@ -34,15 +34,15 @@ def _purchases_payload(*, company, branch, filters: dict[str, Any]) -> dict[str,
         )
         .order_by("doc_type", "status")
     )
-    for row in grouped:
-        key = (str(row.get("doc_type") or ""), str(row.get("status") or ""))
+    for grouped_row in grouped:
+        key = (str(grouped_row.get("doc_type") or ""), str(grouped_row.get("status") or ""))
         agg[key] = {
             "doc_type": key[0],
             "status": key[1],
-            "doc_count": int(row.get("doc_count") or 0),
-            "subtotal": Decimal(row.get("subtotal_sum") or Decimal("0.00")),
-            "tax_total": Decimal(row.get("tax_total_sum") or Decimal("0.00")),
-            "total": Decimal(row.get("total_sum") or Decimal("0.00")),
+            "doc_count": int(grouped_row.get("doc_count") or 0),
+            "subtotal": Decimal(grouped_row.get("subtotal_sum") or Decimal("0.00")),
+            "tax_total": Decimal(grouped_row.get("tax_total_sum") or Decimal("0.00")),
+            "total": Decimal(grouped_row.get("total_sum") or Decimal("0.00")),
         }
 
     rows: list[dict[str, Any]] = []
@@ -52,19 +52,19 @@ def _purchases_payload(*, company, branch, filters: dict[str, Any]) -> dict[str,
     grand_total = Decimal("0.00")
 
     for key in sorted(agg.keys()):
-        row = agg[key]
-        grand_doc_count += int(row["doc_count"])
-        grand_subtotal += row["subtotal"]
-        grand_tax_total += row["tax_total"]
-        grand_total += row["total"]
+        aggregate_row = agg[key]
+        grand_doc_count += int(aggregate_row["doc_count"])
+        grand_subtotal += aggregate_row["subtotal"]
+        grand_tax_total += aggregate_row["tax_total"]
+        grand_total += aggregate_row["total"]
         rows.append(
             {
-                "doc_type": row["doc_type"],
-                "status": row["status"],
-                "doc_count": int(row["doc_count"]),
-                "subtotal": q2(row["subtotal"]),
-                "tax_total": q2(row["tax_total"]),
-                "total": q2(row["total"]),
+                "doc_type": aggregate_row["doc_type"],
+                "status": aggregate_row["status"],
+                "doc_count": int(aggregate_row["doc_count"]),
+                "subtotal": q2(aggregate_row["subtotal"]),
+                "tax_total": q2(aggregate_row["tax_total"]),
+                "total": q2(aggregate_row["total"]),
             }
         )
 
