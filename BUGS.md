@@ -31,6 +31,46 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-073 — El rate limit de Nginx agota el namespace auth y devuelve HTML 503
+
+- **Módulo:** frontend/backend / gateway Nginx / autenticación y reconexión
+- **Fecha:** 2026-08-18 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** ejecutar la suite Playwright forense completa contra la imagen productiva; sus logins, bootstrap y revalidaciones superan el límite compartido de `10r/m` de `/api/auth/`.
+- **Esperado:** los flujos legítimos de sesión y reconexión terminan; si el gateway limita tráfico, responde `429` compatible con throttling, no una página HTML.
+- **Actual:** Nginx agotaba el burst compartido, devolvía su HTML `503 Service Temporarily Unavailable` y el último login quedaba en espera aunque Django había respondido `200`.
+- **Impacto:** usuarios o pruebas con varias pestañas/revalidaciones pueden perder temporalmente autenticación y recibir un mensaje técnico incompatible con el contrato JSON de API.
+- **Causa raíz / fix:** se aplicaba la tasa estricta de login a todo el namespace (incluidos bootstrap, me, refresh y logout) y se conservaba el código de rechazo predeterminado `503`. Se elevó el presupuesto del namespace a `60r/m`, conservando el burst, se fijó `limit_req_status 429` y se añadió una regresión estática. Los throttles DRF específicos siguen siendo el control fino por endpoint.
+
+### BUG-072 — El contrato de checks requeridos no tiene workflows
+
+- **Módulo:** CI / gobernanza / supply chain
+- **Fecha:** 2026-08-18 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** ejecutar `python3 qa/github_required_checks_guard.py --root . --contract qa/contracts/github_required_checks.json`.
+- **Esperado:** existen los cinco workflows declarados y sus nombres/jobs producen los contextos requeridos.
+- **Actual:** `.github/workflows` no existe; el gate reporta ausentes QA, seguridad, carga auth, snapshot PM y supply chain.
+- **Impacto:** GitHub no puede ejecutar ni exigir los gates que el repositorio considera obligatorios; el guard de pinning daba un falso verde al escanear cero acciones.
+- **Causa raíz / fix:** el copiado inicial omitió `.github/` aunque conservó sus contratos. Se repusieron desde `ERP_v2` los cinco workflows requeridos; QA usa ahora `backend/.env.example` y añade credenciales PostgreSQL efímeras de CI. El gate de checks, el pinning de acciones y el parseo YAML pasan; seguridad, carga auth, snapshot y supply chain permanecen idénticos a la referencia.
+
+### BUG-071 — El contexto Docker incluye archivos `.env` anidados
+
+- **Módulo:** frontend / Docker / configuración y secretos
+- **Fecha:** 2026-08-18 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** crear o conservar `frontend/.env` con `VITE_API_BASE_URL=http://localhost:8000`, construir `docker/frontend.Dockerfile.prod` y abrir la SPA.
+- **Esperado:** ningún `.env` local entra al contexto; producción compila con el valor same-origin `/api` predeterminado y la consola queda limpia.
+- **Actual:** `.dockerignore` solo excluye el `.env` de raíz; `frontend/.env` se copia al builder y la SPA advierte que tuvo que sustituir una URL cross-origin.
+- **Impacto:** archivos de entorno anidados pueden enviarse al daemon y valores locales quedan embebidos en artefactos productivos; el fallback evita el fallo funcional, pero no la exposición del contexto.
+- **Causa raíz / fix:** las reglas `.env`/`.env.*` solo cubrían la raíz del contexto. Se añadieron `**/.env` y `**/.env.*`, preservando únicamente `**/.env.example`, más una regresión estática. El contexto backend bajó de ~274 MB a ~560 KB; la imagen productiva recompilada deja consola limpia y conserva las dos llamadas health en 200.
+
+### BUG-070 — Compose declara analytics pero omite su código fuente
+
+- **Módulo:** integración frontend/backend / Docker / analytics
+- **Fecha:** 2026-08-18 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** ejecutar `docker compose up -d --build db backend dash_analytics frontend` o `python3 qa/analytics_contract_guard.py --root .`.
+- **Esperado:** las cuatro imágenes se construyen y el proxy `/analytics` dispone del servicio que declaran Compose, Nginx y el frontend.
+- **Actual:** `docker/dash.Dockerfile` no puede copiar `dash_analytics/requirements.txt` ni `dash_analytics/`; el gate también informa `dash_analytics/app.py missing`.
+- **Impacto:** el stack local completo no arranca y bloquea la verificación navegador → frontend → API → datos exigida por el cierre forense.
+- **Causa raíz / fix:** el copiado inicial conservó Compose, Nginx, Dockerfile y el gate, pero omitió `dash_analytics/`. Se repuso sin cambios la implementación de referencia de `ERP_v2`; el guard pasa, la imagen construye y `/analytics/health` queda saludable, sin modificar v2.
+
 ### BUG-069 — Punto de venta queda en blanco cuando `randomUUID` no está disponible
 
 - **Módulo:** frontend / ventas POS

@@ -12,9 +12,9 @@ evidencia final se genera fuera del repositorio, en un directorio nombrado por S
 
 ## Alcance exacto
 
-- Rama/worktree local `audit/forense-integral-2026-08`; sin push.
+- Rama integrada local `fix/integridad-inventario-facturacion-intercompany`; sin push.
 - Backend, frontend, contratos QA y evidencia reproducible del ERP_v3.
-- PostgreSQL y servicios del proyecto Docker `erpv3_forensic`; la DB demo permanece fuera de alcance.
+- PostgreSQL y servicios aislados del proyecto Docker `erpv3_vercel`; la DB demo permanece fuera de alcance.
 - Este corte documental abarca U1–U30 y L1–L5.
 - Cumplimiento legal/contable permanece separado del cierre técnico y requiere visto bueno humano.
 
@@ -41,8 +41,9 @@ Evidencia dirigida disponible a este corte:
 - U19: edge HTTP `passed` (firma válida, replay 409, firma inválida 401), pilot smoke `passed` y
   rollback `passed`, con kill-switch 403; trazas con secretos redactados.
 
-La corrida completa añade backend 2,071/2,071 (un skip `sklearn` autorizado), frontend lint,
-typecheck, build y Vitest, browser 4/4, migración desde cero y gates de contratos/seguridad.
+La corrida completa añade backend 2,072/2,072 (un skip `sklearn` autorizado), frontend lint,
+typecheck, build y Vitest 59/59, Playwright 4/4, agent-browser sin errores de consola/red en doce
+rutas críticas y tablet, 226 migraciones desde cero y gates de contratos/seguridad.
 
 ## Riesgos remanentes
 
@@ -73,10 +74,14 @@ reportes frescos y un único gate agregador bloqueante.
 Estado final: **PASS**.
 
 - Matriz: 30/30 unidades y 5/5 lentes en `HECHO`; cero bugs abiertos.
-- Backend: 2,071 pruebas, cero fallos/errores y sólo el skip contractual de `sklearn`.
+- Backend: 2,072 pruebas, cero fallos/errores y sólo el skip contractual de `sklearn`.
 - Frontend: lint, typecheck, build, Vitest y Playwright por rol/accesibilidad/offline en verde.
 - Contratos, arquitectura, gobernanza, seguridad y migraciones: `passed`.
 - Worktree final limpio; `ERP_v2`, demo y remotos no fueron modificados.
+
+La evidencia final queda fuera del repositorio en `/tmp/erpv3-vercel-<SHA>/`; el manifest generado
+después del commit identifica el SHA exacto y los hashes de los reportes. No se conectó una cuenta
+de Vercel ni se creó preview o despliegue.
 
 ## Estado de excepciones de seguridad
 

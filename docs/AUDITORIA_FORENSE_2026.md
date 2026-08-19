@@ -2,7 +2,7 @@
 
 ## Identidad de la corrida
 
-- Rama local: `audit/forense-integral-2026-08`
+- Rama integrada local: `fix/integridad-inventario-facturacion-intercompany`
 - Base: `f447f0def5717357a0de68f252d9821c731dbf0d`
 - Datos: exclusivamente PostgreSQL/servicios QA aislados; la DB del demo queda fuera de alcance.
 - Regla: bug documentado antes del fix; prueba de regresión obligatoria; commits locales; sin push.
@@ -37,7 +37,7 @@
 
 | Frente | Estado | Evidencia esperada |
 |---|---|---|
-| Baseline real backend/frontend/guards | HECHO | backend 2,071 pruebas, 0 fallos/errores y 1 skip autorizado; frontend lint/typecheck/build, Vitest 58/58 y E2E 4/4 |
+| Baseline real backend/frontend/guards | HECHO | backend 2,072 pruebas, 0 fallos/errores y 1 skip autorizado; frontend lint/typecheck/build, Vitest 59/59 y E2E 4/4 |
 | P0 dinero y aislamiento de facturación | HECHO | BUG-022..024, BUG-032 y BUG-034; 42 tests dirigidos verdes |
 | P0 tenant/auth/integration/diagnostics | HECHO | BUG-025..030; 189 tests tenant + 24 auth/dashboard verdes |
 | Accounting y recuperación cross-kernel | HECHO | CoA, fault injection, reintentos y 115 regresiones dirigidas |
@@ -76,9 +76,11 @@ hayan sido ejecutados sobre el HEAD integrado.
 
 ## Cierre técnico
 
-La campaña cerró BUG-065..069 durante la estabilización final: contaminación global de throttling,
-contexto Docker con secretos, Node no soportado en producción, 41 errores Mypy y pantalla POS en
-blanco sin `crypto.randomUUID`. La certificación exige y conserva fuera del repositorio el JUnit
+La campaña cerró BUG-065..073 durante la estabilización final. La integración local con las skills
+de Vercel añadió una verificación navegador → SPA Quasar → Nginx → Django → PostgreSQL y cerró la
+omisión del servicio analytics, la inclusión de `.env` anidados, la ausencia de workflows
+requeridos y el rate limit compartido que devolvía HTML 503 durante revalidaciones legítimas. La
+certificación exige y conserva fuera del repositorio el JUnit
 backend, reportes frontend/browser, migraciones, seguridad y contratos bajo un directorio nombrado
 con el SHA. El SHA autoritativo es el campo `commit` de `run_manifest.json`; no se versionan
 evidencias generadas para mantener el worktree limpio.

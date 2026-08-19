@@ -1,0 +1,159 @@
+name: Auth Load Simulation
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: ["master", "main", "feat/*"]
+  schedule:
+    - cron: "0 3 * * 0"
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    env:
+      K6_IMAGE: grafana/k6:0.49.0
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Docker Compose version
+        run: docker compose version
+
+      - name: Resolve env defaults for load simulation
+        run: |
+          {
+            echo "POSTGRES_USER=${{ secrets.POSTGRES_USER || 'erp_user' }}"
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD || 'erp_pass' }}"
+            echo "POSTGRES_DB=${{ secrets.POSTGRES_DB || 'erp_db' }}"
+            echo "DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY || 'dev-only-secret-key-auth-load-simulation' }}"
+            echo "AUDIT_HMAC_KEY=${{ secrets.AUDIT_HMAC_KEY || 'dev-audit-hmac-key-auth-load' }}"
+            echo "ADMIN_TOTP_SECRET=${{ secrets.ADMIN_TOTP_SECRET || 'JBSWY3DPEHPK3PXP' }}"
+            echo "AUTH_SIM_ADMIN_PASSWORD=${{ secrets.AUTH_SIM_ADMIN_PASSWORD || 'K6Tmp!2026' }}"
+            echo "AUTH_SIM_USER_PASSWORD=${{ secrets.AUTH_SIM_USER_PASSWORD || 'K6Tmp!2026' }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Write .env for compose
+        run: |
+          cat > .env << 'EOF'
+          DJANGO_DEBUG=True
+          DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+          AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY}
+          DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend
+          POSTGRES_DB=${POSTGRES_DB}
+          POSTGRES_USER=${POSTGRES_USER}
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          AUTH_TOKEN_TRANSPORT=cookie
+          AUTH_COOKIE_SECURE=False
+          DRF_THROTTLE_ANON=6000/min
+          DRF_THROTTLE_USER=6000/min
+          DRF_THROTTLE_AUTH_LOGIN=1200/min
+          DRF_THROTTLE_AUTH_REFRESH=1200/min
+          DRF_THROTTLE_AUTH_LOGOUT=1200/min
+          DRF_THROTTLE_ME_READ=6000/min
+          DRF_THROTTLE_ME_ACL_READ=6000/min
+          AUTH_SIM_ADMIN_USERNAME=k6_admin
+          AUTH_SIM_ADMIN_EMAIL=k6_admin@test.com
+          AUTH_SIM_ADMIN_PASSWORD=${AUTH_SIM_ADMIN_PASSWORD}
+          AUTH_SIM_ADMIN_TOTP_SECRET=${ADMIN_TOTP_SECRET}
+          AUTH_SIM_ADMIN_2FA=0
+          AUTH_SIM_USER_USERNAME=k6_user
+          AUTH_SIM_USER_EMAIL=k6_user@test.com
+          AUTH_SIM_USER_PASSWORD=${AUTH_SIM_USER_PASSWORD}
+          EOF
+
+      - name: Start backend and db services
+        run: |
+          docker compose down -v --remove-orphans || true
+          up_ok=0
+          for attempt in 1 2 3; do
+            if USE_GUNICORN=1 GUNICORN_WORKERS=4 docker compose up -d db backend; then
+              up_ok=1
+              break
+            fi
+            echo "docker compose up failed (attempt $attempt/3), retrying..."
+            sleep $((attempt * 4))
+          done
+          if [ "$up_ok" -ne 1 ]; then
+            echo "failed to start db/backend after retries"
+            exit 1
+          fi
+
+      - name: Wait for backend readiness
+        run: |
+          for i in {1..120}; do
+            status=$(docker inspect -f '{{.State.Health.Status}}' erpcrm_backend || echo "error")
+            if [ "$status" = "healthy" ]; then
+              echo "Backend is healthy"
+              break
+            fi
+            echo "Waiting for backend health... ($i/120)"
+            sleep 2
+          done
+          if [ "$status" != "healthy" ]; then
+            echo "Backend not healthy in time"
+            docker compose logs backend
+            exit 1
+          fi
+
+      - name: Run database migrations
+        run: docker compose exec -T backend python manage.py migrate --noinput
+
+      - name: Seed test users for load
+        run: docker compose exec -T backend python manage.py seed_auth_users
+
+      - name: Run k6 load test
+        run: |
+          mkdir -p simulacion/reports
+          pull_ok=0
+          for attempt in 1 2 3; do
+            if docker pull "$K6_IMAGE"; then
+              pull_ok=1
+              break
+            fi
+            echo "k6 image pull failed (attempt $attempt/3), retrying..."
+            sleep $((attempt * 3))
+          done
+          if [ "$pull_ok" -ne 1 ]; then
+            echo "failed to pull $K6_IMAGE after retries"
+            exit 1
+          fi
+
+          docker run --rm -v "$PWD/simulacion:/simulacion" \
+            --user "$(id -u):$(id -g)" \
+            --network erp_crm_default \
+            -e BASE_URL=http://backend:8000/api \
+            -e ADMIN_USERNAME=k6_admin \
+            -e ADMIN_PASSWORD=${AUTH_SIM_ADMIN_PASSWORD} \
+            -e ADMIN_TOTP_SECRET= \
+            -e USER_USERNAME=k6_user \
+            -e USER_PASSWORD=${AUTH_SIM_USER_PASSWORD} \
+            -e CSRF_COOKIE_NAME=nt_csrf \
+            -e VUS_WARMUP=2 \
+            -e VUS_TARGET=6 \
+            -e SUSTAIN=30s \
+            -e BASIC_RATE=3 \
+            -e BASIC_DURATION=40s \
+            "$K6_IMAGE" run -o json=/simulacion/reports/auth_load_results.json /simulacion/auth_load_simulation.js
+
+      - name: Upload k6 results artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auth-load-metrics
+          path: simulacion/reports/
+
+      - name: Upload backend logs
+        if: always()
+        run: docker compose logs backend > simulacion/reports/backend.log
+
+      - name: Upload backend log artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-log
+          path: simulacion/reports/backend.log
+
+      - name: Tear down services
+        if: always()
+        run: docker compose down -v
