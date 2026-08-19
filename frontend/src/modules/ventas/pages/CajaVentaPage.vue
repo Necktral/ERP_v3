@@ -770,6 +770,7 @@ import PageHeader from 'src/components/PageHeader.vue';
 import PartySelect from 'src/modules/parties/components/PartySelect.vue';
 import { apiErrorMessage } from 'src/core/api';
 import { formatMoney, formatQty } from 'src/core/format';
+import { newUuid } from 'src/core/uuid';
 import {
   issueCreditNote,
   listBillingDocs,
@@ -1051,7 +1052,7 @@ interface LineaCarrito {
 }
 
 const carrito = ref<LineaCarrito[]>([]);
-let idemKey = crypto.randomUUID();
+let idemKey = newUuid();
 
 /** Precio de catálogo según cantidad: mayoreo automático (espejo del servidor). */
 function precioCatalogo(item: InventoryItem, qty: number): number | null {
@@ -1157,7 +1158,7 @@ function vaciarCarrito() {
   cuentaCargando.value = false;
   codigoAutoFactura.value = null;
   quitarAutorizacion();
-  idemKey = crypto.randomUUID();
+  idemKey = newUuid();
   enfocarEscaner();
 }
 
@@ -1484,7 +1485,7 @@ async function confirmarCobro() {
     cuenta.value = null;
     codigoAutoFactura.value = null;
     quitarAutorizacion();
-    idemKey = crypto.randomUUID();
+    idemKey = newUuid();
     void cargarSesionCaja();
     void cargarStock();
   } catch (e) {
@@ -1681,7 +1682,7 @@ function persistirEspera() {
 
 function dejarEnEspera() {
   enEspera.value.push({
-    id: crypto.randomUUID(),
+    id: newUuid(),
     etiqueta: clienteNombre.value || `Ticket ${new Date().toLocaleTimeString('es-NI')}`,
     total: totales.value.total,
     clienteId: clienteId.value,

@@ -31,6 +31,15 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-069 — Punto de venta queda en blanco cuando `randomUUID` no está disponible
+
+- **Módulo:** frontend / ventas POS
+- **Fecha:** 2026-08-18 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** abrir `/#/ventas` desde un origen HTTP no considerado seguro por Chromium, donde `crypto.getRandomValues` existe pero `crypto.randomUUID` no.
+- **Esperado:** la pantalla monta y genera claves UUID de idempotencia compatibles con reintentos.
+- **Actual:** `CajaVentaPage` invoca `crypto.randomUUID()` durante `setup`; Vue lanza `TypeError` y no monta la superficie principal.
+- **Causa raíz / fix:** se asumía que ambas APIs Web Crypto tenían la misma disponibilidad. Se centralizó `newUuid()`: prefiere `randomUUID`, cae a UUID v4 con `getRandomValues` y conserva un último fallback compatible; la pantalla usa ese helper en todos sus IDs locales.
+
 ### BUG-068 — El gate Mypy acumula errores de nulabilidad e inferencia en agregaciones
 
 - **Módulo:** backend / calidad estática
