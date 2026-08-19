@@ -31,6 +31,15 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-067 — La imagen frontend de producción usa una versión de Node no soportada
+
+- **Módulo:** frontend / Docker producción
+- **Fecha:** 2026-08-18 · **Severidad:** alta · **Estado:** CERRADO
+- **Reproducir:** construir `docker/frontend.Dockerfile.prod`; su builder usa Node 20, mientras `package.json` y `verify-toolchain.mjs` exigen Node 22 o superior.
+- **Esperado:** desarrollo, CI y producción usan una versión soportada y el build reproducible pasa.
+- **Actual:** el build productivo falla en `prebuild` antes de generar la SPA.
+- **Causa raíz / fix:** el Dockerfile quedó rezagado respecto al contrato de toolchain. El builder se actualizó a `node:22-bullseye-slim`, alineado con Compose y CI.
+
 ### BUG-066 — El contexto Docker incluye secretos y artefactos locales
 
 - **Módulo:** Docker / supply chain
