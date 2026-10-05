@@ -31,6 +31,104 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs abiertos
 
+### BUG-075 — Falla crítica de seguridad en el sync (detalle reservado hasta el arreglo)
+
+- **Módulo / paso del ROADMAP:** sync / transversal · seguridad
+- **Fecha:** 2026-10-05
+- **Severidad:** crítico
+- **Estado:** ABIERTO
+- **Detalle:** reservado. Los pasos para reproducir, lo esperado, lo actual y el impacto quedan fuera del repositorio público hasta que se publique el arreglo, en la evidencia local del programa de cartografía.
+- **Causa raíz / fix:** se completa al cerrar.
+
+### BUG-076 — `docker compose` y `make qa-*` sin proyecto apuntan al demo y pueden borrar su base
+
+- **Módulo / paso del ROADMAP:** herramientas de QA (`Makefile`, `qa/*.sh`) / transversal
+- **Fecha:** 2026-10-04 (Fase 0)
+- **Severidad:** alto
+- **Estado:** ABIERTO (mitigado en el programa con `docs/cartografia/stack/erpbl`)
+- **Pasos para reproducir:** desde la raíz de cualquier worktree, `docker compose config` resuelve el proyecto `erp_crm`, que es el demo.
+  - `make qa-ci-up` hace `up --build` sobre el demo.
+  - Con `QA_FRESH_DB=1` corre `docker compose down -v`, que borra `erp_crm_pgdata` (`Makefile:122-127`).
+  - `make docker-clean` borra los contenedores salidos de la imagen del demo, sin importar su proyecto (`Makefile:325`).
+- **Esperado:** las herramientas de QA corren siempre en un proyecto aislado y nunca pueden tocar el demo.
+- **Actual:** dependen del directorio actual y de variables de entorno que se pierden entre comandos.
+- **Impacto:** se puede perder la base del demo, que se armó a mano.
+- **Causa raíz / fix:** se completa al cerrar.
+
+### BUG-077 — La corrida de QA puede declarar PASSED sin haber escrito su manifest
+
+- **Módulo / paso del ROADMAP:** `qa/run_qa_ci.sh` / transversal
+- **Fecha:** 2026-10-04 (Fase 0)
+- **Severidad:** medio
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** correr `qa/run_qa_ci.sh` en un host que tenga `python3` pero no `python` (este equipo).
+- **Esperado:** si no se puede escribir el manifest, la corrida falla.
+- **Actual:**
+  - `emit_manifest` llama a `python` (`qa/run_qa_ci.sh:85`).
+  - El script usa `set -uo pipefail` sin `-e`, así que ignora ese fallo e igual imprime PASSED cuando los gates pasan.
+- **Impacto:** un falso verde de certificación.
+- **Causa raíz / fix:** se completa al cerrar.
+
+### BUG-078 — Siete carpetas de pruebas quedan fuera de todos los gates
+
+- **Módulo / paso del ROADMAP:** `backend/pytest.ini` / transversal
+- **Fecha:** 2026-10-04 (Fase 0)
+- **Severidad:** medio
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** `testpaths` no lista controls, documents, finca, fleet, intercompany, knowledge ni notifications (23 archivos).
+- **Esperado:** toda carpeta de pruebas corre en el gate.
+- **Actual:** las 203 pruebas de esas carpetas solo corren a mano. Pasaron el 2026-10-05, pero una regresión en ellas no frenaría nada. Entre ellas está la regresión de BUG-018 (intercompany).
+- **Impacto:** cobertura que se cree activa y no lo está.
+- **Causa raíz / fix:** se completa al cerrar.
+
+### BUG-079 — Los gates de QA quedan en rojo por proceso y no por el código (blast radius, excepciones vencidas, falsos positivos, mypy, preflight)
+
+- **Módulo / paso del ROADMAP:** gates de QA / transversal
+- **Fecha:** 2026-10-05 (línea base de la Fase 0)
+- **Severidad:** medio
+- **Estado:** ABIERTO
+- **Pasos para reproducir:** la línea base de `dace480` (`.evidencia/dace48003f5a/…-baseline/comparacion_agosto.md`).
+- **Esperado:** un gate rojo significa un problema real del código.
+- **Actual:**
+  1. **`qa-pr-blast-radius-guard`** falla porque las ramas no se integraron y pide un ADR. Es el primer paso, así que corta toda la corrida canónica. Como la cadena `&&` del Gate 1 se corta ahí, el resto ni siquiera se ve.
+  2. **Tres excepciones de seguridad npm vencieron** el 2026-09-14, y hay avisos npm altos nuevos.
+  3. **`qa-static-scan` marca la palabra "TODO/TODOS"** de comentarios en español. Ya estaba rojo con el reporte versionado el 2026-08-18, así que el PASS de agosto no se reproduce con sus propios gates.
+  4. **mypy da 2 `unused type: ignore`** con la misma imagen con la que agosto informó 0. `requirements/dev.txt` no fija mypy ni los stubs.
+  5. **No se puede reproducir el cierre:**
+     - nada produce `production_preflight.json` ni `frontend_vitest.xml`;
+     - el manifest no guarda el commit;
+     - el E2E del POS lee el secreto de `POS_EDGE_E2E_SECRET_B64` y no de `POS_EDGE_CONNECTOR_SHARED_SECRET`.
+- **Impacto:** los gates rojos dejan de ser una señal confiable, y una certificación pudo declararse con gates que no pasaban.
+- **Causa raíz / fix:** se completa al cerrar. Los puntos 1 y 2 piden decisión de Wis; ver PLAN §13.
+
+### BUG-080 — El cobro negociado al pagar (CO-PA) entrega el neto sin la alimentación
+
+- **Módulo / paso del ROADMAP:** comisariato (`pay_negotiated`) + nómina, Sala de pago / paso 4 · **invariante 1 (neto legal)**
+- **Fecha:** 2026-10-05. Hallazgo lateral de la auditoría de BUG-074 (C-21), confirmado con una prueba.
+- **Severidad:** crítico. Según el protocolo (`docs/ESCANEO_PROFUNDO_OPUS.md` §4), viola el invariante 1 en un escenario alcanzable con una sola empresa: un trabajador con préstamo propio y alimentación.
+- **Estado:** ABIERTO
+- **Pasos para reproducir:**
+  1. Tomar una línea de planilla con alimentación (`alimentacion_amount` mayor que 0) cuyo trabajador tenga deuda interna: un préstamo de la finca o una cuenta del comisariato.
+  2. Pagarla en la Sala de pago. Si hay deuda, la Sala usa siempre el CO-PA (`cobrarYPagar`), aunque el abono sea 0.
+- **Esperado:**
+  - se entrega el neto legal: devengado − deducciones de ley + alimentación − abonos acordados;
+  - `net_to_pay` y el pago registrado coinciden con ese monto.
+- **Actual:**
+  - `cobrar_y_pagar` (`backend/src/apps/modulos/comisariato/pay_negotiated.py:158`) recalcula `net_to_pay = total_devengado - total_deductions` y **deja afuera `alimentacion_amount`**. En cambio, `compute_all` (`backend/src/apps/kernels/nomina/models.py:815`) sí la suma.
+  - El "disponible" para los abonos (`:147`) tampoco la incluye. La Sala calcula y **muestra** el "Neto legal (devengado − INSS/IR)" con la misma omisión (`frontend/src/modules/pagador/pages/SalaDePagoPage.vue:783`), así que el error se ve coherente en pantalla y el pagador no tiene cómo notarlo.
+  - El pago registrado y el recibo salen por el monto menor.
+- **Impacto:**
+  - El trabajador recibe **menos que su neto legal**, exactamente por el monto de la alimentación.
+  - La planilla queda reescrita con un neto menor, y no hay aviso.
+  - Pasa en cada pago de un trabajador con deuda interna y alimentación.
+  - **No hay forma de pagarla después:** el saldo de la línea queda en 0, la línea cuenta como pagada y el período puede pasar a PAID.
+  - **La planilla firmada ("Recibí conforme") y el asiento de la aprobación sí incluyen la alimentación.** El documento y los libros dicen un monto mayor que el que se entregó.
+  - **Alcance:**
+    - El pago puede salir en efectivo, por transferencia o con cheque.
+    - Para que haya deuda interna con una sola empresa, el préstamo nace del módulo financiamiento.
+  - **Verificación independiente:** 6/6 confirmadas (`.evidencia/_auditoria/bug080/VERIFICACION.md`).
+- **Causa raíz / fix:** la regla del neto está escrita en al menos tres lugares (`compute_all`, el CO-PA y la Sala) y solo uno suma la alimentación. Se completa al cerrar. **Dirección:** una sola función del neto legal en el kernel de nómina, que usen `compute_all` y el CO-PA, más una prueba de invariante: todo pago es igual al neto legal menos los abonos. Prueba de confirmación (scratch, sin commit): `.evidencia/dace48003f5a/20261005T023040Z-confirmacion-c21/`.
+
 ### BUG-073 — El rate limit de Nginx agota el namespace auth y devuelve HTML 503
 
 - **Módulo:** frontend/backend / gateway Nginx / autenticación y reconexión
@@ -660,9 +758,11 @@ Copiá la plantilla, ponela en **Bugs abiertos**, numerala (BUG-001, BUG-002, �
 
 ## Bugs cerrados
 
-> **Nota de numeración:** BUG-010..013 viven en la rama `fix/aislamiento-copa-nomina` (PR-9, sin
-> mergear). Este lote de bug-hunt de integridad (rama `fix/integridad-inventario-facturacion-intercompany`,
-> off `main`) usa **BUG-014..020** para no colisionar.
+> **Nota de numeración:**
+> - **BUG-010 a 013** nacieron en la rama `fix/aislamiento-copa-nomina` (PR-9, nunca integrada) y se **portaron** en la rama `fix/pr9-copa-nomina-port`. El port espera la revisión de Wis.
+> - **BUG-074** está reservado para esa misma rama: es la familia de BUG-013, hallada al reconciliar.
+> - El lote de integridad usó **BUG-014 a 020**.
+> - El programa de cartografía registra **desde BUG-075**.
 
 ### BUG-020 — Comisariato: `collecting_company` cross-company sin relación CXC declarada
 
