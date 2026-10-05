@@ -1,0 +1,51 @@
+# Override del programa de cartografía (Fase 0).
+# Se usa SOLO vía erpbl, que fija el proyecto aislado (erpv3_baseline | erpv3_pr9),
+# exporta las variables requeridas y verifica la configuración resuelta antes de
+# cada comando. No define container_name ni build: nunca puede tocar el demo.
+services:
+  backend:
+    image: ${ERPBL_BACKEND_IMAGE:?usar erpbl}
+    pull_policy: never
+    environment:
+      POS_EDGE_CONNECTOR_SHARED_SECRET: ${POS_EDGE_CONNECTOR_SHARED_SECRET:?usar erpbl}
+    volumes:
+      - ${ERPBL_EVID_ROOT:?usar erpbl}:/evidencia
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/auth/bootstrap/status/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  frontend:
+    pull_policy: never
+    environment:
+      HOME: /tmp/erpbl_fe_home
+      NPM_CONFIG_CACHE: /tmp/erpbl_fe_home/.npm
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Arranca como root solo para corregir el ownership del volumen node_modules;
+    # npm/Vite corren como el usuario del host (patrón de compose.yaml).
+    command: >-
+      bash -lc "chown -R ${HOST_UID:?usar erpbl}:${HOST_GID:?usar erpbl} /app/frontend/node_modules &&
+      exec setpriv --reuid=${HOST_UID} --regid=${HOST_GID} --clear-groups bash -c
+      'mkdir -p /tmp/erpbl_fe_home/.npm && npm ci && npm run dev -- --host 0.0.0.0 --port 3000'"
+
+  frontend_ci:
+    image: node:22-bullseye-slim
+    pull_policy: never
+    profiles: ["qa"]
+    user: "${HOST_UID:?usar erpbl}:${HOST_GID:?usar erpbl}"
+    working_dir: /app/frontend
+    environment:
+      HOME: /tmp/erpbl_ci_home
+      NPM_CONFIG_CACHE: /tmp/erpbl_ci_home/.npm
+    volumes:
+      - ./frontend:/app/frontend
+      - ${ERPBL_EVID:?usar erpbl}:/evidence
+    command: >-
+      bash -lc "mkdir -p $$HOME $$NPM_CONFIG_CACHE && npm ci && npm run verify:toolchain &&
+      npm run lint && npm run typecheck &&
+      npm run test -- --reporter=default --reporter=junit --outputFile.junit=/evidence/frontend_vitest.xml &&
+      npm run build"

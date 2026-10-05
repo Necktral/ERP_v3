@@ -1,0 +1,284 @@
+#!/usr/bin/env bash
+# erpbl — envoltorio de seguridad del programa de cartografía de ERP_v3.
+#
+# TODO docker/make del programa pasa por acá. Antes de cada comando verifica:
+#   G1  el proyecto compose resuelto es el aislado (erpv3_baseline | erpv3_pr9), nunca erp_crm;
+#   G2  ningún servicio fija container_name;     G3  ningún servicio tiene build;
+#   G4  todos los volúmenes llevan el prefijo del proyecto;
+#   G5  solo publica 127.0.0.1:<backend>/<frontend>;
+#   G6  bind mounts solo dentro del árbol de trabajo o de .evidencia/;
+#   G7  la huella docker del demo (contenedores erpcrm_* y volumen erp_crm_pgdata) no cambió desde T0.
+#
+# Uso:  ERPBL_TREE=forensic|pr9 erpbl <subcomando> [args]
+#   preflight | compose <args> | make <target> [PYTEST_ARGS=..] | exec-backend "<cmd>" |
+#   exec-backend-user "<cmd>" | qa-ci | reset-db <proyecto> | run-start <tipo> | run-dir |
+#   demo-fingerprint save|compare <etiqueta> | init-secrets | env
+set -euo pipefail
+umask 022
+
+FORENSIC_ROOT=/home/wis/dev/ERP_v3_forensic
+PR9_ROOT=/home/wis/dev/ERP_v3_pr9
+DEMO_REPO=/home/wis/dev/ERP_v3
+EVID="$FORENSIC_ROOT/.evidencia"
+STACK_DIR="$FORENSIC_ROOT/docs/cartografia/stack"
+STATE="$EVID/_stack/state"
+SECRETS="$EVID/_stack/secrets"
+BACKEND_IMAGE="erpv3-baseline/backend:545ab70dd5c6"
+
+TREE="${ERPBL_TREE:-forensic}"
+case "$TREE" in
+  forensic) ROOT="$FORENSIC_ROOT"; PROJECT=erpv3_baseline; BACKEND_PORT=18080; FRONTEND_PORT=13000 ;;
+  pr9)      ROOT="$PR9_ROOT";      PROJECT=erpv3_pr9;      BACKEND_PORT=18081; FRONTEND_PORT=13001 ;;
+  *) echo "erpbl: ERPBL_TREE inválido: '$TREE' (forensic|pr9)" >&2; exit 64 ;;
+esac
+
+die() { echo "erpbl: $*" >&2; exit 90; }
+
+# --- Entorno: se fija en cada invocación (Bash no conserva variables entre llamadas) ---
+export COMPOSE_PROJECT_NAME="$PROJECT"
+export COMPOSE_PATH_SEPARATOR=":"
+export COMPOSE_FILE="$ROOT/compose.forensic.yaml:$ROOT/compose.forensic.browser.yaml:$STACK_DIR/compose.baseline.yaml"
+unset COMPOSE_PROFILES COMPOSE_PROJECT_DIRECTORY DOCKER_HOST || true
+export DOCKER_CONTEXT=default
+export FORENSIC_BACKEND_PORT="$BACKEND_PORT" FORENSIC_FRONTEND_PORT="$FRONTEND_PORT"
+HOST_UID="$(id -u)"; HOST_GID="$(id -g)"; export HOST_UID HOST_GID
+export BASE_URL="http://127.0.0.1:${BACKEND_PORT}/api"
+export QA_FRESH_DB=0 QA_KEEP_FRONTEND=0
+export QA_REPORTS_DIR="qa/reports/final"
+export QA_PIP_AUDIT_REPORT="qa/reports/final/qa_pip_audit.json"
+export QA_NPM_AUDIT_REPORT="qa/reports/final/qa_npm_audit.json"
+export PATH="$EVID/_stack/bin:$PATH"
+export ERPBL_BACKEND_IMAGE="$BACKEND_IMAGE"
+export ERPBL_EVID_ROOT="$EVID"
+RUN_FILE="$STATE/current_run_$TREE"
+RUN_DIR="$(cat "$RUN_FILE" 2>/dev/null || true)"
+export ERPBL_EVID="${RUN_DIR:-$STATE/sin-corrida-$TREE}/frontend"
+
+[[ -d "$ROOT" ]] || die "no existe el árbol $ROOT"
+cd "$ROOT"
+
+# --- Secretos de prueba (generados localmente; nunca se imprimen) ---
+init_secrets() {
+  mkdir -p "$SECRETS"; chmod 700 "$SECRETS"
+  [[ -s "$SECRETS/pos_edge_secret_b64" ]] || (umask 077; openssl rand -base64 32 > "$SECRETS/pos_edge_secret_b64")
+  [[ -s "$SECRETS/e2e_password" ]] || (umask 077; printf 'Fz%sQ9' "$(openssl rand -hex 12)" > "$SECRETS/e2e_password")
+  echo "secretos de prueba listos en $SECRETS (no se imprimen)"
+}
+load_secrets() {
+  [[ -s "$SECRETS/pos_edge_secret_b64" ]] || die "faltan secretos de prueba (correr: erpbl init-secrets)"
+  POS_EDGE_CONNECTOR_SHARED_SECRET="$(<"$SECRETS/pos_edge_secret_b64")"; export POS_EDGE_CONNECTOR_SHARED_SECRET
+  # El E2E del POS (qa/run_retail_pos_edge_e2e.sh) lee el secreto de esta otra variable (C-14).
+  export POS_EDGE_E2E_SECRET_B64="$POS_EDGE_CONNECTOR_SHARED_SECRET"
+  if [[ -s "$SECRETS/e2e_password" ]]; then
+    FORENSIC_E2E_PASSWORD="$(<"$SECRETS/e2e_password")"; export FORENSIC_E2E_PASSWORD
+  fi
+}
+
+# --- Huella del demo ---
+demo_docker_fp() {
+  docker inspect erpcrm_backend erpcrm_db \
+    --format '{{.Name}} id={{.Id}} creado={{.Created}} arranque={{.State.StartedAt}} reinicios={{.RestartCount}} imagen={{.Image}}'
+  docker volume inspect erp_crm_pgdata --format 'volumen={{.Name}} creado={{.CreatedAt}}'
+}
+demo_repo_fp() {
+  echo "head=$(git -C "$DEMO_REPO" rev-parse HEAD)"
+  echo "status_sha=$(git --no-optional-locks -C "$DEMO_REPO" status --porcelain | sha256sum | cut -d' ' -f1)"
+  echo "remotos_sha=$(git -C "$DEMO_REPO" for-each-ref --format='%(refname) %(objectname)' refs/remotes | sha256sum | cut -d' ' -f1)"
+}
+demo_fingerprint() {
+  local mode="${1:-}" label="${2:-T0}"
+  mkdir -p "$EVID/_demo"
+  case "$mode" in
+    save)
+      demo_docker_fp > "$EVID/_demo/huella-docker-$label.txt"
+      demo_repo_fp > "$EVID/_demo/huella-repo-$label.txt"
+      echo "huella del demo '$label' guardada" ;;
+    compare)
+      if diff <(demo_docker_fp) "$EVID/_demo/huella-docker-$label.txt" >/dev/null; then
+        echo "docker del demo: igual a $label"
+      else
+        echo "docker del demo: DISTINTA a $label — INCIDENTE"; return 1
+      fi
+      if diff <(demo_repo_fp) "$EVID/_demo/huella-repo-$label.txt" >/dev/null; then
+        echo "repo del demo: igual a $label"
+      else
+        echo "repo del demo: distinto a $label (revisar: puede ser trabajo del usuario en ERP_v3)"
+      fi ;;
+    *) die "uso: demo-fingerprint save|compare <etiqueta>" ;;
+  esac
+}
+
+# --- Chequeos ---
+check_tree() {
+  local top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || die "git no funciona en $ROOT"
+  [[ "$top" == "$ROOT" ]] || die "toplevel inesperado: $top (esperado $ROOT)"
+}
+check_demo() {
+  [[ -s "$EVID/_demo/huella-docker-T0.txt" ]] || die "G7: falta la huella T0 del demo (erpbl demo-fingerprint save T0)"
+  diff <(demo_docker_fp) "$EVID/_demo/huella-docker-T0.txt" >/dev/null \
+    || die "G7: la huella docker del demo cambió desde T0 — INCIDENTE, no se sigue"
+}
+check_config() {
+  local cfg
+  cfg="$(docker compose --profile qa config --format json 2>/dev/null)" || die "docker compose config falló (variables o archivos)"
+  jq -e --arg p "$PROJECT" '.name == $p' >/dev/null <<<"$cfg" \
+    || die "G1: el proyecto resuelto no es $PROJECT"
+  jq -e '[.services[] | select(has("container_name"))] | length == 0' >/dev/null <<<"$cfg" \
+    || die "G2: algún servicio fija container_name"
+  jq -e '[.services[] | select(has("build"))] | length == 0' >/dev/null <<<"$cfg" \
+    || die "G3: algún servicio tiene build"
+  jq -e --arg p "${PROJECT}_" '[(.volumes // {}) | to_entries[] | (.value.name // "") | select(startswith($p) | not)] | length == 0' >/dev/null <<<"$cfg" \
+    || die "G4: hay volúmenes fuera del prefijo ${PROJECT}_"
+  jq -e --arg b "$BACKEND_PORT" --arg f "$FRONTEND_PORT" \
+    '[.services[] | (.ports // [])[] | ((.published // "") | tostring) as $x | select(((.host_ip // "") != "127.0.0.1") or ($x != $b and $x != $f))] | length == 0' >/dev/null <<<"$cfg" \
+    || die "G5: hay puertos fuera de 127.0.0.1:$BACKEND_PORT/$FRONTEND_PORT"
+  jq -e --arg r "$ROOT" --arg e "$EVID" \
+    '[.services[] | (.volumes // [])[] | select(.type == "bind") | .source | select((. == $r or startswith($r + "/") or . == $e or startswith($e + "/")) | not)] | length == 0' >/dev/null <<<"$cfg" \
+    || die "G6: hay bind mounts fuera de $ROOT o $EVID"
+}
+guard_all() { check_tree; load_secrets; check_demo; mkdir -p "$ERPBL_EVID"; check_config; }
+
+preflight() {
+  guard_all
+  local cfg; cfg="$(docker compose --profile qa config --format json)"
+  echo "proyecto:  $(jq -r .name <<<"$cfg")   árbol: $ROOT   commit: $(git rev-parse --short=12 HEAD)"
+  echo "servicios: $(jq -r '.services | keys | join(", ")' <<<"$cfg")"
+  echo "volúmenes: $(jq -r '[(.volumes // {}) | to_entries[] | .value.name] | join(", ")' <<<"$cfg")"
+  echo "puertos:   $(jq -r '[.services[] | (.ports // [])[] | "\(.host_ip):\(.published)->\(.target)"] | join(", ")' <<<"$cfg")"
+  echo "montajes:  $(jq -r '[.services[] | (.volumes // [])[] | select(.type=="bind") | "\(.source)->\(.target)"] | unique | join(", ")' <<<"$cfg")"
+  echo "demo:      huella docker igual a T0 (G1–G7 OK)"
+}
+
+compose_cmd() {
+  local a
+  for a in "$@"; do
+    case "$a" in
+      -p|--project-name|--project-name=*|-f|--file|--file=*|--project-directory|--project-directory=*|\
+      --env-file|--env-file=*|-v|--volume|--volume=*|--volumes|--volumes=*|--privileged|--network=host)
+        die "compose: argumento no permitido: $a (para borrar volúmenes: erpbl reset-db $PROJECT)" ;;
+    esac
+  done
+  guard_all
+  docker compose "$@"
+}
+
+MAKE_ALLOW=(
+  qa-ci-up qa-backend-wait qa-reports-dir-writable
+  qa-namespace-guard qa-analytics-contract-guard qa-route-contract-guard qa-readme-section-guard
+  qa-pr-blast-radius-guard qa-reporting-registry-guard qa-reporting-contract-version-guard
+  qa-pythonpath-bootstrap-guard qa-backend-package-check qa-architecture-dependency-guard
+  qa-action-pin-guard qa-github-required-checks-guard qa-runner-hygiene-guard
+  qa-validate-security-exceptions qa-security-findings-enforce qa-security-audits qa-static-scan
+  qa-backend-bandit qa-backend-ruff qa-backend-mypy qa-verify-static-gate qa-makemigrations-check
+  qa-migration-safety-guard qa-frontend-ci
+  qa-backend-tests qa-sync-contract-guard qa-retail-pos-backend-contract-guard
+  qa-retail-pos-sync-contract-guard qa-retail-pos-frontend-queue-contract-guard
+  qa-retail-pos-edge-simulator-guard qa-retail-pos-edge-e2e-guard qa-coverage-by-domain-guard
+  qa-audit-integrity qa-reporting-r8-gate qa-verify-reporting-r8-gate-artifact qa-export-u6-release-evidence
+  qa-route-authz-guard qa-codex-governance-guard qa-l4-drift qa-migration-rehearsal backend-pytest
+)
+make_cmd() {
+  local target="${1:-}"; shift || true
+  local ok=0 t a
+  for t in "${MAKE_ALLOW[@]}"; do [[ "$t" == "$target" ]] && ok=1; done
+  [[ $ok == 1 ]] || die "make: target no permitido: '$target'"
+  for a in "$@"; do
+    case "$a" in
+      PYTEST_ARGS=*|QA_PYTEST_DB_SLOT=*) ;;
+      *) die "make: argumento no permitido: $a" ;;
+    esac
+  done
+  guard_all
+  make "$target" QA_REPORTS_DIR="$QA_REPORTS_DIR" QA_FRESH_DB=0 "$@"
+}
+
+exec_backend() {
+  guard_all
+  docker compose exec -T backend bash -lc "${1:?uso: exec-backend \"<cmd>\"}"
+}
+exec_backend_user() {
+  guard_all
+  docker compose exec -T -u "$HOST_UID:$HOST_GID" -e HOME=/tmp backend bash -lc "${1:?uso: exec-backend-user \"<cmd>\"}"
+}
+
+qa_ci() {
+  guard_all
+  local rc=0
+  bash "$ROOT/qa/run_qa_ci.sh" || rc=$?
+  [[ -s "$ROOT/$QA_REPORTS_DIR/run_manifest.json" ]] \
+    || die "qa-ci: run_qa_ci.sh terminó (rc=$rc) sin run_manifest.json — posible falso verde"
+  echo "qa-ci: rc=$rc (manifest presente)"
+  return "$rc"
+}
+
+reset_db() {
+  [[ "${1:-}" == "$PROJECT" ]] || die "reset-db: escribí el nombre exacto del proyecto ($PROJECT)"
+  guard_all
+  docker compose --profile qa down -v --remove-orphans
+}
+
+run_start() {
+  local tipo="${1:?uso: run-start <tipo>}" sha ts dir
+  check_tree
+  sha="$(git rev-parse --short=12 HEAD)"; ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  dir="$EVID/$sha/$ts-$tipo"
+  mkdir -p "$dir"/{reports,frontend,playwright,tracked_overwrites,logs,closure} "$STATE"
+  echo "$dir" > "$RUN_FILE"
+  {
+    echo "inicio_utc=$ts"
+    echo "inicio_epoch=$(date +%s)"
+    echo "arbol=$ROOT"
+    echo "proyecto=$PROJECT"
+    echo "commit=$(git rev-parse HEAD)"
+    echo "rama=$(git rev-parse --abbrev-ref HEAD)"
+    echo "docker_server=$(docker version --format '{{.Server.Version}}')"
+    echo "node_host=$(node --version 2>/dev/null || echo n/a)"
+    echo "python_host=$(python3 --version 2>&1)"
+    echo "imagen_backend=$BACKEND_IMAGE $(docker image inspect "$BACKEND_IMAGE" --format '{{.Id}}' 2>/dev/null || echo AUSENTE)"
+    echo "erpbl_sha256=$(sha256sum "$0" | cut -d' ' -f1)"
+    echo "override_sha256=$(sha256sum "$STACK_DIR/compose.baseline.yaml" | cut -d' ' -f1)"
+  } > "$dir/corrida.env"
+  echo "$dir"
+}
+run_dir() { [[ -n "$RUN_DIR" ]] || die "no hay corrida activa para $TREE"; echo "$RUN_DIR"; }
+
+# Eventos del demo que NO son ruido: descarta los healthchecks (exec de curl/pg_isready,
+# exec_die, health_status). Lo que quede es un incidente a explicar en el LOG.
+demo_eventos() {
+  local f="$EVID/_demo/eventos.jsonl"
+  [[ -f "$f" ]] || die "no hay registro de eventos del demo ($f)"
+  echo "eventos registrados: $(wc -l < "$f")"
+  jq -c 'select(
+      ((.Action | startswith("exec_create") or startswith("exec_start"))
+        and ((.Action | contains("curl -fsS http://localhost:8000/api/auth/bootstrap/status/")) or (.Action | contains("pg_isready"))))
+      | not)
+    | select(.Action != "exec_die")
+    | select((.Action | startswith("health_status")) | not)
+    | {hora: (.time | todate), tipo: .Type, accion: .Action, actor: (.Actor.Attributes.name // .Actor.ID)}' "$f"
+}
+
+show_env() {
+  echo "árbol=$ROOT proyecto=$PROJECT puertos=127.0.0.1:$BACKEND_PORT/$FRONTEND_PORT"
+  echo "COMPOSE_FILE=$COMPOSE_FILE"
+  echo "BASE_URL=$BASE_URL QA_REPORTS_DIR=$QA_REPORTS_DIR"
+  echo "corrida=${RUN_DIR:-<ninguna>}"
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  preflight)          preflight ;;
+  compose)            compose_cmd "$@" ;;
+  make)               make_cmd "$@" ;;
+  exec-backend)       exec_backend "$@" ;;
+  exec-backend-user)  exec_backend_user "$@" ;;
+  qa-ci)              qa_ci ;;
+  reset-db)           reset_db "$@" ;;
+  run-start)          run_start "$@" ;;
+  run-dir)            run_dir ;;
+  demo-fingerprint)   demo_fingerprint "$@" ;;
+  demo-eventos)       demo_eventos ;;
+  init-secrets)       init_secrets ;;
+  env)                show_env ;;
+  *) sed -n '2,17p' "$0"; exit 64 ;;
+esac
