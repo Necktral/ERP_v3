@@ -56,7 +56,8 @@ const lastCheckLabel = computed(() => {
 }
 
 .conn--on .conn__label {
-  color: var(--q-positive);
+  /* 5.3:1 sobre la superficie clara del topbar; el verde Quasar sólo alcanza 2.52:1. */
+  color: #137333;
 }
 
 .conn--off .conn__dot {

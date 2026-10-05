@@ -58,6 +58,15 @@ from pathlib import Path
 rows = json.loads(sys.argv[1])
 req_data = {}
 res_data = {}
+def redact(value):
+  if isinstance(value, dict):
+    return {
+      key: ("[REDACTED]" if key.lower() in {"access", "refresh", "token", "signature"} else redact(item))
+      for key, item in value.items()
+    }
+  if isinstance(value, list):
+    return [redact(item) for item in value]
+  return value
 if sys.argv[5] and Path(sys.argv[5]).is_file():
   raw = Path(sys.argv[5]).read_text(encoding="utf-8").strip()
   req_data = json.loads(raw) if raw else {}
@@ -66,8 +75,8 @@ if sys.argv[6] and Path(sys.argv[6]).is_file():
   res_data = json.loads(raw) if raw else {}
 rows.append({
   "name": sys.argv[2],
-  "request": {"method": sys.argv[3], "url": sys.argv[4], "payload": req_data},
-  "response": {"http_status": int(sys.argv[7]) if sys.argv[7].isdigit() else None, "body": res_data},
+  "request": {"method": sys.argv[3], "url": sys.argv[4], "payload": redact(req_data)},
+  "response": {"http_status": int(sys.argv[7]) if sys.argv[7].isdigit() else None, "body": redact(res_data)},
 })
 print(json.dumps(rows, ensure_ascii=False))
 PY
@@ -207,6 +216,26 @@ if [[ -z "${TOKEN}" ]]; then
   fail "login" "Missing access token"
 fi
 add_check "login" "passed" "${LAST_HTTP_STATUS}" "JWT issued"
+
+REVOKED_DEVICE_ID="$(docker compose exec -T backend bash -lc "cd /app/backend && python manage.py shell -c '
+from apps.modulos.iam.models import OrgUnit
+from apps.modulos.sync_engine.models import Device
+company = OrgUnit.objects.get(id=${COMPANY_ID})
+device = Device.objects.create(company=company, status=Device.Status.REVOKED, public_key=bytes(32))
+print(device.id)
+'" | tail -n 1)"
+call_api "kill_switch_revoked_device" "GET" "/retail/pos/cockpit/" "" "${TOKEN}" "${COMPANY_ID}" "${BRANCH_ID}" "X-Device-Id: ${REVOKED_DEVICE_ID}"
+expect_http "403" "kill_switch_revoked_device" "Revoked device must be blocked"
+KILL_SWITCH_CODE="$(python3 - <<'PY' "${LAST_RESPONSE_FILE}"
+import json, sys
+data = json.load(open(sys.argv[1], "r", encoding="utf-8"))
+print(((data.get("error") or {}).get("code") or ""))
+PY
+)"
+if [[ "${KILL_SWITCH_CODE}" != "DEVICE_REVOKED" ]]; then
+  fail "kill_switch_revoked_device" "Expected DEVICE_REVOKED, got ${KILL_SWITCH_CODE:-<empty>}"
+fi
+add_check "kill_switch_revoked_device" "passed" "${LAST_HTTP_STATUS}" "Revoked terminal blocked before POS handling"
 
 SHIFT_PAYLOAD="${TMP_DIR}/shift_payload.json"
 echo '{"note":"pilot-pos-smoke"}' >"${SHIFT_PAYLOAD}"

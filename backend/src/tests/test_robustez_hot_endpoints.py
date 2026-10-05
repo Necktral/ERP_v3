@@ -112,11 +112,9 @@ def test_portfolio_settings_create_forges_other_company():
 
 @pytest.mark.django_db
 def test_portfolio_receivable_create_forges_other_company():
-    """CRÍTICO: crear una CxC (Receivable) con company=<B> en el cuerpo.
-
-    Mismo patrón que settings: `company` es escribible y no hay perform_create.
-    CONFIRMADO: con todos los campos requeridos, el create devuelve 201 con
-    company=B → escritura cruzada real (no solo PortfolioSettings).
+    """BUG-019 CERRADO: `/portfolio/receivables/` es SOLO LECTURA — no se puede
+    crear una CxC por API (las CxC nacen de servicios scopeados por empresa).
+    Antes era un ModelViewSet con FKs escribibles sin scope (fuga cross-company).
     """
     from apps.modulos.parties.models import Party
 
@@ -140,15 +138,8 @@ def test_portfolio_receivable_create_forges_other_company():
         },
         format="json",
     )
-    if resp.status_code in (200, 201):
-        assert resp.data.get("company") != company_b.id, (
-            f"FUGA: Receivable creado para empresa ajena B={company_b.id}. "
-            f"company persistido={resp.data.get('company')}"
-        )
-    else:
-        # Si el serializer rechaza por campos requeridos, no es una fuga (pero el
-        # root cause `company` escribible sigue presente — ver PortfolioSettings).
-        assert resp.status_code in (400, 403, 422), resp.status_code
+    # Endpoint read-only → 405 (no hay create). Nunca 201.
+    assert resp.status_code == 405, f"el endpoint debería ser read-only, dio {resp.status_code}"
 
 
 @pytest.mark.django_db
@@ -613,12 +604,8 @@ def test_csrf_required_for_cookie_session_write():
 # ===========================================================================
 @pytest.mark.django_db
 def test_portfolio_payable_create_forges_other_company():
-    """CRÍTICO (fuga/escritura cruzada en CxP): igual que CxC, `PayableViewSet`
-    no define perform_create() y el serializer expone `company` escribible.
-
-    Un usuario de A crea un Payable con company=<B> → escritura cruzada real:
-    una cuenta por pagar atribuida a la empresa B. Esperado: el backend fuerza
-    request.company o rechaza 400/403. Lo que NO debe pasar: persistir company=B.
+    """BUG-019 CERRADO: `/portfolio/payables/` es SOLO LECTURA — las CxP nacen de
+    servicios (compras/intercompany) scopeados por empresa, no por API.
     """
     from apps.modulos.parties.models import Party
 
@@ -642,13 +629,8 @@ def test_portfolio_payable_create_forges_other_company():
         },
         format="json",
     )
-    if resp.status_code in (200, 201):
-        assert resp.data.get("company") != company_b.id, (
-            f"FUGA: Payable (CxP) creado para empresa ajena B={company_b.id}. "
-            f"company persistido={resp.data.get('company')}"
-        )
-    else:
-        assert resp.status_code in (400, 403, 422), resp.status_code
+    # Endpoint read-only → 405 (no hay create). Nunca 201.
+    assert resp.status_code == 405, f"el endpoint debería ser read-only, dio {resp.status_code}"
 
 
 @pytest.mark.django_db

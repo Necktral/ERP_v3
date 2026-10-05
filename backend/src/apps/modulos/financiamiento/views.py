@@ -3,6 +3,7 @@ permiso ``financing.*``; los errores de negocio del vertical responden 422 con
 ``error.code`` estable (patrón del módulo ventas)."""
 from __future__ import annotations
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
@@ -12,6 +13,7 @@ from apps.kernels.inventarios.models import InventoryItem, Warehouse
 from apps.kernels.payments.services import PaymentsDomainError
 from apps.kernels.portfolio.services import PortfolioDomainError
 from apps.modulos.common.permissions import rbac_permission
+from apps.modulos.common.pagination import get_limit_offset, paginate_queryset
 from apps.modulos.parties.models import Party
 
 from . import services
@@ -53,6 +55,12 @@ from .serializers import (
     SettingsUpdateSerializer,
 )
 from .services import FinancingError
+
+
+def _paginated(request, qs, serializer):
+    limit, offset = get_limit_offset(request)
+    total, rows = paginate_queryset(qs, limit=limit, offset=offset)
+    return Response({"count": total, "limit": limit, "offset": offset, "results": serializer(rows, many=True).data})
 
 
 def _company_or_400(request):
@@ -97,7 +105,14 @@ class ProducerListCreateView(APIView):
         if err:
             return err
         qs = ProducerProfile.objects.filter(company=company).select_related("party").order_by("acopio_code")
-        return Response({"results": ProducerSerializer(qs[:500], many=True).data})
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(party__display_name__icontains=search)
+                | Q(acopio_code__icontains=search)
+                | Q(party__national_id__icontains=search)
+            )
+        return _paginated(request, qs, ProducerSerializer)
 
     def post(self, request):
         company, err = _company_or_400(request)
@@ -195,7 +210,7 @@ class ApplicationListCreateView(APIView):
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
-        return Response({"results": ApplicationSerializer(qs.order_by("-id")[:300], many=True).data})
+        return _paginated(request, qs.order_by("-id"), ApplicationSerializer)
 
     def post(self, request):
         company, err = _company_or_400(request)
@@ -303,7 +318,10 @@ class LoanListView(APIView):
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
-        return Response({"results": LoanSerializer(qs.order_by("-id")[:300], many=True).data})
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(Q(reference__icontains=search) | Q(producer__party__display_name__icontains=search))
+        return _paginated(request, qs.order_by("-id"), LoanSerializer)
 
 
 class PortfolioRiskView(APIView):
@@ -387,7 +405,7 @@ class ReceptionListCreateView(APIView):
         producer_f = request.query_params.get("producer")
         if producer_f:
             qs = qs.filter(producer_id=producer_f)
-        return Response({"results": ReceptionSerializer(qs.order_by("-id")[:300], many=True).data})
+        return _paginated(request, qs.order_by("-id"), ReceptionSerializer)
 
     def post(self, request):
         company, err = _company_or_400(request)
@@ -421,14 +439,14 @@ class FixationListCreateView(APIView):
         company, err = _company_or_400(request)
         if err:
             return err
-        qs = PriceFixation.objects.filter(company=company)
+        qs = PriceFixation.objects.filter(company=company).select_related("producer__party")
         producer_f = request.query_params.get("producer")
         if producer_f:
             qs = qs.filter(producer_id=producer_f)
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
-        return Response({"results": FixationSerializer(qs.order_by("-id")[:300], many=True).data})
+        return _paginated(request, qs.order_by("-id"), FixationSerializer)
 
     def post(self, request):
         company, err = _company_or_400(request)
@@ -461,7 +479,7 @@ class LiquidationListCreateView(APIView):
         producer_f = request.query_params.get("producer")
         if producer_f:
             qs = qs.filter(producer_id=producer_f)
-        return Response({"results": LiquidationSerializer(qs.order_by("-id")[:300], many=True).data})
+        return _paginated(request, qs.order_by("-id"), LiquidationSerializer)
 
     def post(self, request):
         company, err = _company_or_400(request)

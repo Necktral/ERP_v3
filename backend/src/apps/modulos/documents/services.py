@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from apps.modulos.iam.models import OrgUnit
@@ -28,6 +29,8 @@ def create_scanned_document(
     uploaded_by: Any = None,
 ) -> ScannedDocument:
     """Crea el documento en estado PENDING_OCR con la imagen ya almacenada."""
+    if branch is not None and branch.parent_id != company.id:
+        raise ValidationError({"branch": "La sucursal debe pertenecer a la empresa del documento."})
     doc = ScannedDocument(
         company=company,
         branch=branch,

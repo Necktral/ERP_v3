@@ -176,6 +176,40 @@ def upsert_chart_of_accounts(
     created = updated = 0
     parent_mapping: dict[int, str] = {}
     with transaction.atomic():
+        # BUG-034: la fila company funciona como mutex incluso cuando el CoA está
+        # vacío; luego se bloquea el snapshot completo de cuentas. Así dos upserts
+        # concurrentes no pueden validar snapshots viejos y formar un ciclo juntos.
+        company = OrgUnit.objects.select_for_update().get(pk=company.pk)
+        locked_accounts = list(
+            ChartOfAccount.objects.select_for_update()
+            .filter(company=company)
+            .only("id", "code", "parent_id")
+            .order_by("id")
+        )
+        code_by_id = {row.id: row.code for row in locked_accounts}
+        proposed_parent: dict[str, str] = {
+            row.code: code_by_id.get(row.parent_id, "") if row.parent_id is not None else ""
+            for row in locked_accounts
+        }
+        proposed_parent.update({row["code"]: row["parent_code"] for row in clean_rows})
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def _visit(code: str) -> None:
+            if code in visiting:
+                raise Phase7ValidationError(f"El plan de cuentas contiene un ciclo en {code}.")
+            if code in visited:
+                return
+            visiting.add(code)
+            parent_code = proposed_parent.get(code, "")
+            if parent_code and parent_code in proposed_parent:
+                _visit(parent_code)
+            visiting.remove(code)
+            visited.add(code)
+
+        for proposed_code in proposed_parent:
+            _visit(proposed_code)
+
         for row in clean_rows:
             obj, was_created = ChartOfAccount.objects.get_or_create(
                 company=company,
@@ -204,9 +238,12 @@ def upsert_chart_of_accounts(
                     )
                     updated += 1
 
+        referenced_codes = {r["code"] for r in clean_rows} | {
+            r["parent_code"] for r in clean_rows if r["parent_code"]
+        }
         obj_by_code = {
             x.code: x
-            for x in ChartOfAccount.objects.filter(company=company, code__in=[r["code"] for r in clean_rows]).only("id", "code")
+            for x in ChartOfAccount.objects.filter(company=company, code__in=referenced_codes).only("id", "code")
         }
         for obj_id, parent_code in parent_mapping.items():
             obj = ChartOfAccount.objects.select_for_update().get(id=obj_id)
@@ -729,7 +766,10 @@ def run_fx_revaluation(
                 "summary_json": {},
             },
         )
-        if not created and run.status in (RevaluationRun.Status.COMPLETED, RevaluationRun.Status.BLOCKED):
+        # COMPLETED is terminal/idempotent. BLOCKED is deliberately recoverable:
+        # after correcting rates/configuration the same locked run is evaluated
+        # again, without creating a second run or a second set of entries.
+        if not created and run.status == RevaluationRun.Status.COMPLETED:
             summary_json = dict(run.summary_json or {})
             return RevaluationExecutionResult(
                 run_id=str(run.run_id),

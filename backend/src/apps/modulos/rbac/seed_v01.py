@@ -246,6 +246,7 @@ def seed_rbac_v01() -> SeedResult:
         # --- Integration Backbone (core module) ---
         "integration.outbox.read": "Ver outbox canónico.",
         "integration.outbox.publish": "Marcar/publish outbox canónico.",
+        "integration.outbox.retry": "Reencolar eventos outbox fallidos o pendientes.",
         "integration.inbox.read": "Ver inbox canónico.",
         "integration.inbox.process": "Procesar/ack inbox canónico.",
         # --- Accounting kernel ---
@@ -450,6 +451,7 @@ def seed_rbac_v01() -> SeedResult:
             "portfolio.receivable.write": "Crear/editar cuentas por cobrar.",
             "portfolio.receivable.adjust": "Ajustar monto de una CxC (sensible).",
             "portfolio.receivable.writeoff": "Castigar/write-off una CxC (sensible).",
+            "portfolio.receivable.reconcile": "Reconciliar facturas a crédito emitidas sin CxC.",
             "portfolio.payable.read": "Ver cuentas por pagar (CxP).",
             "portfolio.payable.write": "Crear/editar cuentas por pagar.",
             "portfolio.credit.read": "Ver créditos.",
@@ -625,6 +627,7 @@ def seed_rbac_v01() -> SeedResult:
             # Integration backbone
             "integration.outbox.read",
             "integration.outbox.publish",
+            "integration.outbox.retry",
             "integration.inbox.read",
             "integration.inbox.process",
             # Accounting
@@ -695,6 +698,7 @@ def seed_rbac_v01() -> SeedResult:
             "portfolio.receivable.write",
             "portfolio.receivable.adjust",
             "portfolio.receivable.writeoff",
+            "portfolio.receivable.reconcile",
             "portfolio.payable.read",
             "portfolio.payable.write",
             "portfolio.credit.read",
@@ -1087,6 +1091,10 @@ def seed_rbac_v01() -> SeedResult:
                 "cec.exception.resolve",
             ],
             "cashier": [
+                # Caja de venta: acceso mínimo a la ruta POS y a sus selectores de inventario.
+                "sales.pos.sell",
+                "inventory.item.read",
+                "inventory.warehouse.read",
                 "billing.doc.create",
                 "billing.doc.read",
                 "billing.doc.issue",

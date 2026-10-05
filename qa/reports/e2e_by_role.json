@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "generated_at": "2026-08-18T20:32:21.379Z",
+  "runner": "@playwright/test",
+  "checks": [
+    "login y contexto por rol",
+    "aislamiento de contador y cajero",
+    "19 dominios con superficie y control semántico visibles",
+    "respuestas API sin 5xx",
+    "interacción reversible de pestañas",
+    "guard UI contra doble envío inválido"
+  ]
+}

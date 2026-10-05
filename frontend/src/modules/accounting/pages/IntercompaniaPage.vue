@@ -396,7 +396,7 @@ function disputar(tx: IntercompanyTx) {
 }
 
 .ic-disputas__title {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   color: var(--app-text);
   margin-bottom: var(--app-space-3);

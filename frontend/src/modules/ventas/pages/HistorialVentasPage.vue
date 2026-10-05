@@ -78,7 +78,7 @@
       </template>
       <template #body-cell-acciones="props">
         <q-td :props="props" class="text-right">
-          <q-btn flat dense round icon="visibility" @click="verDetalle(props.row)">
+          <q-btn flat dense round icon="visibility" aria-label="Ver detalle de venta" @click="verDetalle(props.row)">
             <q-tooltip>Ver detalle</q-tooltip>
           </q-btn>
           <q-btn
@@ -87,6 +87,7 @@
             dense
             round
             icon="print"
+            aria-label="Reimprimir venta"
             @click="reimprimir(props.row)"
           >
             <q-tooltip>Reimprimir (COPIA)</q-tooltip>
@@ -98,6 +99,7 @@
             round
             color="warning"
             icon="assignment_return"
+            aria-label="Crear devolución"
             @click="abrirDevolucion(props.row)"
           >
             <q-tooltip>Devolución (nota de crédito)</q-tooltip>
@@ -109,6 +111,7 @@
             round
             color="negative"
             icon="block"
+            aria-label="Anular venta"
             @click="abrirAnulacion(props.row)"
           >
             <q-tooltip>Anular</q-tooltip>

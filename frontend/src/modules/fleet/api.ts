@@ -1,9 +1,10 @@
 /**
  * Flota (fleet) — vehículos y maquinaria: lecturas de odómetro/horómetro,
  * documentos con vencimiento (seguro, circulación…) y planes de mantenimiento
- * con alertas. Los listados devuelven array plano.
+ * con alertas. Activos, conductores e historiales volumétricos usan envelopes paginados.
  */
 import { api } from 'src/boot/axios';
+import type { PageReq, Paginated } from 'src/core/api';
 
 export const ASSET_TYPE_LABELS: Record<string, string> = {
   VEHICLE: 'Vehículo',
@@ -85,9 +86,13 @@ export interface MaintenancePlanRow {
 }
 
 // --- Activos ---
-export async function listAssets(): Promise<FleetAsset[]> {
-  const { data } = await api.get<FleetAsset[]>('/fleet/assets/');
+export async function listAssetsPage(page: PageReq, search = ''): Promise<Paginated<FleetAsset>> {
+  const { data } = await api.get<Paginated<FleetAsset>>('/fleet/assets/', { params: { ...page, ...(search ? { search } : {}) } });
   return data;
+}
+
+export async function listAssets(search = ''): Promise<FleetAsset[]> {
+  return (await listAssetsPage({ limit: 25, offset: 0 }, search)).results;
 }
 
 export async function upsertAsset(input: {
@@ -115,9 +120,13 @@ export async function recordMeterReading(input: {
 }
 
 // --- Conductores ---
-export async function listDrivers(): Promise<FleetDriver[]> {
-  const { data } = await api.get<FleetDriver[]>('/fleet/drivers/');
+export async function listDriversPage(page: PageReq, search = ''): Promise<Paginated<FleetDriver>> {
+  const { data } = await api.get<Paginated<FleetDriver>>('/fleet/drivers/', { params: { ...page, ...(search ? { search } : {}) } });
   return data;
+}
+
+export async function listDrivers(search = ''): Promise<FleetDriver[]> {
+  return (await listDriversPage({ limit: 25, offset: 0 }, search)).results;
 }
 
 export async function upsertDriver(input: {
@@ -256,9 +265,9 @@ export interface AssetCostSummary {
   consumption_label: string;
 }
 
-export async function listFuelLogs(assetId: number): Promise<FuelLogRow[]> {
-  const { data } = await api.get<{ results: FuelLogRow[] }>(`/fleet/assets/${assetId}/fuel-logs/`);
-  return data.results;
+export async function listFuelLogs(assetId: number, page: PageReq): Promise<Paginated<FuelLogRow>> {
+  const { data } = await api.get<Paginated<FuelLogRow>>(`/fleet/assets/${assetId}/fuel-logs/`, { params: page });
+  return data;
 }
 
 export async function createFuelLog(
@@ -269,9 +278,9 @@ export async function createFuelLog(
   return data;
 }
 
-export async function listMaintenanceOrders(assetId: number): Promise<MaintenanceOrderRow[]> {
-  const { data } = await api.get<{ results: MaintenanceOrderRow[] }>(`/fleet/assets/${assetId}/maintenance-orders/`);
-  return data.results;
+export async function listMaintenanceOrders(assetId: number, page: PageReq): Promise<Paginated<MaintenanceOrderRow>> {
+  const { data } = await api.get<Paginated<MaintenanceOrderRow>>(`/fleet/assets/${assetId}/maintenance-orders/`, { params: page });
+  return data;
 }
 
 export async function createMaintenanceOrder(
@@ -282,9 +291,9 @@ export async function createMaintenanceOrder(
   return data;
 }
 
-export async function listFleetExpenses(assetId: number): Promise<FleetExpenseRow[]> {
-  const { data } = await api.get<{ results: FleetExpenseRow[] }>(`/fleet/assets/${assetId}/expenses/`);
-  return data.results;
+export async function listFleetExpenses(assetId: number, page: PageReq): Promise<Paginated<FleetExpenseRow>> {
+  const { data } = await api.get<Paginated<FleetExpenseRow>>(`/fleet/assets/${assetId}/expenses/`, { params: page });
+  return data;
 }
 
 export async function createFleetExpense(

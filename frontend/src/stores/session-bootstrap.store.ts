@@ -4,6 +4,7 @@ import { useAclStore, type AclSnapshot } from 'src/stores/acl.store';
 import { useAuthStore } from 'src/stores/auth.store';
 import { useContextStore } from 'src/stores/context.store';
 import { STORAGE_KEYS } from 'src/core/storage/keys';
+import { createSessionCache, readValidSessionCache } from 'src/core/storage/session-cache';
 
 type ShellMode = 'desktop' | 'mobile';
 type DeviceClass = 'desktop' | 'mobile';
@@ -150,8 +151,11 @@ export const useSessionBootstrapStore = defineStore('sessionBootstrap', {
       try {
         const raw = localStorage.getItem(STORAGE_KEYS.SESSION_PAYLOAD);
         if (!raw) return false;
-        const data = JSON.parse(raw) as BootstrapSessionResponse;
-        if (!data?.user || !data?.capabilities?.acl_snapshot) return false;
+        const data = readValidSessionCache<BootstrapSessionResponse>(raw);
+        if (!data?.user || !data?.capabilities?.acl_snapshot) {
+          localStorage.removeItem(STORAGE_KEYS.SESSION_PAYLOAD);
+          return false;
+        }
         this.applyPayload(data);
         return true;
       } catch {
@@ -188,7 +192,10 @@ export const useSessionBootstrapStore = defineStore('sessionBootstrap', {
         this.applyPayload(data);
         // Offline-first: cachear el payload para poder ENTRAR sin red la próxima vez.
         try {
-          localStorage.setItem(STORAGE_KEYS.SESSION_PAYLOAD, JSON.stringify(data));
+          localStorage.setItem(
+            STORAGE_KEYS.SESSION_PAYLOAD,
+            JSON.stringify(createSessionCache(data)),
+          );
         } catch {
           /* storage lleno/no disponible: la sesión sigue en memoria */
         }

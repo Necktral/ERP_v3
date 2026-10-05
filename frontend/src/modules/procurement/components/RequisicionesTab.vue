@@ -123,7 +123,7 @@
           <div v-for="(ln, i) in lineas" :key="i" class="req-linea">
             <ItemSelect v-model="ln.item_id" class="req-linea__item" />
             <q-input v-model="ln.qty" outlined dense type="number" min="0.0001" label="Cantidad *" class="req-linea__num" />
-            <q-btn flat dense round icon="close" :disable="lineas.length === 1" @click="lineas.splice(i, 1)" />
+            <q-btn flat dense round icon="close" aria-label="Eliminar línea de requisición" :disable="lineas.length === 1" @click="lineas.splice(i, 1)" />
           </div>
           <q-btn flat no-caps icon="add" label="Agregar línea" @click="lineas.push({ item_id: null, qty: '1' })" />
           <q-input v-model="notas" outlined dense label="Notas (para qué se necesita)" />

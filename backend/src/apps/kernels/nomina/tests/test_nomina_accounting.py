@@ -23,6 +23,7 @@ from apps.modulos.audit.models import AuditEvent
 from apps.modulos.hr.models import Employee
 from apps.modulos.iam.models import OrgUnit
 from apps.modulos.integration.models import OutboxEvent
+from apps.modulos.integration.services import mark_outbox_event_retry, requeue_outbox_event
 
 User = get_user_model()
 
@@ -135,8 +136,70 @@ def test_payroll_posting_is_idempotent_per_period():
     assert OutboxEvent.objects.filter(
         source_module="NOMINA", event_type="PayrollPeriodApproved", company=company
     ).count() == 1
-    assert r2["link_status"] == "ALREADY_POSTED"
+    assert r2["link_status"] == r1["link_status"]
+    assert r2["journal_draft_id"] == r1["journal_draft_id"]
     assert r2["outbox_event_id"] == r1["outbox_event_id"]
+
+
+@pytest.mark.django_db
+def test_payroll_replay_reports_pending_then_repairs_real_consequence(monkeypatch):
+    from apps.kernels.accounting import services as accounting_services
+    from apps.kernels.nomina.accounting_link import post_payroll_period_to_accounting
+
+    company, branch = _mk_scope()
+    actor = _actor()
+    _posting_config(company)
+    period = _period_with_entries(company, branch, actor, has_inss=True)
+    original = accounting_services.link_operational_event_to_accounting
+    monkeypatch.setattr(
+        accounting_services,
+        "link_operational_event_to_accounting",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("accounting offline")),
+    )
+    first = post_payroll_period_to_accounting(request=_req(actor, company=company), actor=actor, period=period)
+    assert first["link_status"] == "OUTBOX_PENDING"
+    assert first["journal_draft_id"] is None
+
+    monkeypatch.setattr(accounting_services, "link_operational_event_to_accounting", original)
+    replay = post_payroll_period_to_accounting(request=_req(actor, company=company), actor=actor, period=period)
+    assert replay["link_status"] == "DRAFT_VALIDATED"
+    assert replay["journal_draft_id"] is not None
+    assert JournalDraft.objects.filter(economic_event__company=company).count() == 1
+
+
+@pytest.mark.django_db
+def test_failed_payroll_outbox_requires_admin_requeue_before_replay(monkeypatch):
+    from apps.kernels.accounting import services as accounting_services
+    from apps.kernels.nomina.accounting_link import post_payroll_period_to_accounting
+
+    company, branch = _mk_scope()
+    actor = _actor()
+    _posting_config(company)
+    period = _period_with_entries(company, branch, actor, has_inss=True)
+    original = accounting_services.link_operational_event_to_accounting
+    monkeypatch.setattr(
+        accounting_services,
+        "link_operational_event_to_accounting",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("accounting offline")),
+    )
+    post_payroll_period_to_accounting(request=_req(actor, company=company), actor=actor, period=period)
+    event = OutboxEvent.objects.get(company=company, source_module="NOMINA", event_type="PayrollPeriodApproved")
+    mark_outbox_event_retry(event=event, error="dispatcher exhausted", max_attempts=1)
+    blocked = post_payroll_period_to_accounting(request=_req(actor, company=company), actor=actor, period=period)
+    assert blocked["link_status"] == "OUTBOX_FAILED"
+    assert blocked["journal_draft_id"] is None
+
+    requeue_outbox_event(
+        event_id=event.event_id,
+        company=company,
+        branch=branch,
+        actor_user=actor,
+        request=_req(actor, company=company),
+    )
+    monkeypatch.setattr(accounting_services, "link_operational_event_to_accounting", original)
+    repaired = post_payroll_period_to_accounting(request=_req(actor, company=company), actor=actor, period=period)
+    assert repaired["link_status"] == "DRAFT_VALIDATED"
+    assert repaired["journal_draft_id"] is not None
 
 
 @pytest.mark.django_db

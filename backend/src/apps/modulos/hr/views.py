@@ -65,6 +65,7 @@ from .services_vacaciones import (
 )
 from .serializers import (
     AssignmentCreateSerializer,
+    BootstrapAdminDemotionSerializer,
     ContractAmendSerializer,
     ContractCreateSerializer,
     ContractRenewSerializer,
@@ -91,6 +92,7 @@ from .serializers import (
     VacationRegisterSerializer,
 )
 from .services import (
+    BootstrapAdminDemotionError,
     annul_contract,
     annul_memo,
     create_contract_draft,
@@ -98,6 +100,7 @@ from .services import (
     end_assignment,
     issue_contract,
     link_employee_to_party,
+    link_and_demote_bootstrap_admin,
     provision_user_for_employee,
     reconcile_employee_roles,
     rehire_employee,
@@ -808,6 +811,32 @@ class EmployeeProvisionUserView(APIView):
             raise ValidationError({"detail": msg})
 
 
+class BootstrapAdminDemotionView(APIView):
+    permission_classes = [rbac_permission("hr.employee.update")]
+    throttle_scope = "admin_writes"
+
+    def post(self, request, employee_id: int):
+        serializer = BootstrapAdminDemotionSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        employee = get_object_or_404(Employee, id=employee_id, company=request.company)
+        try:
+            result = link_and_demote_bootstrap_admin(
+                employee=employee,
+                actor=request.user,
+                company=request.company,
+                request=request,
+            )
+        except BootstrapAdminDemotionError as exc:
+            # El middleware de envelope recibe el HttpRequest de Django, no el
+            # wrapper Request de DRF.
+            request._request.error_code_override = exc.code
+            return Response(
+                {"detail": str(exc), "code": exc.code},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(result, status=status.HTTP_200_OK)
+
+
 class EmployeeResetTempPasswordView(APIView):
     """
     POST /hr/employees/<id>/reset-temp-password/
@@ -1489,6 +1518,9 @@ class EmployeeProfileView(APIView):
                 "linked_user_id": emp.linked_user_id,
                 "linked_username": emp.linked_user.username if emp.linked_user_id and emp.linked_user else None,
                 "linked_user_active": bool(emp.linked_user.is_active) if emp.linked_user_id and emp.linked_user else None,
+                "can_claim_bootstrap_admin": bool(
+                    request.user.is_superuser and emp.linked_user_id in (None, request.user.id)
+                ),
                 "roles": [{"role_id": r.role_id, "role_name": r.role.name} for r in roles],
                 "assignments": [
                     {

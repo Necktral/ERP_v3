@@ -4,6 +4,7 @@ import base64
 import json
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
 from rest_framework.exceptions import AuthenticationFailed
@@ -11,8 +12,20 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.modulos.iam.models import OrgUnit
+from apps.modulos.rbac.selectors import get_effective_permissions_for_scope
 
 User = get_user_model()
+
+
+def _bounded_current_permissions(*, claimed: list[str], current: set[str]) -> list[str]:
+    """Keep the token's original ceiling while honoring RBAC revocation immediately."""
+    claimed_set = {str(code).strip() for code in claimed if str(code).strip()}
+    current_set = {str(code).strip() for code in current if str(code).strip()}
+    if "*" in claimed_set:
+        return sorted(current_set)
+    if "*" in current_set:
+        return sorted(claimed_set)
+    return sorted(claimed_set & current_set)
 
 
 def _decode_payload_unverified(raw_token: str) -> dict[str, Any]:
@@ -91,7 +104,19 @@ class ReportingEmbedJWTAuthentication(BaseAuthentication):
                 raise AuthenticationFailed("Scope branch inválido para token reporting.")
 
         self._set_context(request=request, company=company, branch=branch)
-        perm_codes = [str(code).strip() for code in list(token.get("perm_codes") or []) if str(code).strip()]
+        claimed_permissions = [
+            str(code).strip() for code in list(token.get("perm_codes") or []) if str(code).strip()
+        ]
+        current_permissions = get_effective_permissions_for_scope(
+            user,
+            company=company,
+            branch=branch,
+            include_global=bool(getattr(settings, "RBAC_INCLUDE_GLOBAL_USERROLES", False)),
+        )
+        perm_codes = _bounded_current_permissions(
+            claimed=claimed_permissions,
+            current=current_permissions,
+        )
         setattr(request, "reporting_effective_permissions", perm_codes)
         setattr(request, "rbac_effective_permissions_override", perm_codes)
         setattr(request, "reporting_consumer_type", "DASHBOARD")

@@ -154,7 +154,7 @@ onMounted(cargar);
 .kpi__value {
   font-size: 1.6rem;
   font-weight: 700;
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   margin-top: 2px;
 }
 .kpi__sub {

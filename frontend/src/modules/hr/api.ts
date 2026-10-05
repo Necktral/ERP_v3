@@ -257,6 +257,27 @@ export async function revokeAccess(
   await api.post(`/hr/employees/${employeeId}/revoke-access/`, input);
 }
 
+export interface BootstrapAdminDemotionResult {
+  user_id: number;
+  employee_id: number;
+  is_superuser: false;
+  is_staff: false;
+  linked_existing_user: true;
+  preserved_permissions: string[];
+  replayed: boolean;
+}
+
+export async function claimBootstrapAdminEmployee(
+  employeeId: number,
+  confirmation: string,
+): Promise<BootstrapAdminDemotionResult> {
+  const { data } = await api.post<BootstrapAdminDemotionResult>(
+    `/hr/employees/${employeeId}/claim-bootstrap-admin/`,
+    { confirmation },
+  );
+  return data;
+}
+
 // --- Catálogos (choices del backend, fuente única) -------------------------
 export interface CatalogChoice {
   value: string;
@@ -526,6 +547,7 @@ export interface EmployeeProfile {
   linked_user_id: number | null;
   linked_username: string | null;
   linked_user_active: boolean | null;
+  can_claim_bootstrap_admin: boolean;
   roles: EmployeeRoleRow[];
   assignments: AssignmentRow[];
   contracts: ContractRow[];

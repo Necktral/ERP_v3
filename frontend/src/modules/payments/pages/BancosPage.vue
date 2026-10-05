@@ -170,7 +170,7 @@
             <q-input v-model="ln.description" dense outlined placeholder="Descripción" class="ban-linea__desc" />
             <q-input v-model="ln.reference" dense outlined placeholder="Ref." class="ban-linea__ref" />
             <q-input v-model="ln.amount" dense outlined type="number" placeholder="Monto ±" class="ban-linea__monto" />
-            <q-btn flat dense round size="sm" icon="close" @click="formExt.lines.splice(i, 1)" />
+            <q-btn flat dense round size="sm" icon="close" aria-label="Eliminar línea del extracto" @click="formExt.lines.splice(i, 1)" />
           </div>
           <div class="text-caption text-muted">
             Suma de líneas: <strong>{{ formatMoney(sumaLineas) }}</strong> · Inicial + líneas =
@@ -202,7 +202,7 @@
             → {{ detalle ? formatDate(detalle.period_end) : '' }}
           </div>
           <q-space />
-          <q-btn flat round dense icon="close" v-close-popup />
+          <q-btn flat round dense icon="close" aria-label="Cerrar diálogo" v-close-popup />
         </q-card-section>
 
         <q-card-section v-if="detalle" class="q-pt-none">

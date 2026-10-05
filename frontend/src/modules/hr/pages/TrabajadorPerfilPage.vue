@@ -82,6 +82,15 @@
           </div>
         </div>
         <div class="perfil-head__actions">
+          <q-btn
+            v-if="profile.can_claim_bootstrap_admin"
+            outline
+            no-caps
+            color="negative"
+            icon="security"
+            label="Retirar superusuario"
+            @click="openAdminDemotion"
+          />
           <template v-if="profile.employment_status === 'ACTIVO'">
             <q-btn outline no-caps color="warning" icon="pause_circle" label="Suspender" @click="suspendOpen = true" />
             <q-btn outline no-caps color="negative" icon="person_off" label="Dar de baja" @click="bajaOpen = true" />
@@ -249,7 +258,7 @@
           </template>
           <template #body-cell-acciones="props">
             <q-td :props="props" class="text-right">
-              <q-btn flat dense round icon="visibility" @click="openContract(props.row.id)">
+              <q-btn flat dense round icon="visibility" aria-label="Ver contrato" @click="openContract(props.row.id)">
                 <q-tooltip>Ver / editar texto</q-tooltip>
               </q-btn>
             </q-td>
@@ -282,12 +291,12 @@
         >
           <template #body-cell-acciones="props">
             <q-td :props="props" class="text-right">
-              <q-btn flat dense round icon="visibility" @click="viewDocument(props.row.id)">
+              <q-btn flat dense round icon="visibility" aria-label="Ver documento" @click="viewDocument(props.row.id)">
                 <q-tooltip>Ver / descargar</q-tooltip>
               </q-btn>
               <q-btn
                 v-if="puede('hr.file.manage')"
-                flat dense round icon="delete" color="negative" @click="removeDocument(props.row.id)"
+                flat dense round icon="delete" color="negative" aria-label="Eliminar documento" @click="removeDocument(props.row.id)"
               >
                 <q-tooltip>Eliminar</q-tooltip>
               </q-btn>
@@ -352,7 +361,7 @@
           </template>
           <template #body-cell-acciones="props">
             <q-td :props="props" class="text-right">
-              <q-btn flat dense round icon="visibility" @click="viewMemo(props.row)">
+              <q-btn flat dense round icon="visibility" aria-label="Ver memorando" @click="viewMemo(props.row)">
                 <q-tooltip>Ver</q-tooltip>
               </q-btn>
               <q-btn
@@ -362,6 +371,7 @@
                 round
                 icon="cancel"
                 color="negative"
+                aria-label="Anular memorando"
                 @click="doAnnulMemo(props.row)"
               >
                 <q-tooltip>Anular</q-tooltip>
@@ -602,7 +612,7 @@
               {{ currentContract?.status === 'BORRADOR' ? 'Texto editable: ajustalo al caso y emitilo cuando esté listo.' : 'Texto congelado (el contrato ya fue emitido).' }}
             </div>
           </div>
-          <q-btn flat round icon="close" @click="contractOpen = false" />
+          <q-btn flat round icon="close" aria-label="Cerrar contrato" @click="contractOpen = false" />
         </q-card-section>
         <q-card-section class="perfil-contract__body">
           <q-input
@@ -672,6 +682,42 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="adminDemotionOpen" persistent>
+      <q-card style="width: min(560px, 92vw)">
+        <q-card-section>
+          <div class="text-h6">Vincular este expediente y retirar superusuario</div>
+          <p class="q-mt-md q-mb-sm">
+            Esta operación vincula tu usuario actual a este trabajador y elimina los privilegios
+            globales de superusuario. Conservarás únicamente los permisos RBAC de
+            <strong>company_admin</strong> en esta empresa.
+          </p>
+          <q-banner rounded class="bg-orange-1 text-orange-10 q-mb-md">
+            Verificá que este sea tu expediente. La operación no crea otro usuario y no se puede
+            revertir desde esta pantalla.
+          </q-banner>
+          <q-input
+            v-model="adminDemotionConfirmation"
+            outlined
+            autofocus
+            label="Escribí DESPROMOVER para confirmar"
+            autocomplete="off"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Cancelar" :disable="adminDemotionSaving" @click="adminDemotionOpen = false" />
+          <q-btn
+            unelevated
+            no-caps
+            color="negative"
+            label="Vincular y retirar privilegio"
+            :loading="adminDemotionSaving"
+            :disable="adminDemotionConfirmation !== 'DESPROMOVER'"
+            @click="demoteBootstrapAdmin"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -684,6 +730,7 @@ import { apiErrorMessage } from 'src/core/api';
 import {
   annulContract,
   annulMemo,
+  claimBootstrapAdminEmployee,
   createContract,
   createMemo,
   deleteEmployeeDocument,
@@ -716,11 +763,13 @@ import EmployeeAvatar from 'src/modules/hr/components/EmployeeAvatar.vue';
 import RoleMultiSelect from 'src/modules/hr/components/RoleMultiSelect.vue';
 import { useAclStore } from 'src/stores/acl.store';
 import { useContextStore } from 'src/stores/context.store';
+import { useSessionBootstrapStore } from 'src/stores/session-bootstrap.store';
 
 const $q = useQuasar();
 const route = useRoute();
 const acl = useAclStore();
 const ctx = useContextStore();
+const sessionBootstrap = useSessionBootstrapStore();
 const employeeId = computed(() => Number(route.params.id));
 
 function puede(code: string): boolean {
@@ -734,6 +783,36 @@ const profile = ref<EmployeeProfile | null>(null);
 const catalogs = ref<HrCatalogs | null>(null);
 const positions = ref<Position[]>([]);
 const tab = ref('datos');
+const adminDemotionOpen = ref(false);
+const adminDemotionSaving = ref(false);
+const adminDemotionConfirmation = ref('');
+
+function openAdminDemotion() {
+  adminDemotionConfirmation.value = '';
+  adminDemotionOpen.value = true;
+}
+
+async function demoteBootstrapAdmin() {
+  if (adminDemotionConfirmation.value !== 'DESPROMOVER') return;
+  adminDemotionSaving.value = true;
+  try {
+    await claimBootstrapAdminEmployee(employeeId.value, adminDemotionConfirmation.value);
+    await sessionBootstrap.loadSession({ force: true });
+    await reload();
+    adminDemotionOpen.value = false;
+    $q.notify({
+      type: 'positive',
+      message: 'Usuario vinculado. Privilegio global retirado y permisos RBAC actualizados.',
+    });
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: apiErrorMessage(error, 'No se pudo retirar el privilegio de forma segura.'),
+    });
+  } finally {
+    adminDemotionSaving.value = false;
+  }
+}
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -864,11 +943,7 @@ async function uploadDocument() {
     docDialog.value = false;
     await reload();
   } catch (e) {
-    const msg =
-      (e as { response?: { data?: { file?: string; detail?: string } } }).response?.data?.file ||
-      (e as { response?: { data?: { detail?: string } } }).response?.data?.detail ||
-      'No se pudo subir el documento.';
-    $q.notify({ type: 'negative', message: msg });
+    $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo subir el documento.') });
   } finally {
     savingDoc.value = false;
   }
@@ -1377,7 +1452,7 @@ function doAnnulMemo(m: MemoRow) {
 }
 
 .perfil-head__name {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 1.25rem;
   font-weight: 800;
   color: var(--app-text);
@@ -1488,7 +1563,7 @@ function doAnnulMemo(m: MemoRow) {
 
 .perfil-contract__text :deep(textarea) {
   min-height: 60vh;
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: ui-monospace, 'Courier New', monospace;
   font-size: 0.9rem;
   line-height: 1.55;
 }

@@ -1,14 +1,49 @@
 {
-  "status": "failed",
-  "failure_stage": "login",
-  "timestamp": "2026-07-03T06:59:37Z",
+  "status": "passed",
+  "failure_stage": null,
+  "timestamp": "2026-08-18T19:47:31Z",
   "checks": [
     {
       "name": "login",
-      "status": "failed",
+      "status": "passed",
+      "http_status": 200,
+      "latency_ms": 109,
+      "detail": "JWT token issued"
+    },
+    {
+      "name": "challenge_happy",
+      "status": "passed",
+      "http_status": 201,
+      "latency_ms": 105,
+      "detail": "Challenge issued"
+    },
+    {
+      "name": "handshake_happy",
+      "status": "passed",
+      "http_status": 201,
+      "latency_ms": 100,
+      "detail": "Handshake accepted"
+    },
+    {
+      "name": "handshake_replay",
+      "status": "passed",
+      "http_status": 409,
+      "latency_ms": 44,
+      "detail": "Stable rejection REPLAY_DETECTED"
+    },
+    {
+      "name": "capabilities_happy",
+      "status": "passed",
+      "http_status": 200,
+      "latency_ms": 47,
+      "detail": "Capabilities consistent"
+    },
+    {
+      "name": "handshake_bad_signature",
+      "status": "passed",
       "http_status": 401,
-      "latency_ms": 120,
-      "detail": "Login failed (http=401)"
+      "latency_ms": 56,
+      "detail": "Stable rejection BAD_SIGNATURE"
     }
   ]
 }

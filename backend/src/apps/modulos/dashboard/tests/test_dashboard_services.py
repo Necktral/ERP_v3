@@ -170,6 +170,46 @@ def test_redeem_token_success_then_conflict_on_reuse():
         redeem_embed_token(token_str=raw)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_redeem_token_concurrent_allows_exactly_one_winner(monkeypatch):
+    """BUG-030: el mismo grant es una capability single-use bajo concurrencia."""
+    import threading
+    from django.db import connection as db_conn
+
+    company, branch = _mk_scope()
+    user = _user_with_perms(company=company, branch=branch, perms=_EXEC_PERMS)
+    raw, grant = _issue_token(user, company, branch)
+    # La cadena de auditoría tiene su propia prueba. Aislarla aquí evita que su
+    # lock global oculte la propiedad bajo prueba: el single-use del grant.
+    monkeypatch.setattr("apps.modulos.dashboard.services.emit_service_event", lambda **_kwargs: None)
+    barrier = threading.Barrier(2, timeout=10)
+    outcomes: list[str] = []
+    outcomes_lock = threading.Lock()
+
+    def attempt() -> None:
+        try:
+            barrier.wait()
+            try:
+                redeem_embed_token(token_str=raw)
+                outcome = "ok"
+            except DashboardConflictError:
+                outcome = "conflict"
+            with outcomes_lock:
+                outcomes.append(outcome)
+        finally:
+            db_conn.close()
+
+    threads = [threading.Thread(target=attempt) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=20)
+
+    grant.refresh_from_db()
+    assert sorted(outcomes) == ["conflict", "ok"]
+    assert grant.status == DashboardEmbedGrant.Status.REDEEMED
+
+
 @pytest.mark.django_db
 def test_redeem_empty_token_raises():
     with pytest.raises(DashboardValidationError):

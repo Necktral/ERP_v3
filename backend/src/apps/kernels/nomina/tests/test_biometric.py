@@ -8,6 +8,7 @@ push del aparato autenticado por token de dispositivo.
 from __future__ import annotations
 
 import io
+import importlib
 import uuid
 import zipfile
 from datetime import date
@@ -15,8 +16,13 @@ from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
+from django.db.migrations.exceptions import IrreversibleError
 from rest_framework.test import APIClient
 
+from apps.kernels.nomina.biometric import tabular_reader
+from apps.kernels.nomina.biometric.models_biometric import hash_device_token, new_device_token
 from apps.kernels.nomina.biometric.services_biometric import (
     import_checks_file,
     parse_check_rows,
@@ -40,6 +46,14 @@ from apps.modulos.rbac.models import Permission, Role, RoleAssignment, RolePermi
 User = get_user_model()
 
 
+def test_plaintext_token_retirement_blocks_unsafe_legacy_rollback():
+    migration = importlib.import_module(
+        "apps.kernels.nomina.migrations.0021_retire_plaintext_biometric_tokens"
+    )
+    with pytest.raises(IrreversibleError, match="backup anterior a 0021|rote las credenciales"):
+        migration.block_unsafe_legacy_rollback(None, None)
+
+
 def _scope():
     t = uuid.uuid4().hex[:8]
     holding = OrgUnit.objects.create(unit_type=OrgUnit.UnitType.HOLDING, name=f"H{t}", code=f"H-{t}")
@@ -55,7 +69,15 @@ def _emp(company, code, first_name="Trabajador"):
 
 
 def _device(company, branch=None):
-    return BiometricDevice.objects.create(company=company, branch=branch, name="Portón hacienda")
+    raw_token = new_device_token()
+    device = BiometricDevice.objects.create(
+        company=company,
+        branch=branch,
+        name="Portón hacienda",
+        api_token_hash=hash_device_token(raw_token),
+    )
+    device._test_raw_token = raw_token
+    return device
 
 
 def _request(company=None):
@@ -174,6 +196,50 @@ def test_tabular_reader_supports_shared_strings_fallbacks_and_user_errors():
         read_tabular_file("empty.xlsx", _make_xlsx_without_sheet())
     with pytest.raises(TabularReadError, match="xls"):
         read_tabular_file("legacy.xls", b"old-binary")
+
+
+def test_tabular_reader_rejects_oversized_upload_and_csv_dimensions(monkeypatch):
+    monkeypatch.setattr(tabular_reader, "MAX_UPLOAD_BYTES", 32)
+    with pytest.raises(TabularReadError, match="máx 0 MB"):
+        read_tabular_file("large.csv", b"x" * 33)
+
+    monkeypatch.setattr(tabular_reader, "MAX_UPLOAD_BYTES", 1024)
+    monkeypatch.setattr(tabular_reader, "MAX_ROWS", 2)
+    with pytest.raises(TabularReadError, match="máx 2 filas"):
+        read_tabular_file("rows.csv", b"a\n1\n2\n")
+
+    monkeypatch.setattr(tabular_reader, "MAX_ROWS", 100)
+    monkeypatch.setattr(tabular_reader, "MAX_COLUMNS", 2)
+    with pytest.raises(TabularReadError, match="máx 2 columnas"):
+        read_tabular_file("columns.csv", b"a,b,c\n")
+
+    monkeypatch.setattr(tabular_reader, "MAX_COLUMNS", 100)
+    monkeypatch.setattr(tabular_reader, "MAX_CELLS", 3)
+    with pytest.raises(TabularReadError, match="máx 3 celdas"):
+        read_tabular_file("cells.csv", b"a,b\n1,2\n")
+
+
+def test_tabular_reader_rejects_zip_bombs_and_limits_during_xlsx_parse(monkeypatch):
+    content = _make_xlsx([["ID"], ["1"]])
+
+    monkeypatch.setattr(tabular_reader, "MAX_ZIP_MEMBERS", 1)
+    with pytest.raises(TabularReadError, match="componentes ZIP"):
+        read_tabular_file("members.xlsx", content)
+
+    monkeypatch.setattr(tabular_reader, "MAX_ZIP_MEMBERS", 100)
+    monkeypatch.setattr(tabular_reader, "MAX_ZIP_COMPRESSION_RATIO", 1)
+    with pytest.raises(TabularReadError, match="ratio ZIP"):
+        read_tabular_file("ratio.xlsx", content)
+
+    monkeypatch.setattr(tabular_reader, "MAX_ZIP_COMPRESSION_RATIO", 10_000)
+    monkeypatch.setattr(tabular_reader, "MAX_ZIP_MEMBER_BYTES", 100)
+    with pytest.raises(TabularReadError, match="componente ZIP"):
+        read_tabular_file("member.xlsx", content)
+
+    monkeypatch.setattr(tabular_reader, "MAX_ZIP_MEMBER_BYTES", 1024 * 1024)
+    monkeypatch.setattr(tabular_reader, "MAX_ROWS", 1)
+    with pytest.raises(TabularReadError, match="máx 1 filas"):
+        read_tabular_file("rows.xlsx", content)
 
 
 def test_parse_supports_separate_date_time_and_excel_serial():
@@ -347,7 +413,10 @@ def test_push_endpoint_requires_valid_device_token():
 
     # token correcto → ingesta idempotente
     resp = client.post(
-        "/api/nomina/biometric/push/", body, format="json", headers={"X-Device-Token": device.api_token}
+        "/api/nomina/biometric/push/",
+        body,
+        format="json",
+        headers={"X-Device-Token": device._test_raw_token},
     )
     assert resp.status_code == 200, resp.data
     assert resp.data["created"] == 2
@@ -355,13 +424,45 @@ def test_push_endpoint_requires_valid_device_token():
 
     # reenvío (el aparato repite) → no duplica
     resp = client.post(
-        "/api/nomina/biometric/push/", body, format="json", headers={"X-Device-Token": device.api_token}
+        "/api/nomina/biometric/push/",
+        body,
+        format="json",
+        headers={"X-Device-Token": device._test_raw_token},
     )
     assert resp.data["created"] == 0
     assert resp.data["duplicates"] == 2
 
     device.refresh_from_db()
     assert device.last_seen_at is not None
+
+
+@pytest.mark.django_db
+def test_device_token_is_hashed_compared_and_plaintext_is_rejected(monkeypatch):
+    company, _ = _scope()
+    device = _device(company)
+    raw_token = device._test_raw_token
+    device.refresh_from_db()
+
+    assert device.api_token == ""
+    assert device.api_token_hash == hash_device_token(raw_token)
+    assert raw_token not in device.api_token_hash
+
+    calls = []
+    from apps.kernels.nomina.biometric import models_biometric
+
+    original_compare = models_biometric.hmac.compare_digest
+
+    def recording_compare(left, right):
+        calls.append((left, right))
+        return original_compare(left, right)
+
+    monkeypatch.setattr(models_biometric.hmac, "compare_digest", recording_compare)
+    assert BiometricDevice.authenticate_token(raw_token).pk == device.pk
+    assert BiometricDevice.authenticate_token("token-totalmente-invalido") is None
+    assert len(calls) == 2
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        BiometricDevice.objects.filter(pk=device.pk).update(api_token="texto-claro")
 
 
 def _client(*, company, branch, perms):
@@ -402,6 +503,14 @@ def test_device_create_import_and_rollup_via_api():
     assert created.status_code == 201, created.data
     assert created.data["api_token"]  # se muestra UNA vez
     device_id = created.data["id"]
+    raw_token = created.data["api_token"]
+    persisted = BiometricDevice.objects.get(pk=device_id)
+    assert persisted.api_token == ""
+    assert persisted.api_token_hash == hash_device_token(raw_token)
+
+    listed = client.get("/api/nomina/biometric/devices/")
+    assert listed.status_code == 200
+    assert "api_token" not in listed.data["results"][0]
 
     csv_bytes = io.BytesIO(b"ID,Fecha/Hora,Estado\n101,2026-06-01 06:00:00,Entrada\n")
     csv_bytes.name = "export.csv"
@@ -450,6 +559,7 @@ def test_biometric_device_admin_and_error_paths_via_api():
     listed = client.get("/api/nomina/biometric/devices/")
     assert listed.status_code == 200
     assert listed.data["results"][0]["id"] == device_id
+    assert "api_token" not in listed.data["results"][0]
 
     patched = client.patch(
         f"/api/nomina/biometric/devices/{device_id}/",
@@ -459,10 +569,29 @@ def test_biometric_device_admin_and_error_paths_via_api():
     assert patched.status_code == 200, patched.data
     assert patched.data["name"] == "Reloj central"
     assert patched.data["branch_id"] is None
+    assert "api_token" not in patched.data
 
     rotated = client.post(f"/api/nomina/biometric/devices/{device_id}/rotate-token/", {}, format="json")
     assert rotated.status_code == 200, rotated.data
     assert rotated.data["api_token"] != token
+    rotated_token = rotated.data["api_token"]
+    persisted = BiometricDevice.objects.get(pk=device_id)
+    assert persisted.api_token == ""
+    assert persisted.api_token_hash == hash_device_token(rotated_token)
+    assert BiometricDevice.authenticate_token(token) is None
+    assert BiometricDevice.authenticate_token(rotated_token).pk == device_id
+
+    oversized = SimpleUploadedFile(
+        "oversized.csv",
+        b"x" * (tabular_reader.MAX_UPLOAD_BYTES + 1),
+        content_type="text/csv",
+    )
+    too_large = client.post(
+        f"/api/nomina/biometric/devices/{device_id}/import/",
+        {"file": oversized},
+        format="multipart",
+    )
+    assert too_large.status_code == 413
 
     missing_file = client.post(f"/api/nomina/biometric/devices/{device_id}/import/", {}, format="multipart")
     assert missing_file.status_code == 400

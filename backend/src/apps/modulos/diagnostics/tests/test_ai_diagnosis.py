@@ -70,8 +70,8 @@ def test_runtime_button_off_blocks_even_with_env_on():
 
 @pytest.mark.django_db
 def test_ai_analyze_api_returns_409_when_ai_off():
-    run = create_diagnostic_run(error=_err())
     company, branch = mk_scope()
+    run = create_diagnostic_run(error=_err(company=company, branch=branch))
     client = mk_client(
         company=company, branch=branch, perm_codes=["diagnostics.ai_diagnose.run"]
     )
@@ -82,8 +82,8 @@ def test_ai_analyze_api_returns_409_when_ai_off():
 @pytest.mark.django_db
 @override_settings(AI_FEATURES_ENABLED=True)
 def test_ai_analyze_api_runs_when_on():
-    run = create_diagnostic_run(error=_err(risk_class="C1"))
     company, branch = mk_scope()
+    run = create_diagnostic_run(error=_err(risk_class="C1", company=company, branch=branch))
     client = mk_client(
         company=company, branch=branch, perm_codes=["diagnostics.ai_diagnose.run"]
     )

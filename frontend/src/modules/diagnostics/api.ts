@@ -3,7 +3,7 @@
  * determinista + análisis IA opcional, hallazgos de seguridad y kill switch IA.
  */
 import { api } from 'src/boot/axios';
-import { PAGE } from 'src/core/api';
+import { collectPaginated, type PageReq, type Paginated } from 'src/core/api';
 
 export const RISK_LABELS: Record<string, string> = {
   C1: 'C1 (crítico)',
@@ -53,11 +53,10 @@ export interface SecurityFindingRow {
 export async function listErrors(filters: { risk_class?: string; status?: string } = {}): Promise<
   ErrorEventRow[]
 > {
-  const params: Record<string, string | number> = { ...PAGE };
-  if (filters.risk_class) params.risk_class = filters.risk_class;
-  if (filters.status) params.status = filters.status;
-  const { data } = await api.get<{ results: ErrorEventRow[] }>('/diagnostics/errors/', { params });
-  return data.results;
+  return collectPaginated((page) => listErrorsPage(page, filters));
+}
+export async function listErrorsPage(page: PageReq, filters: { risk_class?: string; status?: string } = {}): Promise<Paginated<ErrorEventRow>> {
+  return (await api.get<Paginated<ErrorEventRow>>('/diagnostics/errors/', { params: { ...page, ...filters } })).data;
 }
 
 export async function diagnoseError(errorId: string): Promise<Record<string, unknown>> {
@@ -70,10 +69,10 @@ export async function triageError(errorId: string, status: string): Promise<void
 }
 
 export async function listSecurityFindings(): Promise<SecurityFindingRow[]> {
-  const { data } = await api.get<{ results: SecurityFindingRow[] }>('/diagnostics/findings/', {
-    params: PAGE,
-  });
-  return data.results;
+  return collectPaginated(listSecurityFindingsPage);
+}
+export async function listSecurityFindingsPage(page: PageReq): Promise<Paginated<SecurityFindingRow>> {
+  return (await api.get<Paginated<SecurityFindingRow>>('/diagnostics/findings/', { params: page })).data;
 }
 
 export async function triageSecurityFinding(findingId: string, status: string): Promise<void> {
@@ -153,12 +152,10 @@ export interface CodeEvidenceRow {
 export async function listDiagnoses(
   filters: { risk_class?: string; status?: string; domain?: string } = {},
 ): Promise<DiagnosisRow[]> {
-  const params: Record<string, string> = {};
-  if (filters.risk_class) params.risk_class = filters.risk_class;
-  if (filters.status) params.status = filters.status;
-  if (filters.domain) params.domain = filters.domain;
-  const { data } = await api.get<{ results: DiagnosisRow[] }>('/diagnostics/diagnoses/', { params });
-  return data.results;
+  return collectPaginated((page) => listDiagnosesPage(page, filters));
+}
+export async function listDiagnosesPage(page: PageReq, filters: { risk_class?: string; status?: string; domain?: string } = {}): Promise<Paginated<DiagnosisRow>> {
+  return (await api.get<Paginated<DiagnosisRow>>('/diagnostics/diagnoses/', { params: { ...page, ...filters } })).data;
 }
 export async function getDiagnosis(runId: string): Promise<DiagnosisRow> {
   const { data } = await api.get<DiagnosisRow>(`/diagnostics/diagnoses/${runId}/`);
@@ -172,11 +169,8 @@ export async function aiAnalyzeDiagnosis(runId: string): Promise<DiagnosisRow> {
 export async function listCodeEvidence(
   filters: { domain?: string; coverage_state?: string } = {},
 ): Promise<CodeEvidenceRow[]> {
-  const params: Record<string, string> = {};
-  if (filters.domain) params.domain = filters.domain;
-  if (filters.coverage_state) params.coverage_state = filters.coverage_state;
-  const { data } = await api.get<{ results: CodeEvidenceRow[] }>('/diagnostics/code-evidence/', {
-    params,
-  });
-  return data.results;
+  return collectPaginated((page) => listCodeEvidencePage(page, filters));
+}
+export async function listCodeEvidencePage(page: PageReq, filters: { domain?: string; coverage_state?: string } = {}): Promise<Paginated<CodeEvidenceRow>> {
+  return (await api.get<Paginated<CodeEvidenceRow>>('/diagnostics/code-evidence/', { params: { ...page, ...filters } })).data;
 }

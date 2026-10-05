@@ -35,8 +35,11 @@ python manage.py migrate --noinput
 # Static (Django admin + whitenoise manifest)
 python manage.py collectstatic --noinput
 
-# Preflight (te detecta cosas de prod rápido)
-python manage.py check --deploy || true
+# Un error de configuración o de generación del contrato impide arrancar. Las
+# advertencias conocidas se inventarían con un ratchet separado: HSTS preload
+# requiere una decisión operativa explícita y la cobertura OpenAPI se mejora de
+# forma incremental sin convertir deuda documental histórica en un outage.
+python manage.py check --deploy --fail-level ERROR
 
 # Gunicorn
 : "${GUNICORN_WORKERS:=3}"

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-06-16T01:48:16.324474+00:00",
+  "generated_at": "2026-07-04T14:48:26.535121+00:00",
   "migrations": {
     "backend/src/apps/kernels/accounting/migrations/0001_initial.py": {
       "risk_class": "high_lock_risk",
@@ -75,7 +75,7 @@
       "fingerprint": "64c5cc65d504d7c70e78c982b1bfc31e103a51cedfec040f350d33cb3401ba6e"
     },
     "backend/src/apps/kernels/accounting/migrations/0010_intercompany_effective_at.py": {
-      "risk_class": "expand",
+      "risk_class": "high_lock_risk",
       "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
@@ -122,6 +122,14 @@
       "ticket_ref": "U5-BASELINE",
       "fingerprint": "a08ce8f1653cb9867e3b8160479b56bd26491ddf3be98b92fc2853a08869c5f2"
     },
+    "backend/src/apps/kernels/accounting/migrations/0016_intercompanytransaction_uq_acc_ic_tx_ref.py": {
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
+      "rollback_strategy": "roll_forward_preferred",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
+      "fingerprint": "9fc790d5923b777a16e24bf9cbf314e6f13b60a5b974c7632398397a59cf8d5a"
+    },
     "backend/src/apps/kernels/facturacion/migrations/0001_initial.py": {
       "risk_class": "expand",
       "rollout_strategy": "baseline_existing_migration",
@@ -164,18 +172,18 @@
     },
     "backend/src/apps/kernels/facturacion/migrations/0006_billingdocument_payment_method.py": {
       "risk_class": "expand",
-      "rollout_strategy": "add_billing_document_tender_snapshot_default_unknown",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "CAP-04-TENDER-SPINE-V1",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "529ac27058c7e9181164bf77c1becf6bde1cad1c64ee84337a6f8f70f9aa93e2"
     },
     "backend/src/apps/kernels/facturacion/migrations/0007_billingdocument_customer_party.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "add_nullable_billing_customer_party_fk_and_index_without_backfill",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "COMMERCIAL-6-2-BILLING-CUSTOMER-PARTY",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "af52f3d5f056936e043e08f065274c1d587d9d2da62e84c85b5879b5b268b1b5"
     },
     "backend/src/apps/kernels/facturacion/migrations/0008_billingpayment_creditapprovalrequest_salesorder_and_more.py": {
@@ -201,6 +209,22 @@
       "owner": "db-architecture",
       "ticket_ref": "U5-BASELINE",
       "fingerprint": "31c16895c8c5113a76482d01b2ddde101bd72e7237d1cde7f63d377f392ecbdb"
+    },
+    "backend/src/apps/kernels/facturacion/migrations/0011_billingpayment_idempotency_key_and_more.py": {
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
+      "rollback_strategy": "roll_forward_preferred",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
+      "fingerprint": "eef896a12e11a4dfcfabd0c00f8f18b64853e4cd64e299b00d4d674a5ebea56a"
+    },
+    "backend/src/apps/kernels/facturacion/migrations/0012_alter_billingpayment_idempotency_key.py": {
+      "risk_class": "high_lock_risk",
+      "rollout_strategy": "replace idempotency constraint after rehearsal on an ephemeral PostgreSQL clone",
+      "rollback_strategy": "reverse migration restores document-scoped constraint; roll forward preferred after writes",
+      "owner": "billing-kernel",
+      "ticket_ref": "BUG-023/BUG-032",
+      "fingerprint": "871c8809d6f2ee24f227e6a79bffc1f2399c6f4ffd51fe6179fa9cd02ee91548"
     },
     "backend/src/apps/kernels/inventarios/migrations/0001_initial.py": {
       "risk_class": "high_lock_risk",
@@ -340,10 +364,10 @@
     },
     "backend/src/apps/kernels/nomina/migrations/0004_alter_payrollentry_payment_frequency_and_more.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "expand_field_attendance_foundation_and_catorcena_choices",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "PR16-FIELD-ATTENDANCE",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "95f51250c98b88bfcc5222b4d89baf38b8215a53c981d06f3113216ce902cc97"
     },
     "backend/src/apps/kernels/nomina/migrations/0005_employeeinssenrollment_payrollinsselection.py": {
@@ -388,10 +412,10 @@
     },
     "backend/src/apps/kernels/nomina/migrations/0010_field_capture_models.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "expand_field_attendance_capture_foundation",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "PR17-FIELD-ATTENDANCE-CAPTURE",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "e9f1576619fa9b78350d78316e5f591dbd1dbba24bd6d35c9695a4ac9ca47bcc"
     },
     "backend/src/apps/kernels/nomina/migrations/0011_payrollentry_ir_manual.py": {
@@ -411,11 +435,11 @@
       "fingerprint": "700903f16e854c3b33e4035e5968234c63d92eb9d71a22a3ea5f4339b8a1ee77"
     },
     "backend/src/apps/kernels/nomina/migrations/0013_biometricdevice_biometricimportbatch_biometriccheck_and_more.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_biometric_tables_devices_batches_checks_personmap",
+      "risk_class": "high_lock_risk",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "ASISTENCIA-B1-2026-06",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "c733cf8c22f589535c59e0fa97082aeb3af4051765a2f4e8aae8bdef170613ac"
     },
     "backend/src/apps/kernels/nomina/migrations/0014_salarycomplementsheet_salarycomplementline_and_more.py": {
@@ -443,11 +467,11 @@
       "fingerprint": "3750dc146506d7fc0c6703176af410a08eadd88f97eb384974acc77da0313d85"
     },
     "backend/src/apps/kernels/nomina/migrations/0017_payrollentry_alimentacion_amount_and_more.py": {
-      "risk_class": "high_lock_risk",
-      "rollout_strategy": "add_payrollentry_alimentacion_and_daily_attendance_columns",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "PR-112",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "395f9c12c853a22c7347313d11e6d912b3edd508198821ccaa14a0b87d66daf2"
     },
     "backend/src/apps/kernels/nomina/migrations/0018_payrollentry_worker_code.py": {
@@ -455,16 +479,32 @@
       "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "CARNET-WORKER-CODE",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "21823717a119ba70d8ce9f87aa1c9bce9bea4623ab796b5b737c2957ef39f25b"
     },
     "backend/src/apps/kernels/nomina/migrations/0019_backfill_entry_worker_code.py": {
-      "risk_class": "backfill",
+      "risk_class": "metadata_only",
       "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "CARNET-WORKER-CODE",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "531299f508d685dc473c990dac5e76736b8d166b4e5f056c0b49d1229880c55c"
+    },
+    "backend/src/apps/kernels/nomina/migrations/0020_hash_biometric_device_tokens.py": {
+      "risk_class": "backfill",
+      "rollout_strategy": "expand hash column, backfill while plaintext remains, then deploy hash-aware code",
+      "rollback_strategy": "reversible while plaintext is retained; verify legacy token authentication before contract",
+      "owner": "payroll-security",
+      "ticket_ref": "BUG-036",
+      "fingerprint": "9d7d4fc524fed0b39ca97f6f406371396c512e174e32ed8c09fd1752a5b43c37"
+    },
+    "backend/src/apps/kernels/nomina/migrations/0021_retire_plaintext_biometric_tokens.py": {
+      "risk_class": "destructive",
+      "rollout_strategy": "contract only after 0020 and hash-aware application verification; re-backfill window writes",
+      "rollback_strategy": "intentionally irreversible; restore pre-0021 backup or retain hash-aware code and rotate tokens",
+      "owner": "payroll-security",
+      "ticket_ref": "BUG-036",
+      "fingerprint": "050d08db72ac1e6acfc05c9ad503142f81ad1fce0c2266bfc03b6b64e69552d8"
     },
     "backend/src/apps/kernels/payments/migrations/0001_initial.py": {
       "risk_class": "high_lock_risk",
@@ -484,18 +524,18 @@
     },
     "backend/src/apps/kernels/payments/migrations/0003_cashmovement_idempotency.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "expand_cash_movement_idempotency_key_with_conditional_unique_constraint",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "PAYMENTS-CASH-IDEMPOTENCY-P0",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "c3d4ecfe2167344524c65395541671e6918d746961c43e050317ca25d5554d5c"
     },
     "backend/src/apps/kernels/payments/migrations/0004_paymentintent_payment_method.py": {
       "risk_class": "expand",
-      "rollout_strategy": "add_payment_intent_tender_snapshot_default_unknown",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "CAP-04-TENDER-SPINE-V1",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "55eb0d93e61642e08ec84efa3ab6caacc0d2ea03fa502caa866ce3d746e22938"
     },
     "backend/src/apps/kernels/payments/migrations/0005_alter_paymentintent_payment_method.py": {
@@ -764,10 +804,10 @@
     },
     "backend/src/apps/modulos/compras/migrations/0002_purchasedocument_supplier_party.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "expand_procurement_supplier_party_nullable_fk_and_index",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "C3-PROCUREMENT-PARTY-LINK",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "33729299e14a5b367b75649a6d4e7b952373d526840dd86f203eb6393f6b47f8"
     },
     "backend/src/apps/modulos/compras/migrations/0003_remove_purchasedocument_uniq_proc_number_and_more.py": {
@@ -811,68 +851,84 @@
       "fingerprint": "44b139a07597e70d7bc04ddb2f1e4ac2d83d9827232709502b9f456e02b68cd7"
     },
     "backend/src/apps/modulos/diagnostics/migrations/0001_initial.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_errorevent_table_diagnostics_b1",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "DIAG-B1",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "09621431ba56b46bad1722ec822f29c46113882cc1a358acf3ff555000a00622"
     },
     "backend/src/apps/modulos/diagnostics/migrations/0002_aicontrol_securityfinding.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_securityfinding_and_aicontrol_diagnostics_b2",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "DIAG-B2",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "8a5348daf697875b9aacb6d82638f166fb387735f3f4256cbc813a44f81e5bde"
     },
     "backend/src/apps/modulos/diagnostics/migrations/0003_diagnosticrun.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_diagnosticrun_table_root_cause",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "DIAG-B3",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "9e9739fb412bbc3d978054418eae2147fe5f2056dcf67659fccf5bdbe716663c"
     },
     "backend/src/apps/modulos/diagnostics/migrations/0004_aiagentrun.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_aiagentrun_table_ai_advisory",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "DIAG-B5",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "6d336eed728c977b528b30c1026a5e78d2ea4087678a55f390ce5090fb8d88fa"
     },
     "backend/src/apps/modulos/diagnostics/migrations/0005_codeunitevidence.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_codeunitevidence_table_coverage",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "DIAG-CODEUNIT",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "bc1ad297170e2156ef95c016e943585b70170a9fa8a0d556c11fb94b07c11ea6"
     },
+    "backend/src/apps/modulos/diagnostics/migrations/0006_error_event_tenant_scope.py": {
+      "risk_class": "backfill",
+      "rollout_strategy": "expand tenant FKs, backfill legacy events, then add scoped uniqueness and checks",
+      "rollback_strategy": "reverse constraints/FKs; retain an export of legacy global events before rollout",
+      "owner": "platform-security",
+      "ticket_ref": "BUG-027",
+      "fingerprint": "c90278ce96840a92cba310175354bba0bf65d6d17fda65610565ebf115afb465"
+    },
     "backend/src/apps/modulos/documents/migrations/0001_initial.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_scanneddocument_table_idp_f1",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "IDP-F1",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "9b5822b0fc79db231d4f9b7a8094de978cebfbce3c5e66f48080004c40cd56c3"
     },
     "backend/src/apps/modulos/documents/migrations/0002_alter_scanneddocument_status.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "alter_status_choices_extracted_idp_f2_noop_sql",
+      "risk_class": "high_lock_risk",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "IDP-F2",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "4d67c0026e04ba66e742e5017f355e1cdb89e2358f84920c0c1bee6a48c71745"
     },
     "backend/src/apps/modulos/documents/migrations/0003_alter_scanneddocument_doc_type.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "alter_doc_type_choices_remision_idp_f2_noop_sql",
+      "risk_class": "high_lock_risk",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "IDP-F2",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "bc30f806b47b24b4ffa096c239c0d39492ba92bc4f900bfcfd5b17329d4c2862"
+    },
+    "backend/src/apps/modulos/documents/migrations/0004_repair_cross_company_branches.py": {
+      "risk_class": "backfill",
+      "rollout_strategy": "null cross-company branch links before enforcing model/API tenant validation",
+      "rollback_strategy": "schema reverse is safe; invalid cross-tenant links are deliberately not reconstructed",
+      "owner": "platform-security",
+      "ticket_ref": "BUG-025",
+      "fingerprint": "1cc4bd0fac768f27bbe0687c86190f69ab087fb00297cfd12450b19694355cd4"
     },
     "backend/src/apps/modulos/estacion_servicios/migrations/0001_initial.py": {
       "risk_class": "expand",
@@ -955,19 +1011,19 @@
       "fingerprint": "01905e4c3a4828818e252e9b1357d64db3418f0b38f473986c0fc690e2054de5"
     },
     "backend/src/apps/modulos/estacion_servicios/migrations/0011_fuelsale_idempotency.py": {
-      "risk_class": "high_lock_risk",
-      "rollout_strategy": "expand_fuel_sale_idempotency_key_with_conditional_unique_constraint",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "FUEL-SALE-IDEMPOTENCY-P1",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "ffb8b65a05d7f8bc71d98d9330791a5db8ae568a57fd4b99b81c759192500074"
     },
     "backend/src/apps/modulos/estacion_servicios/migrations/0012_fuelsale_customer_party.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "add_nullable_fuel_sale_customer_party_fk_and_index_without_backfill",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "COMMERCIAL-6-3A-FUEL-CUSTOMER-PARTY",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "861715620f5316a60b8a693dd4cb6a26bcc81147b0a749fbd0995334198a2fa6"
     },
     "backend/src/apps/modulos/estacion_servicios/migrations/0013_fueltank_fueltankmovement_and_more.py": {
@@ -979,11 +1035,11 @@
       "fingerprint": "ba00c99e4f263e6e5e49d8de37d59d9e78e3302fe136651480bd1653b5cf0525"
     },
     "backend/src/apps/modulos/financiamiento/migrations/0001_initial.py": {
-      "risk_class": "expand",
-      "rollout_strategy": "new_opt_in_financing_vertical_tables_only",
+      "risk_class": "high_lock_risk",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "FINANCING-SIFA-PR",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "5ecf5dc30c336274f3c51f5ee0b116c408d3e9b4317f6eac7c6b44e71793d446"
     },
     "backend/src/apps/modulos/finca/migrations/0001_initial.py": {
@@ -1068,42 +1124,42 @@
     },
     "backend/src/apps/modulos/hr/migrations/0005_employee_party.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "expand_hr_employee_party_fk_and_index",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "PR93-HR-PARTY-LINK",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "10f56f3a85d82cabc97499f60a412c9f03143e09632b5d69823ade82fc915ce2"
     },
     "backend/src/apps/modulos/hr/migrations/0006_employeerolemap.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_employeerolemap_table_multi_cargo",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "HR-VERTICAL-2026-06",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "8a9ed0dfa79e963f637c4714e6722867ad4641e641ccd5149a95b2eda694bcec"
     },
     "backend/src/apps/modulos/hr/migrations/0007_employeelifecycleevent_employeememo_and_more.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "create_lifecycle_memo_contract_tables_plus_index_on_employee",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "HR-VERTICAL-2026-06",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "93e2fafb0842cfb834d6c66a20e33e8dacdeb0c6000124f8193d7a72ebcdf60d"
     },
     "backend/src/apps/modulos/hr/migrations/0008_employee_cedula_employee_daily_rate_nio_and_more.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "add_defaulted_columns_employee_cedula_salary_inss",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "HR-VERTICAL-2026-06",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "cc0cd883b06829d953583725dbe31b1c7859c48b8773bf1f75d3c4bd18ea809c"
     },
     "backend/src/apps/modulos/hr/migrations/0009_employeephoto.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_employeephoto_table",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "HR-VERTICAL-2026-06",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "cbdd905fbbf14ad1ab32758c9d889d1e61e37b579b8865b3f4b4d83879f14c14"
     },
     "backend/src/apps/modulos/hr/migrations/0010_employmentcontract_fully_signed_at_and_more.py": {
@@ -1186,20 +1242,28 @@
       "ticket_ref": "U5-BASELINE",
       "fingerprint": "addbf5e091f37b91beccd7b8adb7efeda9dddfaeae198bc1d7adb88bf060f5a4"
     },
+    "backend/src/apps/modulos/integration/migrations/0004_inbox_tenant_scope.py": {
+      "risk_class": "backfill",
+      "rollout_strategy": "expand scope FKs, backfill from Outbox or validated payload, then add check/index",
+      "rollback_strategy": "reverse scope fields only after exporting tenant attribution for audit",
+      "owner": "platform-security",
+      "ticket_ref": "BUG-026",
+      "fingerprint": "ac1361f33bd5cfd267e14531b267a39daae974ba9c19296d39752f59c50a5765"
+    },
     "backend/src/apps/modulos/knowledge/migrations/0001_initial.py": {
-      "risk_class": "online_safe",
-      "rollout_strategy": "create_knowledgechunk_table_fts_rag",
+      "risk_class": "expand",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "RAG-1",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "1c5d94c811b80a54937583cb20a4f4c121d24dd7c583d93d824566dcee849c28"
     },
     "backend/src/apps/modulos/knowledge/migrations/0002_code_corpus.py": {
       "risk_class": "expand",
-      "rollout_strategy": "add_corpus_field_for_code_index",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
-      "owner": "backend",
-      "ticket_ref": "DEV-ASSISTANT-CODE",
+      "owner": "db-architecture",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "a28ef50d3668fc0b44ea3c75d388830d3e86969bad1526459594d3d5e38f8258"
     },
     "backend/src/apps/modulos/notifications/migrations/0001_initial.py": {
@@ -1252,10 +1316,10 @@
     },
     "backend/src/apps/modulos/org/migrations/0006_companymodule.py": {
       "risk_class": "expand",
-      "rollout_strategy": "create_company_module_registry_table",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "ORG-COMPANY-MODULES",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "01fe533b7113197374f3ed1102abbb5fbc2d6f8f472eb05ae6b207aac4a73a5c"
     },
     "backend/src/apps/modulos/org/migrations/0007_intercompanyrelationship.py": {
@@ -1284,10 +1348,10 @@
     },
     "backend/src/apps/modulos/parties/migrations/0001_initial.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "create_parties_tables_and_indexes",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "PR93-HR-PARTY-LINK",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "75b0bbd1c21de9db7994a9e6c47f8001cd5eba24db743394cb46a1b7e4ba9d6a"
     },
     "backend/src/apps/modulos/parties/migrations/0002_party_worker_code_party_ix_party_company_worker_code_and_more.py": {
@@ -1295,15 +1359,15 @@
       "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "CARNET-WORKER-CODE",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "079f1ce0ef46ade2f96cbf8c0d261e4ec0b273f2adbc6dc3301b0b35e54c1568"
     },
     "backend/src/apps/modulos/parties/migrations/0003_backfill_worker_code.py": {
-      "risk_class": "backfill",
+      "risk_class": "metadata_only",
       "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "CARNET-WORKER-CODE",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "a7d040887e75870ac0c1ac80a88351a4410308c6c19716eb8fd333a712fb362e"
     },
     "backend/src/apps/modulos/rbac/migrations/0001_initial.py": {
@@ -1348,10 +1412,10 @@
     },
     "backend/src/apps/modulos/rbac/migrations/0006_materialize_global_userroles.py": {
       "risk_class": "metadata_only",
-      "rollout_strategy": "materialize_global_userroles_to_scoped_roleassignments",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "RBAC-GLOBAL-ROLE-HARD-CUT",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "6097e0f11c823d5f4d5c338e3245a7d8748672a7509f4a4e4e58bcc418bf2e67"
     },
     "backend/src/apps/modulos/retail_pos/migrations/0001_initial.py": {
@@ -1388,10 +1452,10 @@
     },
     "backend/src/apps/modulos/retail_pos/migrations/0005_posticket_customer_party.py": {
       "risk_class": "high_lock_risk",
-      "rollout_strategy": "add_nullable_pos_customer_party_fk_and_index_without_backfill",
+      "rollout_strategy": "baseline_existing_migration",
       "rollback_strategy": "roll_forward_preferred",
       "owner": "db-architecture",
-      "ticket_ref": "COMMERCIAL-6.3B-POS-CUSTOMER-PARTY",
+      "ticket_ref": "U5-BASELINE",
       "fingerprint": "b082a22468deb0ddfc83cb6b5d8e3220aeaced2dceecf96afb9fedec6f1a9a59"
     },
     "backend/src/apps/modulos/retail_pos/migrations/0006_possession_origin_node_possession_sync_uid_and_more.py": {

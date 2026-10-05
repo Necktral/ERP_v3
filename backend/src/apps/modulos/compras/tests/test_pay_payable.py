@@ -6,13 +6,16 @@ misma idempotency_key NO vuelve a aplicar (dinero que sale).
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import uuid
 from datetime import timedelta
 from decimal import Decimal
+from threading import Barrier
 from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import close_old_connections, connections
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -146,6 +149,48 @@ def test_paid_payable_rejects_more_payments(ctx):
             request=ctx.req, actor=ctx.actor, payable_id=ctx.payable.id,
             amount=Decimal("10.00"), method="TRANSFER", idempotency_key="P7",
         )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_distinct_concurrent_payment_keys_cannot_overpay_same_payable():
+    """U17: dos pagos de 600 contra CxP 1000 dejan un ganador y nunca saldo negativo."""
+    company, branch = _scope()
+    actor = _actor()
+    req = _req(company, branch, actor)
+    payable = _payable(company, branch, amount="1000.00")
+    barrier = Barrier(2)
+
+    def pay(index: int):
+        close_old_connections()
+        barrier.wait(timeout=10)
+        try:
+            result = pay_payable(
+                request=req,
+                actor=actor,
+                payable_id=payable.id,
+                amount=Decimal("600.00"),
+                method="TRANSFER",
+                idempotency_key=f"PAY-CONCURRENT-{index}",
+            )
+            return "ok", result
+        except ProcurementError as exc:
+            return "error", str(exc)
+        finally:
+            close_old_connections()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(pay, range(2)))
+    finally:
+        connections.close_all()
+
+    payable.refresh_from_db()
+    assert sorted(kind for kind, _ in results) == ["error", "ok"]
+    assert [payload for kind, payload in results if kind == "error"] == [
+        "PROCUREMENT_AMOUNT_EXCEEDS_OUTSTANDING"
+    ]
+    assert payable.outstanding_amount == Decimal("400.00")
+    assert PaymentAllocation.objects.filter(obligation_object_id=payable.id).count() == 1
 
 
 def test_cross_company_payable_not_found(ctx):

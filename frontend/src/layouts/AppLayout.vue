@@ -125,7 +125,7 @@
     </q-header>
 
     <q-drawer v-if="!native" v-model="drawer" show-if-above bordered class="app-drawer" :width="248">
-      <q-list padding>
+      <q-list padding role="navigation" aria-label="Navegación principal">
         <template v-for="grupo in navAgrupado" :key="grupo.section">
           <q-item-label header class="app-drawer__header">{{ grupo.section }}</q-item-label>
           <q-item
@@ -159,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useQuasar } from 'quasar';
 import ConnectivityDot from 'src/components/ConnectivityDot.vue';
@@ -172,6 +172,7 @@ import { useUiStore } from 'src/stores/ui.store';
 import { NAV, NAV_SECTIONS } from 'src/app/nav';
 import { isNativeApp } from 'src/core/platform';
 import { useConnectivity } from 'src/core/connectivity';
+import { switchContextWithRollback } from 'src/core/context-switch';
 
 // App nativa (Capacitor) = monopropósito CO-PA: oculta el drawer y la navegación a otros módulos.
 const native = isNativeApp();
@@ -193,6 +194,21 @@ const auth = useAuthStore();
 const acl = useAclStore();
 const ctx = useContextStore();
 const sessionBootstrap = useSessionBootstrapStore();
+
+async function revalidarSesionReconectada() {
+  try {
+    await sessionBootstrap.loadSession({ force: true });
+  } catch {
+    // Axios decide 401/403; ante una caída transitoria se conserva la caché vigente.
+  }
+}
+
+function alReconectar() {
+  void revalidarSesionReconectada();
+}
+
+onMounted(() => window.addEventListener('necktral:server-online', alReconectar));
+onBeforeUnmount(() => window.removeEventListener('necktral:server-online', alReconectar));
 
 // Marca del topbar: branding de la empresa activa (del bootstrap), con fallback a la
 // marca por despliegue (VITE_BRAND_*). El "developer" (crédito) siempre es el estático.
@@ -266,9 +282,9 @@ async function cambiarContexto(companyId: string | number, branchId: string | nu
   if (esContextoActivo(companyId, resolvedBranchId)) return;
   switching.value = true;
   try {
-    ctx.setContext(companyId, resolvedBranchId);
-    // Recarga sesión: ACL + módulos efectivos de la empresa nueva.
-    await sessionBootstrap.loadSession({ force: true });
+    await switchContextWithRollback(ctx, companyId, resolvedBranchId, () =>
+      sessionBootstrap.loadSession({ force: true }),
+    );
     // A la raíz: la ruta actual puede no existir/permitirse en la otra empresa.
     await router.replace('/');
     // BUG-9: una empresa SIN sucursal operativa deja el contexto sin X-Branch-Id, y las
@@ -372,7 +388,7 @@ async function logout() {
 
 .app-brand__name {
   margin-left: var(--app-space-3);
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   letter-spacing: 0.03em;
   font-size: 1.02rem;

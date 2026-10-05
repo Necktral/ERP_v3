@@ -21,6 +21,43 @@ def _d(value) -> Decimal:
     return Decimal(str(value or "0"))
 
 
+def _replay_existing_accounting_link(*, outbox: OutboxEvent, actor) -> dict:
+    """Devuelve/reintenta la consecuencia real; nunca equipara outbox con asiento."""
+    if outbox.status == OutboxEvent.Status.FAILED:
+        from apps.kernels.accounting.models import EconomicEvent
+
+        economic = EconomicEvent.objects.filter(
+            company=outbox.company,
+            source_outbox_event_id=outbox.event_id,
+        ).first()
+        draft = economic.journal_drafts.order_by("id").first() if economic is not None else None
+        return {
+            "outbox_event_id": str(outbox.event_id),
+            "journal_draft_id": draft.id if draft is not None else None,
+            "link_status": "OUTBOX_FAILED",
+        }
+    try:
+        from apps.kernels.accounting.services import (
+            apply_accounting_link_to_outbox_event,
+            link_operational_event_to_accounting,
+        )
+
+        link = link_operational_event_to_accounting(outbox_event=outbox, actor_user=actor)
+        apply_accounting_link_to_outbox_event(outbox_event=outbox, link=link)
+        return {
+            "outbox_event_id": str(outbox.event_id),
+            "journal_draft_id": link.journal_draft_id,
+            "link_status": link.status,
+        }
+    except (ImportError, AttributeError, RuntimeError, ValueError, KeyError, TypeError):
+        outbox.refresh_from_db(fields=["status"])
+        return {
+            "outbox_event_id": str(outbox.event_id),
+            "journal_draft_id": None,
+            "link_status": "OUTBOX_FAILED" if outbox.status == OutboxEvent.Status.FAILED else "OUTBOX_PENDING",
+        }
+
+
 def post_payroll_period_to_accounting(*, request, actor, period: PayrollPeriod) -> dict:
     """Consolida totales del período, emite el outbox y enlaza a contabilidad (best-effort)."""
     # NM-04: idempotencia por período. El kernel de contabilidad dedupe por
@@ -37,11 +74,7 @@ def post_payroll_period_to_accounting(*, request, actor, period: PayrollPeriod) 
         .first()
     )
     if already is not None:
-        return {
-            "outbox_event_id": str(already.event_id),
-            "journal_draft_id": None,
-            "link_status": "ALREADY_POSTED",
-        }
+        return _replay_existing_accounting_link(outbox=already, actor=actor)
 
     agg = PayrollEntry.objects.filter(sheet__period=period).aggregate(
         devengado=Sum("total_devengado"),
@@ -115,7 +148,7 @@ def post_payroll_period_to_accounting(*, request, actor, period: PayrollPeriod) 
         link_status = link.status
     except (ImportError, AttributeError, RuntimeError, ValueError, KeyError, TypeError):
         # Best-effort: la contabilidad nunca bloquea la aprobación de la planilla.
-        link_status = "FAILED"
+        link_status = "OUTBOX_PENDING"
 
     write_event(
         request=request,

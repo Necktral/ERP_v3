@@ -3,12 +3,15 @@ costos por proveedor, recepciones parciales que postean inventario real, idempot
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import uuid
 from decimal import Decimal
+from threading import Barrier
 from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import close_old_connections, connections
 
 from apps.kernels.inventarios.models import InventoryItem, StockBalance, StockMovement, UoM
 from apps.kernels.inventarios.services import create_warehouse
@@ -294,6 +297,83 @@ def test_receive_is_idempotent_by_key():
     assert line.qty_received == Decimal("4.0000")  # sin doble conteo
     bal = StockBalance.objects.get(company=company, branch=branch, warehouse=wh, item=item)
     assert bal.qty_on_hand == Decimal("4.0000")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_receive_same_order_concurrently_serializes_quantities_and_inventory():
+    """U17: dos recepciones compatibles no pierden updates ni duplican stock."""
+    company, branch = _scope()
+    actor = _actor()
+    other = _actor()
+    req = _req(company, branch, actor)
+    supplier = _supplier(company)
+    item = _item(company)
+    warehouse = _warehouse(req, company, branch, actor)
+    order = _order_to_sent(req, actor, other, supplier, item, qty="10")
+    line_id = order.lines.get().id
+    barrier = Barrier(2)
+
+    def receive(index: int):
+        close_old_connections()
+        barrier.wait(timeout=10)
+        result = receive_purchase_order(
+            request=req,
+            actor=actor,
+            order_id=order.id,
+            warehouse_id=warehouse.id,
+            lines=[{"order_line_id": line_id, "qty": "5"}],
+            idempotency_key=f"RC-CONCURRENT-{index}",
+        )
+        close_old_connections()
+        return result
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(receive, range(2)))
+    finally:
+        connections.close_all()
+
+    order.refresh_from_db()
+    line = order.lines.get(id=line_id)
+    balance = StockBalance.objects.get(company=company, branch=branch, warehouse=warehouse, item=item)
+    assert order.status == PurchaseOrderStatus.RECEIVED
+    assert line.qty_received == Decimal("10.0000")
+    assert balance.qty_on_hand == Decimal("10.0000")
+    assert len({result["receipt_id"] for result in results}) == 2
+    assert len({result["number"] for result in results}) == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_purchase_order_numbers_are_unique_under_concurrent_creation():
+    """U17: la primera creacion concurrente de la secuencia OC no duplica numero."""
+    company, branch = _scope()
+    actor = _actor()
+    req = _req(company, branch, actor)
+    supplier = _supplier(company)
+    item = _item(company)
+    barrier = Barrier(2)
+
+    def create(index: int):
+        close_old_connections()
+        barrier.wait(timeout=10)
+        result = create_purchase_order(
+            request=req,
+            actor=actor,
+            supplier_party_id=supplier.id,
+            lines=[{"item_id": item.id, "qty": "1", "unit_cost": "10"}],
+            idempotency_key=f"OC-CONCURRENT-{index}",
+        )
+        close_old_connections()
+        return result
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(create, range(2)))
+    finally:
+        connections.close_all()
+
+    assert {result["number"] for result in results} == {1, 2}
+    assert PurchaseOrder.objects.filter(company=company, branch=branch).count() == 2
 
 
 @pytest.mark.django_db

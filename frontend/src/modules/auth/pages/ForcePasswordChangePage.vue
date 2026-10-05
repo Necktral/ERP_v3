@@ -85,6 +85,8 @@ import {
   type PasswordPolicy,
 } from 'src/modules/auth/usePasswordStrength';
 import PasswordStrengthMeter from 'src/modules/auth/components/PasswordStrengthMeter.vue';
+import { apiErrorMessage } from 'src/core/api';
+import { AUTHENTICATED_HOME_ROUTE } from 'src/modules/auth/navigation';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -119,11 +121,12 @@ async function submitChange() {
       authStore.user.must_change_password = false;
     }
 
-    await router.push('/dashboard');
+    await router.push(AUTHENTICATED_HOME_ROUTE);
   } catch (error) {
-    const err = error as { response?: { data?: { detail?: string } } };
-    const msg = err.response?.data?.detail || 'No se pudo actualizar la contraseña';
-    $q.notify({ type: 'negative', message: msg });
+    $q.notify({
+      type: 'negative',
+      message: apiErrorMessage(error, 'No se pudo actualizar la contraseña.'),
+    });
   } finally {
     loading.value = false;
   }

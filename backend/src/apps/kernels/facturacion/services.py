@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -15,6 +15,7 @@ from apps.modulos.common.api_exceptions import ConflictError
 from apps.modulos.common.domain_errors import IntegrationError
 from apps.modulos.common.tender import TENDER_PAYMENT_METHOD_VALUES
 from apps.modulos.iam.models import OrgUnit
+from apps.modulos.integration.models import OutboxEvent
 from apps.modulos.integration.services import publish_outbox_event
 from apps.modulos.parties.models import Party, PartyRole
 from apps.modulos.parties.services import assign_party_role
@@ -85,6 +86,10 @@ class BillingNotFoundError(BillingError):
 
 class BillingSoDError(BillingError):
     """Violación de segregación de funciones (maker ≠ checker) — HTTP 409."""
+
+
+class BillingConflictError(BillingError):
+    """Conflicto de estado o idempotencia — HTTP 409."""
 
 
 @dataclass(frozen=True)
@@ -314,7 +319,19 @@ def create_draft(
 
     with transaction.atomic():
         if idempotency_key:
-            existing = BillingDocument.objects.filter(company=company, idempotency_key=idempotency_key).first()
+            # El constraint único es el último respaldo, pero no puede ofrecer
+            # semántica de replay a dos INSERT simultáneos. Serializamos por la
+            # misma clave lógica antes de consultar/crear.
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    [f"billing-document:{company.id}:{idempotency_key}"],
+                )
+            existing = (
+                BillingDocument.objects.select_for_update()
+                .filter(company=company, idempotency_key=idempotency_key)
+                .first()
+            )
             if existing:
                 return CreateResult(existing.id)
 
@@ -431,6 +448,19 @@ def _allocate_document_number(*, doc: BillingDocument) -> None:
         defaults={"next_number": 1, "updated_at": timezone.now()},
     )
     number = int(seq.next_number)
+    # PositiveIntegerField usa INTEGER en PostgreSQL. El valor máximo todavía
+    # cabría en el documento, pero no permite persistir el siguiente cursor;
+    # tratarlo como secuencia agotada evita un DataError/HTTP 500.
+    if number <= 0 or number >= 2_147_483_647:
+        raise BillingConflictError("secuencia fiscal agotada o fuera de rango")
+    if BillingDocument.objects.filter(
+        company=doc.company,
+        branch=doc.branch,
+        doc_type=doc.doc_type,
+        series=doc.series,
+        number=number,
+    ).exclude(pk=doc.pk).exists():
+        raise BillingConflictError("el siguiente número fiscal ya está asignado")
     seq.next_number = number + 1
     seq.updated_at = timezone.now()
     seq.save(update_fields=["next_number", "updated_at"])
@@ -738,9 +768,23 @@ def issue_doc(
         # CxC (portfolio): una venta a crédito genera una cuenta por cobrar. Best-effort:
         # el cobro/cartera no debe romper la emisión del documento (ownership: portfolio posee el saldo).
         try:
-            from apps.kernels.portfolio.services import link_billing_document_to_receivable
+            from apps.kernels.portfolio.services import consume_billing_document_issued_for_receivable
 
-            link_billing_document_to_receivable(outbox_event=issued_outbox, actor_user=actor)
+            receivable_link = consume_billing_document_issued_for_receivable(
+                outbox_event=issued_outbox,
+                actor_user=actor,
+            )
+            if receivable_link.get("status") == "FAILED":
+                logger.error(
+                    "billing_receivable_link_issue_failed",
+                    extra={
+                        "company_id": company.id,
+                        "branch_id": branch.id,
+                        "doc_id": int(doc.id),
+                        "event_id": str(getattr(issued_outbox, "event_id", "")),
+                        "error": receivable_link.get("error", ""),
+                    },
+                )
         except Exception as exc:  # noqa: BLE001 - aislar el efecto de cartera de la emisión
             logger.exception(
                 "billing_receivable_link_issue_failed",
@@ -788,6 +832,56 @@ def issue_doc(
         if queued_job_id is not None:
             out["print_job_id"] = queued_job_id
         return out
+
+
+def reconcile_issued_credit_documents_receivables(
+    *, company, branch, actor_user=None, request=None, limit: int = 200
+) -> dict[str, int]:
+    """Valida verdad Billing y delega sólo eventos canónicos al dueño de CxC."""
+    from apps.kernels.portfolio.services import reconcile_billing_receivable_events
+
+    safe_limit = max(1, min(int(limit), 500))
+    docs = BillingDocument.objects.filter(
+        company=company,
+        branch=branch,
+        doc_type=DocType.INVOICE,
+        status=DocStatus.ISSUED,
+    ).exclude(credit_status=CreditStatus.NONE).exclude(customer_party__isnull=True).filter(total__gt=0)
+    docs_by_id = {doc.id: doc for doc in docs.order_by("issued_at", "id")[:safe_limit]}
+    events = OutboxEvent.objects.filter(
+        company=company,
+        branch=branch,
+        source_module="BILLING",
+        event_type="DocumentIssued",
+        payload__data__doc_id__in=list(docs_by_id),
+    ).order_by("occurred_at", "id")
+    verified = []
+    for event in events:
+        data = event.payload.get("data", {}) if isinstance(event.payload, dict) else {}
+        raw_doc_id = data.get("doc_id") if isinstance(data, dict) else None
+        doc_id = int(raw_doc_id) if raw_doc_id is not None else None
+        doc = docs_by_id.get(doc_id) if doc_id is not None else None
+        if doc is None:
+            continue
+        try:
+            snapshot_matches = (
+                str(data.get("credit_status") or "").upper() == str(doc.credit_status).upper()
+                and int(data.get("customer_party_id") or 0) == int(doc.customer_party_id or 0)
+                and Decimal(str(data.get("total") or "0")) == doc.total
+                and str(data.get("currency") or "") == doc.currency
+            )
+        except (InvalidOperation, TypeError, ValueError):
+            snapshot_matches = False
+        if snapshot_matches:
+            verified.append(event)
+    return reconcile_billing_receivable_events(
+        company=company,
+        branch=branch,
+        events=verified,
+        actor_user=actor_user,
+        request=request,
+        limit=safe_limit,
+    )
 
 
 def queue_fiscal_print(
@@ -1112,6 +1206,38 @@ def retry_fiscal_print_job(
         return job
 
 
+def _void_side_effects(*, doc: BillingDocument, company: OrgUnit) -> list[str]:
+    """Efectos ya materializados que una anulación NO revierte (BUG-T2).
+
+    Devuelve la lista de efectos presentes (vacía si el doc es anulable): despacho
+    de inventario, CxC generada, o abonos recibidos. La vía correcta cuando hay
+    efectos es la Nota de Crédito.
+    """
+    efectos: list[str] = []
+
+    # Abonos (campo del propio doc, sin import).
+    if doc.amount_paid and doc.amount_paid > Decimal("0.00"):
+        efectos.append("abonos recibidos")
+
+    # Inventario despachado por la emisión (post_issue con source_id = doc.id).
+    from apps.kernels.inventarios.models import StockMovement
+
+    if StockMovement.objects.filter(
+        company=company, source_module="BILLING", source_type="DOC_ISSUE", source_id=str(doc.id)
+    ).exists():
+        efectos.append("inventario despachado")
+
+    # CxC generada por venta a crédito.
+    from apps.kernels.portfolio.models import Receivable
+
+    if Receivable.objects.filter(
+        company=company, reference_type="BILLING_DOC", reference_id=doc.id
+    ).exists():
+        efectos.append("cuenta por cobrar")
+
+    return efectos
+
+
 def void_doc(
     *,
     request,
@@ -1134,6 +1260,18 @@ def void_doc(
             return {"ok": True, "already_voided": True}
         if doc.status == DocStatus.DRAFT:
             raise BillingError("cannot void a draft document")
+
+        # BUG-T2: anular solo revierte el asiento GL — NO reingresa inventario ni
+        # cancela la CxC. Si el documento ya produjo esos efectos, anular dejaría
+        # el kardex y la cartera divergentes de la contabilidad. Se bloquea y se
+        # obliga a usar Nota de Crédito (que sí reingresa stock y ajusta cartera).
+        efectos = _void_side_effects(doc=doc, company=company)
+        if efectos:
+            raise BillingError(
+                "No se puede anular: el documento ya tiene efectos ("
+                + ", ".join(efectos)
+                + "). Emití una Nota de Crédito, que reingresa el inventario y ajusta la cartera."
+            )
 
         before = {
             "status": doc.status,
@@ -1393,6 +1531,7 @@ class PaymentResult:
     doc_id: int
     amount_paid: Decimal
     payment_status: str
+    idempotent: bool = False
 
 
 def create_payment(
@@ -1410,36 +1549,115 @@ def create_payment(
     coffee_lot_ref: str = "",
     payment_intent_id: int | None = None,
     auto_confirm: bool = True,
+    idempotency_key: str = "",
 ) -> PaymentResult:
     company: OrgUnit = request.company
+    branch: OrgUnit = request.branch
 
     amount = _q_money(Decimal(str(amount)))
     if amount <= 0:
         raise BillingError("payment amount must be > 0")
 
     normalized_method = _normalize_payment_method(payment_method)
+    idem = str(idempotency_key or "").strip()
+    if not idem:
+        raise BillingError("idempotency_key requerido")
+    if len(idem) > 96:
+        raise BillingError("idempotency_key excede 96 caracteres")
 
     with transaction.atomic():
         try:
-            doc = BillingDocument.objects.select_for_update().get(id=doc_id, company=company)
+            doc = BillingDocument.objects.select_for_update().get(
+                id=doc_id,
+                company=company,
+                branch=branch,
+            )
         except BillingDocument.DoesNotExist as exc:
             raise BillingNotFoundError("documento no encontrado") from exc
 
-        if doc.status == DocStatus.VOIDED:
-            raise BillingError("no se puede pagar un documento anulado")
+        # BUG-032: la clave representa una operación canónica en toda la empresa.
+        # El advisory lock cierra la carrera entre dos documentos distintos antes
+        # de que el constraint único de BD tenga que arbitrarla.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                [f"billing-payment:{company.id}:{idem}"],
+            )
+
+        payment_currency = str(currency or doc.currency or "").strip().upper()
+        document_currency = str(doc.currency or "").strip().upper()
+        reference_clean = str(reference or "")
+        notes_clean = str(notes or "")
+        payroll_ref_clean = str(payroll_period_ref or "")
+        coffee_ref_clean = str(coffee_lot_ref or "")
+
+        prev = (
+            BillingPayment.objects.select_for_update()
+            .filter(company=company, idempotency_key=idem)
+            .first()
+        )
+        if prev is not None:
+            requested_date = payment_date or prev.payment_date
+            previous_initial_status = (
+                BillingPayment.Status.CONFIRMED
+                if prev.status == BillingPayment.Status.REVERSED
+                else prev.status
+            )
+            expected_initial_status = (
+                BillingPayment.Status.CONFIRMED if auto_confirm else BillingPayment.Status.PENDING
+            )
+            same_payload = all(
+                (
+                    prev.doc_id == int(doc.id),
+                    Decimal(prev.amount) == amount,
+                    str(prev.currency or "").strip().upper() == payment_currency,
+                    str(prev.payment_method or "") == normalized_method,
+                    str(prev.reference or "") == reference_clean,
+                    str(prev.notes or "") == notes_clean,
+                    prev.payment_date == requested_date,
+                    str(prev.payroll_period_ref or "") == payroll_ref_clean,
+                    str(prev.coffee_lot_ref or "") == coffee_ref_clean,
+                    prev.payment_intent_id == payment_intent_id,
+                    previous_initial_status == expected_initial_status,
+                )
+            )
+            if not same_payload:
+                raise BillingConflictError(
+                    "idempotency_key ya fue usada con un payload de cobro distinto"
+                )
+            return PaymentResult(
+                payment_id=prev.id,
+                doc_id=doc.id,
+                amount_paid=doc.amount_paid,
+                payment_status=doc.payment_status,
+                idempotent=True,
+            )
+
+        # BUG-T5: solo se cobran FACTURAS EMITIDAS. Antes solo bloqueaba VOIDED,
+        # así que se podía registrar un pago sobre un borrador o una cotización.
+        if doc.status != DocStatus.ISSUED:
+            raise BillingError("solo se puede cobrar una factura emitida (ISSUED)")
+        if doc.doc_type != DocType.INVOICE:
+            raise BillingError("solo las facturas admiten cobros")
+
+        if payment_currency != document_currency:
+            raise BillingError(
+                f"moneda del pago ({payment_currency}) debe coincidir con la factura ({document_currency})"
+            )
 
         payment = BillingPayment.objects.create(
+            idempotency_key=idem,
             doc=doc,
             company=company,
             payment_method=normalized_method,
             amount=amount,
-            currency=currency or "NIO",
-            reference=reference or "",
-            notes=notes or "",
+            currency=payment_currency,
+            reference=reference_clean,
+            notes=notes_clean,
             payment_date=payment_date or timezone.localdate(),
             status=BillingPayment.Status.CONFIRMED if auto_confirm else BillingPayment.Status.PENDING,
-            payroll_period_ref=payroll_period_ref or "",
-            coffee_lot_ref=coffee_lot_ref or "",
+            payroll_period_ref=payroll_ref_clean,
+            coffee_lot_ref=coffee_ref_clean,
             payment_intent_id=payment_intent_id,
             created_by=actor,
         )
@@ -1465,7 +1683,7 @@ def create_payment(
                 "doc_id": doc_id,
                 "payment_method": normalized_method,
                 "amount": str(amount),
-                "currency": currency,
+                "currency": payment_currency,
                 "auto_confirm": auto_confirm,
                 "doc_payment_status": doc.payment_status,
                 "doc_amount_paid": str(doc.amount_paid),
@@ -1484,14 +1702,21 @@ def reverse_payment(
     *,
     request,
     actor,
+    doc_id: int,
     payment_id: int,
     reason: str,
 ) -> dict:
     company: OrgUnit = request.company
+    branch: OrgUnit = request.branch
 
     with transaction.atomic():
         try:
-            payment = BillingPayment.objects.select_for_update().get(id=payment_id, company=company)
+            payment = BillingPayment.objects.select_for_update().get(
+                id=payment_id,
+                doc_id=doc_id,
+                company=company,
+                doc__branch=branch,
+            )
         except BillingPayment.DoesNotExist as exc:
             raise BillingNotFoundError("pago no encontrado") from exc
 

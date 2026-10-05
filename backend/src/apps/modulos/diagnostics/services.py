@@ -47,6 +47,7 @@ def record_error_event(
     with transaction.atomic():
         obj, created = ErrorEvent.objects.select_for_update().get_or_create(
             stack_hash=shash,
+            company=company,
             defaults={
                 "exception_type": getattr(exc_type, "__name__", "Error")[:255],
                 "message_hash": message_hash(exc_value),
@@ -60,8 +61,9 @@ def record_error_event(
                 "domain": domain[:64],
                 "risk_class": risk,
                 "correlation_id": correlation_id,
-                "company_id": company_id,
-                "branch_id": branch_id,
+                "branch": branch,
+                "company_legacy_id": company_id,
+                "branch_legacy_id": branch_id,
                 "first_seen_at": now,
                 "last_seen_at": now,
             },

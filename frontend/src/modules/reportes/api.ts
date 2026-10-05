@@ -32,7 +32,7 @@ export interface CatalogEntry {
   title: string;
   description: string;
   domain_owner: string;
-  scope_level: 'COMPANY' | 'BRANCH' | string;
+  scope_level: string;
   schema_version: string;
   semantic_version: string;
   freshness_mode: string;
@@ -119,7 +119,7 @@ export async function runDataset(
 // Runs (GET /reporting/runs/ y /reporting/runs/<id>/)
 // ---------------------------------------------------------------------------
 
-export type RunEstado = 'RUNNING' | 'SUCCEEDED' | 'FAILED' | string;
+export type RunEstado = string;
 
 /** Fila del historial de ejecuciones (RunsListView). */
 export interface RunResumen {
@@ -174,7 +174,7 @@ export async function getRunDetail(runId: string): Promise<RunDetalle> {
 // ---------------------------------------------------------------------------
 
 export type ExportFormato = 'json' | 'csv' | 'xlsx';
-export type ExportEstado = 'PENDING' | 'SUCCEEDED' | 'FAILED' | string;
+export type ExportEstado = string;
 
 /** Export de un run, fiel a exports.export_to_dict(). */
 export interface ExportResult {
@@ -220,7 +220,7 @@ export async function getExportDetail(
 // Snapshots (GET /reporting/snapshots/ y POST /reporting/snapshots/generate/)
 // ---------------------------------------------------------------------------
 
-export type SnapshotEstado = 'ACTIVE' | 'EXPIRED' | 'FAILED' | string;
+export type SnapshotEstado = string;
 
 /** Fila del listado de snapshots (SnapshotsListView). */
 export interface SnapshotRow {

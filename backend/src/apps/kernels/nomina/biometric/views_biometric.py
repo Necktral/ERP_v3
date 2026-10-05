@@ -28,6 +28,7 @@ from .models_biometric import (
     BiometricCheckDirection,
     BiometricDevice,
     BiometricImportBatch,
+    hash_device_token,
     new_device_token,
 )
 from .services_biometric import (
@@ -37,7 +38,7 @@ from .services_biometric import (
     rollup_biometric_to_period,
     set_person_map,
 )
-from .tabular_reader import TabularReadError
+from .tabular_reader import MAX_UPLOAD_BYTES, TabularReadError
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +81,7 @@ class RollupSerializer(serializers.Serializer):
     period_id = serializers.IntegerField()
 
 
-def _device_payload(d: BiometricDevice, *, include_token: bool = False) -> dict:
+def _device_payload(d: BiometricDevice, *, revealed_token: str = "") -> dict:
     out = {
         "id": d.id,
         "name": d.name,
@@ -91,8 +92,8 @@ def _device_payload(d: BiometricDevice, *, include_token: bool = False) -> dict:
         "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
         "created_at": d.created_at.isoformat(),
     }
-    if include_token:
-        out["api_token"] = d.api_token
+    if revealed_token:
+        out["api_token"] = revealed_token
     return out
 
 
@@ -122,6 +123,7 @@ class BiometricDeviceListCreateView(MethodThrottleScopeMixin, APIView):
             branch = get_object_or_404(
                 OrgUnit, id=int(v["branch_id"]), parent=request.company, unit_type=OrgUnit.UnitType.BRANCH
             )
+        raw_token = new_device_token()
         device = BiometricDevice.objects.create(
             company=request.company,
             branch=branch,
@@ -129,6 +131,7 @@ class BiometricDeviceListCreateView(MethodThrottleScopeMixin, APIView):
             vendor=v.get("vendor", ""),
             serial=v.get("serial", ""),
             created_by=request.user,
+            api_token_hash=hash_device_token(raw_token),
         )
         write_event(
             request=request,
@@ -141,7 +144,7 @@ class BiometricDeviceListCreateView(MethodThrottleScopeMixin, APIView):
             metadata={"name": device.name},
         )
         # el token se muestra UNA vez (como una clave temporal)
-        return Response(_device_payload(device, include_token=True), status=status.HTTP_201_CREATED)
+        return Response(_device_payload(device, revealed_token=raw_token), status=status.HTTP_201_CREATED)
 
 
 class BiometricDeviceDetailView(APIView):
@@ -183,8 +186,7 @@ class BiometricDeviceRotateTokenView(APIView):
 
     def post(self, request, device_pk: int):
         device = get_object_or_404(BiometricDevice, id=device_pk, company=request.company)
-        device.api_token = new_device_token()
-        device.save(update_fields=["api_token", "updated_at"])
+        raw_token = device.rotate_api_token()
         write_event(
             request=request,
             module="NOMINA",
@@ -195,7 +197,7 @@ class BiometricDeviceRotateTokenView(APIView):
             subject_id=str(device.id),
             metadata={"fields": ["api_token"]},
         )
-        return Response(_device_payload(device, include_token=True), status=status.HTTP_200_OK)
+        return Response(_device_payload(device, revealed_token=raw_token), status=status.HTTP_200_OK)
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +215,11 @@ class BiometricImportView(APIView):
         if upload is None:
             return Response({"file": "Adjuntá el archivo exportado por el aparato (.xlsx o .csv)."},
                             status=status.HTTP_400_BAD_REQUEST)
+        if upload.size > MAX_UPLOAD_BYTES:
+            return Response(
+                {"file": f"Archivo demasiado grande (máx {MAX_UPLOAD_BYTES // (1024 * 1024)} MB)."},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
         try:
             batch = import_checks_file(
                 device=device,
@@ -282,7 +289,7 @@ class BiometricPushView(APIView):
         token = (request.headers.get("X-Device-Token") or "").strip()
         if not token:
             return Response({"detail": "Falta X-Device-Token."}, status=status.HTTP_401_UNAUTHORIZED)
-        device = BiometricDevice.objects.filter(api_token=token, is_active=True).select_related("company").first()
+        device = BiometricDevice.authenticate_token(token)
         if device is None:
             return Response({"detail": "Token inválido."}, status=status.HTTP_401_UNAUTHORIZED)
 

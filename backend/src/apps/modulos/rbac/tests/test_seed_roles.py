@@ -85,6 +85,16 @@ def test_accountant_reads_cec_close_but_does_not_operate_it():
 
 
 @pytest.mark.django_db
+def test_cashier_can_open_pos_with_only_required_inventory_reads():
+    seed_rbac_v01()
+    p = _perms("cashier")
+    assert {"sales.pos.sell", "inventory.item.read", "inventory.warehouse.read"} <= p
+    assert "sales.pos.price_override" not in p
+    assert "inventory.movement.post" not in p
+    assert "inventory.item.manage" not in p
+
+
+@pytest.mark.django_db
 def test_collections_officer_no_writeoff_adjust_or_disburse():
     seed_rbac_v01()
     p = _perms("collections_officer")

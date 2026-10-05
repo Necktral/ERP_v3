@@ -7,16 +7,23 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "verify:toolchain": "node scripts/verify-toolchain.mjs",
+    "prelint": "npm run verify:toolchain",
     "lint": "eslint -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
+    "pretypecheck": "npm run verify:toolchain",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore",
+    "pretest": "npm run verify:toolchain",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e:forensic": "playwright test",
     "dev": "quasar dev",
+    "prebuild": "npm run verify:toolchain",
     "build": "quasar build",
     "postinstall": "quasar prepare"
   },
   "dependencies": {
+    "@aparajita/capacitor-secure-storage": "7.1.6",
     "@capacitor-community/sqlite": "^7.0.3",
     "@capacitor-mlkit/barcode-scanning": "^7.5.0",
     "@capacitor/android": "^7.6.6",
@@ -26,18 +33,20 @@
     "@capacitor/network": "^7.0.4",
     "@capacitor/share": "^7.0.4",
     "@quasar/extras": "^2.0.0",
-    "axios": "^1.16.0",
+    "axios": "^1.19.0",
     "jeep-sqlite": "^2.8.0",
     "pinia": "^3.0.1",
     "qrcode": "^1.5.4",
-    "quasar": "^2.19.3",
+    "quasar": "^2.24.0",
     "tweetnacl": "^1.0.3",
     "vue": "^3.5.22",
     "vue-router": "^4.0.12"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
     "@capacitor/cli": "^7.6.6",
     "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.62.1",
     "@quasar/app-vite": "^2.5.4",
     "@types/node": "^20.5.9",
     "@types/qrcode": "^1.5.6",
@@ -60,6 +69,20 @@
     "vue-tsc": "^3.3.4"
   },
   "overrides": {
+    "body-parser": "1.20.6",
+    "immutable": "5.1.9",
+    "minimatch@5": {
+      "brace-expansion": "2.1.4"
+    },
+    "minimatch@9": {
+      "brace-expansion": "2.1.4"
+    },
+    "minimatch@10": {
+      "brace-expansion": "5.0.9"
+    },
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26",
+    "tar": "7.5.22",
     "flatted": "^3.4.2",
     "js-cookie": "3.0.7"
   },

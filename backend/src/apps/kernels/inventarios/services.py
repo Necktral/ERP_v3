@@ -365,7 +365,8 @@ def _assert_lot_matches(
             _idempotency_conflict()
         return
     if lot_number:
-        existing_number = existing.lot.lot_number if existing.lot_id else ""
+        existing_lot = existing.lot if existing.lot_id is not None else None
+        existing_number = existing_lot.lot_number if existing_lot is not None else ""
         if existing_number != lot_number:
             _idempotency_conflict()
         return
@@ -995,6 +996,68 @@ def post_issue(
         return _post_result_from_movement(movement=mov, qty_on_hand=bal.qty_on_hand, avg_cost=bal.avg_cost)
 
 
+def _reconcile_lot_balances_for_adjust(
+    *, company, branch, warehouse, item, delta: Decimal, explicit_lot
+) -> None:
+    """BUG-T4: mantiene Σ LotBalance == StockBalance en un ajuste de ítem con lotes.
+
+    Con lote explícito, aplica el delta a ese lote. Sin lote, absorbe el delta en
+    orden de consumo (FEFO/FIFO): una baja se descuenta de los lotes más antiguos
+    primero; un alza se suma al primer lote del orden. Antes el ajuste no tocaba
+    los lotes y la suma divergía del saldo total.
+    """
+    if not item.track_lots or delta == 0:
+        return
+
+    if explicit_lot is not None:
+        lot_bal = _get_or_create_lot_balance_locked(
+            company=company, branch=branch, warehouse=warehouse, item=item, lot=explicit_lot
+        )
+        lot_bal.qty_on_hand = _q_qty(lot_bal.qty_on_hand + delta)
+        lot_bal.updated_at = timezone.now()
+        lot_bal.save(update_fields=["qty_on_hand", "updated_at"])
+        return
+
+    from .classification import lot_consumption_ordering
+
+    ordering = lot_consumption_ordering(item, prefix="lot__") or ("lot__id",)
+    lot_bals = list(
+        LotBalance.objects.select_for_update()
+        .filter(company=company, branch=branch, warehouse=warehouse, item=item, lot__status="ACTIVE")
+        .order_by(*ordering)
+    )
+    if not lot_bals:
+        # Sin lotes activos: una BAJA no tiene qué reducir (Σ ya es 0, benigno).
+        # Un ALZA no se puede atribuir a ningún lote sin romper el invariante →
+        # se exige lote explícito en vez de divergir en silencio.
+        if delta > 0:
+            raise ValueError(
+                "Alza de un ítem con lotes sin lote activo: especificá lot_id para atribuir la cantidad."
+            )
+        return
+
+    if delta > 0:
+        # Alza: se atribuye al primer lote del orden de consumo.
+        lb = lot_bals[0]
+        lb.qty_on_hand = _q_qty(lb.qty_on_hand + delta)
+        lb.updated_at = timezone.now()
+        lb.save(update_fields=["qty_on_hand", "updated_at"])
+        return
+
+    # Baja: descontar de los lotes más antiguos primero, sin dejar lotes negativos.
+    restante = -delta  # positivo
+    for lb in lot_bals:
+        if restante <= 0:
+            break
+        quitar = min(lb.qty_on_hand, restante)
+        if quitar <= 0:
+            continue
+        lb.qty_on_hand = _q_qty(lb.qty_on_hand - quitar)
+        lb.updated_at = timezone.now()
+        lb.save(update_fields=["qty_on_hand", "updated_at"])
+        restante = _q_qty(restante - quitar)
+
+
 def post_adjust(
     *,
     request,
@@ -1002,6 +1065,7 @@ def post_adjust(
     warehouse_id: int,
     item_id: int,
     new_qty_on_hand: Decimal,
+    lot_id: int | None = None,
     idempotency_key: str = "",
     note: str = "",
     movement_type: str = MovementType.ADJUST,
@@ -1042,6 +1106,15 @@ def post_adjust(
         item = _get_item_or_error(company=company, item_id=item_id)
         bal = _get_or_create_balance_locked(company=company, branch=branch, warehouse=warehouse, item=item)
 
+        # Lote explícito (opcional): valida contra el ítem. Un ítem sin lotes no lo acepta.
+        explicit_lot: ItemLot | None = None
+        if lot_id:
+            if not item.track_lots:
+                raise ValueError("El ítem no tiene habilitado tracking de lotes.")
+            explicit_lot = ItemLot.objects.filter(id=lot_id, company=company, item=item).first()
+            if explicit_lot is None:
+                raise ValueError("Lote inválido para este ítem.")
+
         delta = _q_qty(new_qty_on_hand - bal.qty_on_hand)
         unit_cost = bal.avg_cost
         total_cost = _q_cost(delta * unit_cost)
@@ -1056,6 +1129,7 @@ def post_adjust(
             qty_delta=delta,
             unit_cost=unit_cost,
             total_cost=total_cost,
+            lot=explicit_lot,
             note=note or "",
             idempotency_key=idempotency_key or "",
             created_by=getattr(actor, "pk", None) and actor,
@@ -1064,6 +1138,12 @@ def post_adjust(
         bal.qty_on_hand = new_qty_on_hand
         bal.updated_at = timezone.now()
         bal.save(update_fields=["qty_on_hand", "updated_at"])
+
+        # BUG-T4: reconciliar los LotBalance para que Σ lotes == saldo total.
+        _reconcile_lot_balances_for_adjust(
+            company=company, branch=branch, warehouse=warehouse, item=item,
+            delta=delta, explicit_lot=explicit_lot,
+        )
 
         write_event(
             request=request,
@@ -1213,10 +1293,20 @@ def post_transfer(
         from_bal.updated_at = timezone.now()
         from_bal.save(update_fields=["qty_on_hand", "avg_cost", "updated_at"])
 
-        to_bal.qty_on_hand = _q_qty(to_bal.qty_on_hand + qty)
-        # avg_cost stays the same (weighted average is preserved on transfer at same cost)
-        if to_bal.qty_on_hand == 0:
-            to_bal.avg_cost = unit_cost
+        # BUG-T1: el destino debe MEZCLAR su costo promedio con el de la entrada,
+        # igual que post_receive (antes solo lo tocaba cuando la cantidad final era
+        # 0 → una transferencia a bodega vacía dejaba avg_cost=0 y COGS=0). El costo
+        # que entra es el promedio del origen (unit_cost = from_bal.avg_cost).
+        prev_to_qty = to_bal.qty_on_hand
+        new_to_qty = _q_qty(prev_to_qty + qty)
+        if new_to_qty == 0:
+            to_bal.avg_cost = Decimal("0.000000")
+        elif prev_to_qty <= 0:
+            # INV-02: base cero/negativa → se reinicia al costo de la entrada.
+            to_bal.avg_cost = _q_cost(unit_cost)
+        else:
+            to_bal.avg_cost = _q_cost(((prev_to_qty * to_bal.avg_cost) + total_cost) / new_to_qty)
+        to_bal.qty_on_hand = new_to_qty
         to_bal.updated_at = timezone.now()
         to_bal.save(update_fields=["qty_on_hand", "avg_cost", "updated_at"])
 

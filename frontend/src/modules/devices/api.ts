@@ -26,6 +26,13 @@ export interface DeviceRow {
   last_accepted_sequence: number | null;
 }
 
+export interface DevicePage {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: DeviceRow[];
+}
+
 export async function createEnrollmentChallenge(input: {
   label_hint?: string;
   expires_in_minutes?: number;
@@ -34,11 +41,11 @@ export async function createEnrollmentChallenge(input: {
   return data;
 }
 
-export async function listDevices(): Promise<DeviceRow[]> {
-  const { data } = await api.get<{ results: DeviceRow[] }>('/sync/devices/', {
-    params: { limit: 200, offset: 0 },
+export async function listDevices(limit = 25, offset = 0): Promise<DevicePage> {
+  const { data } = await api.get<DevicePage>('/sync/devices/', {
+    params: { limit, offset },
   });
-  return data.results;
+  return data;
 }
 
 export async function revokeDevice(deviceId: string): Promise<void> {

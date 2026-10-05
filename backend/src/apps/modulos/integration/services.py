@@ -9,6 +9,7 @@ from django.db.models import Count, Max, Min, Q
 from django.utils import timezone
 
 from apps.modulos.common.domain_errors import IntegrationError
+from apps.modulos.audit.writer import write_event
 
 from .models import InboxEvent, OutboxEvent
 
@@ -19,6 +20,57 @@ OPERATIONAL_ACCOUNTING_CONTRACT_EVENTS = {
     ("INVENTORY", "InventoryAdjusted"),
     ("INVENTORY", "InventoryTransferCompleted"),
 }
+
+
+class OutboxRecoveryConflict(ValueError):
+    """La recuperación solicitada contradice el estado durable del evento."""
+
+
+@transaction.atomic
+def requeue_outbox_event(*, event_id, company, branch=None, actor_user=None, request=None) -> OutboxEvent:
+    """Rehabilita un evento fallido sin borrar su evidencia de intentos/error.
+
+    Los eventos company-wide (``branch=NULL``) son visibles desde cualquier sucursal
+    de la misma compañía; un evento ligado a sucursal exige coincidencia exacta.
+    """
+    scope = Q(company=company)
+    if branch is not None:
+        scope &= Q(branch=branch) | Q(branch__isnull=True)
+    event = OutboxEvent.objects.select_for_update().filter(scope, event_id=event_id).first()
+    if event is None:
+        raise OutboxEvent.DoesNotExist
+    if event.status == OutboxEvent.Status.SENT:
+        raise OutboxRecoveryConflict("Un evento SENT no puede volver a encolarse.")
+
+    previous_status = event.status
+    previous_next_attempt_at = event.next_attempt_at
+    event.status = OutboxEvent.Status.PENDING
+    event.next_attempt_at = timezone.now()
+    event.published_at = None
+    event.save(update_fields=["status", "next_attempt_at", "published_at"])
+
+    write_event(
+        request=request,
+        module="INTEGRATION",
+        event_type="INTEGRATION_OUTBOX_REQUEUED",
+        actor_user=actor_user,
+        subject_type="OUTBOX_EVENT",
+        subject_id=str(event.event_id),
+        before_snapshot={
+            "status": previous_status,
+            "attempt_count": event.attempt_count,
+            "last_error": event.last_error,
+            "next_attempt_at": previous_next_attempt_at.isoformat() if previous_next_attempt_at else None,
+        },
+        after_snapshot={
+            "status": event.status,
+            "attempt_count": event.attempt_count,
+            "last_error": event.last_error,
+            "next_attempt_at": event.next_attempt_at.isoformat(),
+        },
+        metadata={"company_id": company.id, "branch_id": event.branch_id},
+    )
+    return event
 
 
 def _normalize_operational_contract_payload(*, source_module: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -136,6 +188,8 @@ def create_or_get_inbox_event(
                 event_type=event.event_type,
                 schema_version=int(event.schema_version or 1),
                 payload=event.payload if isinstance(event.payload, dict) else {},
+                company_id=event.company_id,
+                branch_id=event.branch_id,
                 status=status,
             )
         ],
@@ -154,6 +208,10 @@ def create_or_get_inbox_event(
                 "event_type": str(event.event_type),
             },
         )
+    if persisted.company_id is None and event.company_id is not None:
+        persisted.company_id = event.company_id
+        persisted.branch_id = event.branch_id
+        persisted.save(update_fields=["company", "branch"])
     return persisted, True
 
 

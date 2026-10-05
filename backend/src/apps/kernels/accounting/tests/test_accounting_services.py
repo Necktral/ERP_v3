@@ -10,11 +10,14 @@ Tests del kernel accounting — contratos críticos usados por otros kernels:
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import uuid
 from datetime import timezone as dt_timezone
 from decimal import Decimal
+from threading import Barrier
 
 import pytest
+from django.db import close_old_connections, connections
 from django.utils import timezone
 
 from apps.kernels.accounting.models import (
@@ -33,10 +36,12 @@ from apps.kernels.accounting.services import (
     dispatch_accounting_outbox_events,
     link_operational_event_to_accounting,
     post_journal_drafts,
+    reconcile_operational_vs_accounting,
     seed_posting_rules_v1_for_company,
 )
 from apps.modulos.iam.models import OrgUnit
 from apps.modulos.integration.models import OutboxEvent
+from apps.modulos.audit.models import AuditEvent
 
 
 # ---------------------------------------------------------------------------
@@ -477,6 +482,68 @@ def test_post_drafts_sod_block_same_approver():
     )
     assert result.failed >= 1
     assert any("SoD" in e["error"] for e in result.errors)
+
+
+@pytest.mark.django_db
+def test_operational_reconciliation_query_budget_is_constant_for_posted_drafts(django_assert_num_queries):
+    """BUG-049: cargar el reverse OneToOne JournalEntry no debe costar una query por draft."""
+    company, branch = _mk_scope()
+    seed_posting_rules_v1_for_company(company=company)
+
+    _billing_outbox(company=company, branch=branch)
+    dispatch_accounting_outbox_events(limit=100)
+    post_journal_drafts(company_id=company.id, auto_approve=True, allow_same_approver=True)
+    with django_assert_num_queries(7):
+        one = reconcile_operational_vs_accounting(company=company)
+    assert one["summary"]["drafts_posted"] == 1
+
+    for _ in range(99):
+        _billing_outbox(company=company, branch=branch)
+    dispatch_accounting_outbox_events(limit=100)
+    post_journal_drafts(company_id=company.id, auto_approve=True, allow_same_approver=True)
+    with django_assert_num_queries(7):
+        many = reconcile_operational_vs_accounting(company=company)
+    assert many["summary"]["drafts_posted"] == 100
+
+
+@pytest.mark.django_db(transaction=True)
+def test_post_journal_draft_is_single_transition_under_concurrency():
+    """U5: dos workers no duplican asiento, outbox ni auditoria de posteo."""
+    company, branch = _mk_scope()
+    seed_posting_rules_v1_for_company(company=company)
+    _billing_outbox(company=company, branch=branch)
+    dispatch_accounting_outbox_events(limit=10)
+    barrier = Barrier(2)
+
+    def post():
+        close_old_connections()
+        barrier.wait(timeout=10)
+        result = post_journal_drafts(
+            company_id=company.id,
+            auto_approve=True,
+            allow_same_approver=True,
+        )
+        close_old_connections()
+        return result
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: post(), range(2)))
+    finally:
+        connections.close_all()
+
+    assert sum(result.posted for result in results) == 1
+    assert sum(result.failed for result in results) == 0
+    assert JournalEntry.objects.filter(company=company).count() == 1
+    assert OutboxEvent.objects.filter(
+        company=company,
+        source_module="ACCOUNTING",
+        event_type="JournalPosted",
+    ).count() == 1
+    assert AuditEvent.objects.filter(
+        event_type="ACCOUNTING_JOURNAL_POSTED",
+        metadata__company_id=str(company.id),
+    ).count() == 1
 
 
 # ---------------------------------------------------------------------------

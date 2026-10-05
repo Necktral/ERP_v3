@@ -3,7 +3,7 @@
     <PageHeader
       title="Flota"
       subtitle="Vehículos y maquinaria con sus lecturas y documentos por vencer. El mantenimiento y los conductores tienen su pantalla."
-      :loading="cargando"
+      :loading="cargando || cargandoActivos"
       @refresh="recargar"
     >
       <template #actions>
@@ -45,15 +45,15 @@
 
     <div class="flo-cols">
       <div class="flo-main">
-        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="activos"
           :columns="columnas"
           row-key="id"
           flat
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="cargando || cargandoActivos"
+          v-model:pagination="assetPagination"
+          @request="assetRequest"
           no-data-label="Aún no hay activos de flota."
         >
           <template #body-cell-tipo="props">
@@ -214,13 +214,14 @@ import { reactive, ref, onMounted } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatQty } from 'src/core/format';
 import {
   ASSET_STATUS_LABELS,
   ASSET_TYPE_LABELS,
   FLEET_DOC_STATUS_LABELS,
   FLEET_DOC_TYPE_LABELS,
-  listAssets,
+  listAssetsPage,
   listFleetDocuments,
   recordMeterReading,
   registerFleetDocument,
@@ -238,7 +239,8 @@ const ctx = useContextStore();
 
 const cargando = ref(false);
 const guardando = ref(false);
-const activos = ref<FleetAsset[]>([]);
+const assetListado = useListadoServer<FleetAsset>(listAssetsPage, { rowsPerPage: 25, errorMessage: 'No se pudo cargar la flota.' });
+const { rows: activos, loading: cargandoActivos, pagination: assetPagination, onRequest: assetRequest, reload: reloadAssets } = assetListado;
 const documentos = ref<FleetDocument[]>([]);
 
 function puede(code: string): boolean {
@@ -267,11 +269,7 @@ const columnas: QTableColumn<FleetAsset>[] = [
 async function recargar() {
   cargando.value = true;
   try {
-    const tareas: Promise<void>[] = [
-      listAssets().then((r) => {
-        activos.value = r;
-      }),
-    ];
+    const tareas: Promise<unknown>[] = [reloadAssets()];
     if (puede('fleet.document.read')) {
       tareas.push(
         listFleetDocuments().then((r) => {

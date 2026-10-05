@@ -4,6 +4,7 @@ from django.urls import path
 
 from .views import (
     BranchFiscalConfigView,
+    BillingReceivableReconcileView,
     CreditApprovalResolveView,
     DocContingencyResolveView,
     DocContingencyView,
@@ -24,6 +25,7 @@ from .views import (
 urlpatterns = [
     path("health/", HealthView.as_view()),
     path("fiscal/branch-config/", BranchFiscalConfigView.as_view()),
+    path("receivables/reconcile/", BillingReceivableReconcileView.as_view()),
     path("docs/", DocListCreateView.as_view()),
     path("docs/<int:doc_id>/", DocDetailView.as_view()),
     path("docs/<int:doc_id>/issue/", DocIssueView.as_view()),

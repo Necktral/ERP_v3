@@ -37,6 +37,7 @@ describe('auth.store', () => {
     authApi.get.mockReset();
     authApi.post.mockReset();
     storageMocks.clearTokens.mockReset();
+    storageMocks.clearTokens.mockResolvedValue(undefined);
 
     setActivePinia(createPinia());
   });

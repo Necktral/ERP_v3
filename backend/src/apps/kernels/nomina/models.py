@@ -368,7 +368,7 @@ class IRBracket(models.Model):
         brackets = getattr(config, "_ir_brackets_cache", None)
         if brackets is None:
             brackets = list(cls.objects.filter(config=config).order_by("order"))
-            config._ir_brackets_cache = brackets
+            setattr(config, "_ir_brackets_cache", brackets)
         ir = Decimal("0.00")
         for bracket in brackets:
             if annual_income <= bracket.min_income:

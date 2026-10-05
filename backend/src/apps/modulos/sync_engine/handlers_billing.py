@@ -215,6 +215,7 @@ def handle_billing_payment_add(ctx: dict[str, Any], payload: dict[str, Any]) -> 
             payroll_period_ref=_opt_str(payload, "payroll_period_ref"),
             coffee_lot_ref=_opt_str(payload, "coffee_lot_ref"),
             auto_confirm=_opt_bool(payload, "auto_confirm", True),
+            idempotency_key=_opt_str(payload, "idempotency_key") or str(ctx["command_id"]),
         )
     except BillingError as e:
         raise _map_billing_error(e)

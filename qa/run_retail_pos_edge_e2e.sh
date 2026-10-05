@@ -72,6 +72,15 @@ req_path = Path(sys.argv[5])
 res_path = Path(sys.argv[6])
 request_data = {}
 response_data = {}
+def redact(value):
+    if isinstance(value, dict):
+        return {
+            key: ("[REDACTED]" if key.lower() in {"access", "refresh", "token", "signature"} else redact(item))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact(item) for item in value]
+    return value
 if req_path.exists():
     if req_path.is_file():
         raw = req_path.read_text(encoding="utf-8").strip()
@@ -86,12 +95,12 @@ payload.append(
         "request": {
             "method": sys.argv[3],
             "url": sys.argv[4],
-            "payload": request_data,
+        "payload": redact(request_data),
         },
         "response": {
             "http_status": int(sys.argv[7]) if sys.argv[7].isdigit() else None,
             "latency_ms": int(sys.argv[8]) if sys.argv[8].isdigit() else None,
-            "body": response_data,
+            "body": redact(response_data),
         },
     }
 )
@@ -369,6 +378,20 @@ if [[ "${DEVICES_SYNCED}" -lt 1 ]]; then
   fail "handshake_happy" "devices_synced must be >= 1"
 fi
 add_check "handshake_happy" "passed" "${LAST_HTTP_STATUS}" "${LAST_LATENCY_MS}" "Handshake accepted"
+
+echo "[qa-edge-e2e] validating challenge replay rejection..."
+call_api "handshake_replay" "POST" "/retail/pos/peripherals/edge/handshake/" "${HANDSHAKE_PAYLOAD}" "${ACCESS_TOKEN}" "${COMPANY_ID}" "${BRANCH_ID}"
+require_http "409" "handshake_replay" "Consumed challenge replay should be rejected with 409"
+REPLAY_CODE="$(python3 - <<'PY' "${LAST_RESPONSE_FILE}"
+import json, sys
+data = json.load(open(sys.argv[1], "r", encoding="utf-8"))
+print(data.get("error_code", ""))
+PY
+)"
+if [[ "${REPLAY_CODE}" != "REPLAY_DETECTED" ]]; then
+  fail "handshake_replay" "Expected error_code REPLAY_DETECTED, got ${REPLAY_CODE:-<empty>}"
+fi
+add_check "handshake_replay" "passed" "${LAST_HTTP_STATUS}" "${LAST_LATENCY_MS}" "Stable rejection REPLAY_DETECTED"
 
 echo "[qa-edge-e2e] validating capabilities..."
 call_api "capabilities_happy" "GET" "/retail/pos/peripherals/capabilities/" "" "${ACCESS_TOKEN}" "${COMPANY_ID}" "${BRANCH_ID}"

@@ -20,7 +20,6 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva solicitud" @click="abrirAlta" />
       </div>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="apps"
         :columns="appCols"
@@ -28,7 +27,8 @@
         flat
         bordered
         :loading="loadingApps"
-        :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }"
+        v-model:pagination="appsPagination"
+        @request="appsRequest"
         no-data-label="Sin solicitudes."
       >
         <template #body-cell-status="props">
@@ -49,7 +49,6 @@
 
     <!-- ===== PRÉSTAMOS ===== -->
     <div v-else>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
       <q-table
         :rows="loans"
         :columns="loanCols"
@@ -57,7 +56,8 @@
         flat
         bordered
         :loading="loadingLoans"
-        :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }"
+        v-model:pagination="loansPagination"
+        @request="loansRequest"
         no-data-label="Sin préstamos."
       >
         <template #body-cell-status="props">
@@ -79,7 +79,7 @@
       <q-card class="app-dialog" style="min-width: 420px">
         <q-card-section class="text-h6">Nueva solicitud de financiamiento</q-card-section>
         <q-card-section class="q-gutter-md">
-          <q-select v-model="fApp.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense />
+          <q-select v-model="fApp.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense use-input input-debounce="250" @filter="buscarProductores" />
           <div class="row q-col-gutter-md">
             <q-input class="col" v-model.number="fApp.requested_nio" type="number" label="Monto C$" outlined dense />
             <q-input class="col" v-model.number="fApp.requested_usd" type="number" label="Monto US$" outlined dense />
@@ -175,7 +175,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { apiErrorMessage } from 'src/core/api';
 import {
   APPLICATION_STATUS_LABELS,
@@ -185,9 +185,9 @@ import {
   approveApplication,
   createApplication,
   disburseApplication,
-  listApplications,
-  listLoans,
-  listProducers,
+  listApplicationsPage,
+  listLoansPage,
+  listProducersPage,
   loanStatement,
   registerLoanPayment,
   rejectApplication,
@@ -203,8 +203,10 @@ import {
 
 const $q = useQuasar();
 const tab = ref<'solicitudes' | 'prestamos'>('solicitudes');
-const { rows: apps, loading: loadingApps, reload: reloadApps } = useListado<ApplicationRow>(listApplications);
-const { rows: loans, loading: loadingLoans, reload: reloadLoans } = useListado<LoanRow>(() => listLoans());
+const appsListado = useListadoServer<ApplicationRow>(listApplicationsPage, { rowsPerPage: 15 });
+const loansListado = useListadoServer<LoanRow>(listLoansPage, { rowsPerPage: 15 });
+const { rows: apps, loading: loadingApps, pagination: appsPagination, onRequest: appsRequest, reload: reloadApps } = appsListado;
+const { rows: loans, loading: loadingLoans, pagination: loansPagination, onRequest: loansRequest, reload: reloadLoans } = loansListado;
 
 function reloadAll() {
   void reloadApps();
@@ -216,6 +218,12 @@ interface Opt<T = number> {
   value: T;
 }
 const prodOpts = ref<Opt[]>([]);
+async function buscarProductores(value: string, update: (callback: () => void) => void) {
+  const page = await listProducersPage({ limit: 25, offset: 0 }, value.trim());
+  update(() => {
+    prodOpts.value = page.results.map((p) => ({ label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id }));
+  });
+}
 const formaOpts = (Object.keys(DISBURSEMENT_LABELS) as DisbursementForm[]).map((k) => ({ label: DISBURSEMENT_LABELS[k], value: k }));
 const monedaOpts = (Object.keys(CURRENCY_LABELS) as Currency[]).map((k) => ({ label: CURRENCY_LABELS[k] ?? k, value: k }));
 const monedaTargetOpts: Opt<Currency | ''>[] = [{ label: '(misma)', value: '' }, ...monedaOpts];
@@ -410,14 +418,7 @@ async function confirmarPago() {
   }
 }
 
-onMounted(async () => {
-  try {
-    const prods = await listProducers();
-    prodOpts.value = prods.map((p) => ({ label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id }));
-  } catch {
-    /* noop */
-  }
-});
+onMounted(() => void buscarProductores('', (callback) => callback()));
 </script>
 
 <style scoped>

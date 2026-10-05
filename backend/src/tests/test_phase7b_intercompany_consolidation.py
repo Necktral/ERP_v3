@@ -350,6 +350,57 @@ def test_phase7b_consolidation_happy_path_and_idempotent():
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("strict", [True, False])
+def test_consolidation_rejects_legacy_foreign_currency_atomically(strict):
+    company_a, _branch_a, company_b, _branch_b = _mk_orgs()
+    _seed_coa(company=company_a)
+    _seed_coa(company=company_b)
+    actor = _mk_user("foreign_legacy")
+    CompanyAccountingConfig.objects.create(
+        company=company_a,
+        phase7_enabled=True,
+        functional_currency="NIO",
+    )
+    foreign_tx = IntercompanyTransaction.objects.create(
+        source_company=company_a,
+        target_company=company_b,
+        status=IntercompanyTransaction.Status.CONFIRMED,
+        currency="USD",
+        amount=Decimal("100.00"),
+        source_account_code="4101",
+        target_account_code="5101",
+        source_side=IntercompanyTransaction.Side.CREDIT,
+        target_side=IntercompanyTransaction.Side.DEBIT,
+        effective_at=timezone.make_aware(datetime(2026, 3, 15, 12, 0)),
+        created_by=actor,
+        confirmed_by=actor,
+        confirmed_at=timezone.now(),
+    )
+
+    result = run_consolidation(
+        parent_company_id=company_a.id,
+        year=2026,
+        month=3,
+        company_ids=[company_a.id, company_b.id],
+        strict=strict,
+        actor_user=actor,
+    )
+
+    assert result.status == ConsolidationRun.Status.BLOCKED
+    assert result.summary_json["issues"] == [
+        {
+            "code": "CONSOLIDATION_CURRENCY_UNSUPPORTED",
+            "tx_id": str(foreign_tx.tx_id),
+            "detail": "La consolidación no convierte monedas; se esperaba NIO y se recibió USD.",
+            "currency": "USD",
+            "functional_currency": "NIO",
+        }
+    ]
+    assert result.summary_json["elimination_count"] == 0
+    assert ConsolidationEliminationLink.objects.filter(consolidation_run__run_id=result.run_id).count() == 0
+
+
+@pytest.mark.django_db
 def test_phase7b_consolidation_orders_intercompany_by_effective_at_then_created_at():
     company_a, branch_a, company_b, branch_b = _mk_orgs()
     coa_a = _seed_coa(company=company_a)

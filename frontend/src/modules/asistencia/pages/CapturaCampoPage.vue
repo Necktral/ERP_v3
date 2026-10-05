@@ -611,16 +611,12 @@ async function crearJornada() {
 const reporte = ref<CaptureReport | null>(null);
 const asistencia = ref<AttendanceReportRow[]>([]);
 
-function claveSolicitud(reportId: number): string {
-  return `asistencia.captura.reporte.${reportId}.solicitud`;
-}
-
 const codigoSolicitud = ref('');
 
 function seleccionarReporte(row: CaptureReport) {
   reporte.value = row;
   asistencia.value = [];
-  codigoSolicitud.value = localStorage.getItem(claveSolicitud(row.id)) ?? '';
+  codigoSolicitud.value = row.approval_request_uuid ?? '';
   codigoAprobar.value = codigoSolicitud.value;
   void recargarEventos();
 }
@@ -755,7 +751,6 @@ async function pedirAprobacion() {
     reporte.value = res.report;
     codigoSolicitud.value = res.approval_request_id;
     codigoAprobar.value = res.approval_request_id;
-    localStorage.setItem(claveSolicitud(res.report.id), res.approval_request_id);
     $q.notify({
       type: 'positive',
       timeout: 8000,
@@ -805,6 +800,12 @@ async function construirAsistencia() {
   } finally {
     construyendo.value = false;
   }
+}
+
+function copiarCodigo() {
+  void copyToClipboard(codigoSolicitud.value).then(() =>
+    $q.notify({ type: 'positive', message: 'Código copiado.' }),
+  );
 }
 
 // ===================== carga inicial =====================

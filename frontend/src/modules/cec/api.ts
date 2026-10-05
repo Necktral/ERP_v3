@@ -3,7 +3,7 @@
  * EMPAQUETADA→ENTREGADA (o reabierta por excepción) y excepciones con resolución.
  */
 import { api } from 'src/boot/axios';
-import { PAGE, type Paginated } from 'src/core/api';
+import { collectPaginated, type PageReq, type Paginated } from 'src/core/api';
 
 export const CLOSE_RUN_STATUS_LABELS: Record<string, string> = {
   CREATED: 'Creada',
@@ -42,8 +42,10 @@ export interface CecException {
 }
 
 export async function listCloseRuns(): Promise<CloseRunRow[]> {
-  const { data } = await api.get<Paginated<CloseRunRow>>('/cec/close-runs/', { params: PAGE });
-  return data.results;
+  return collectPaginated(listCloseRunsPage);
+}
+export async function listCloseRunsPage(page: PageReq): Promise<Paginated<CloseRunRow>> {
+  return (await api.get<Paginated<CloseRunRow>>('/cec/close-runs/', { params: page })).data;
 }
 
 export async function createCloseRun(runType: 'DAILY' | 'PERIODIC'): Promise<CloseRunRow> {
@@ -79,8 +81,10 @@ export async function explainCloseRun(runId: string): Promise<Record<string, unk
 }
 
 export async function listCecExceptions(): Promise<CecException[]> {
-  const { data } = await api.get<Paginated<CecException>>('/cec/exceptions/', { params: PAGE });
-  return data.results;
+  return collectPaginated(listCecExceptionsPage);
+}
+export async function listCecExceptionsPage(page: PageReq): Promise<Paginated<CecException>> {
+  return (await api.get<Paginated<CecException>>('/cec/exceptions/', { params: page })).data;
 }
 
 export async function resolveCecException(excId: number, note: string): Promise<void> {

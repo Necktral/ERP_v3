@@ -6,6 +6,7 @@ from typing import Any, cast
 from urllib.parse import quote
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import AccessToken
@@ -252,69 +253,77 @@ def redeem_embed_token(*, token_str: str) -> dict[str, Any]:
     if not jti:
         raise DashboardAuthError("Token embed inválido (jti).")
 
-    grant = DashboardEmbedGrant.objects.select_related("user", "company", "branch").filter(jti=jti).first()
-    if grant is None:
-        raise DashboardAuthError("Embed grant no encontrado.")
+    # BUG-030: el grant es una capability de un solo uso; lockear la fila hace
+    # atómica la verificación ISSUED -> REDEEMED bajo canjes concurrentes.
+    with transaction.atomic():
+        grant = (
+            DashboardEmbedGrant.objects.select_for_update(of=("self",))
+            .select_related("user", "company", "branch")
+            .filter(jti=jti)
+            .first()
+        )
+        if grant is None:
+            raise DashboardAuthError("Embed grant no encontrado.")
 
-    now = timezone.now()
-    if grant.expires_at <= now:
-        if grant.status == DashboardEmbedGrant.Status.ISSUED:
-            grant.status = DashboardEmbedGrant.Status.EXPIRED
-            grant.save(update_fields=["status", "updated_at"])
-        raise DashboardAuthError("Embed grant expirado.")
-    if grant.status == DashboardEmbedGrant.Status.REDEEMED:
-        raise DashboardConflictError("Embed grant ya canjeado.")
-    if grant.status != DashboardEmbedGrant.Status.ISSUED:
-        raise DashboardAuthError("Embed grant no disponible.")
+        now = timezone.now()
+        if grant.expires_at <= now:
+            if grant.status == DashboardEmbedGrant.Status.ISSUED:
+                grant.status = DashboardEmbedGrant.Status.EXPIRED
+                grant.save(update_fields=["status", "updated_at"])
+            raise DashboardAuthError("Embed grant expirado.")
+        if grant.status == DashboardEmbedGrant.Status.REDEEMED:
+            raise DashboardConflictError("Embed grant ya canjeado.")
+        if grant.status != DashboardEmbedGrant.Status.ISSUED:
+            raise DashboardAuthError("Embed grant no disponible.")
 
-    claim_company = int(decoded.get("company_id") or 0)
-    claim_branch = decoded.get("branch_id")
-    claim_workspace = str(decoded.get("workspace_key") or "").strip().lower()
-    if claim_company != int(grant.company_id or 0):
-        raise DashboardAuthError("Token embed inválido (scope company).")
-    if claim_workspace != str(grant.workspace_key or "").strip().lower():
-        raise DashboardAuthError("Token embed inválido (workspace).")
-    if grant.branch_id is None and claim_branch not in (None, "", 0):
-        raise DashboardAuthError("Token embed inválido (scope branch).")
-    if grant.branch_id is not None and int(claim_branch or 0) != int(grant.branch_id):
-        raise DashboardAuthError("Token embed inválido (scope branch).")
+        claim_company = int(decoded.get("company_id") or 0)
+        claim_branch = decoded.get("branch_id")
+        claim_workspace = str(decoded.get("workspace_key") or "").strip().lower()
+        if claim_company != int(grant.company_id or 0):
+            raise DashboardAuthError("Token embed inválido (scope company).")
+        if claim_workspace != str(grant.workspace_key or "").strip().lower():
+            raise DashboardAuthError("Token embed inválido (workspace).")
+        if grant.branch_id is None and claim_branch not in (None, "", 0):
+            raise DashboardAuthError("Token embed inválido (scope branch).")
+        if grant.branch_id is not None and int(claim_branch or 0) != int(grant.branch_id):
+            raise DashboardAuthError("Token embed inválido (scope branch).")
 
-    reporting_token = AccessToken.for_user(grant.user)
-    reporting_token["purpose"] = "reporting_embed"
-    reporting_token["company_id"] = int(grant.company_id)
-    reporting_token["branch_id"] = int(grant.branch_id) if grant.branch_id is not None else None
-    reporting_token["workspace_key"] = str(grant.workspace_key)
-    reporting_token["perm_codes"] = list(grant.perm_codes_json or [])
-    reporting_token.set_exp(lifetime=timedelta(minutes=15))
-    reporting_exp = _token_exp_to_dt(reporting_token.get("exp"))
+        reporting_token = AccessToken.for_user(grant.user)
+        reporting_token["purpose"] = "reporting_embed"
+        reporting_token["company_id"] = int(grant.company_id)
+        reporting_token["branch_id"] = int(grant.branch_id) if grant.branch_id is not None else None
+        reporting_token["workspace_key"] = str(grant.workspace_key)
+        reporting_token["perm_codes"] = list(grant.perm_codes_json or [])
+        reporting_token.set_exp(lifetime=timedelta(minutes=15))
+        reporting_exp = _token_exp_to_dt(reporting_token.get("exp"))
 
-    grant.status = DashboardEmbedGrant.Status.REDEEMED
-    grant.redeemed_at = now
-    grant.save(update_fields=["status", "redeemed_at", "updated_at"])
+        grant.status = DashboardEmbedGrant.Status.REDEEMED
+        grant.redeemed_at = now
+        grant.save(update_fields=["status", "redeemed_at", "updated_at"])
 
-    emit_service_event(
-        company=grant.company,
-        branch=grant.branch,
-        module="DASHBOARD",
-        event_type="DASHBOARD_EMBED_TOKEN_REDEEMED",
-        reason_code="DASHBOARD_OK",
-        actor_user=grant.user,
-        subject_type="DASHBOARD_EMBED",
-        subject_id=str(grant.id),
-        before_snapshot={"status": DashboardEmbedGrant.Status.ISSUED},
-        after_snapshot={"status": grant.status},
-        metadata={"jti": jti, "workspace_key": str(grant.workspace_key)},
-    )
+        emit_service_event(
+            company=grant.company,
+            branch=grant.branch,
+            module="DASHBOARD",
+            event_type="DASHBOARD_EMBED_TOKEN_REDEEMED",
+            reason_code="DASHBOARD_OK",
+            actor_user=grant.user,
+            subject_type="DASHBOARD_EMBED",
+            subject_id=str(grant.id),
+            before_snapshot={"status": DashboardEmbedGrant.Status.ISSUED},
+            after_snapshot={"status": grant.status},
+            metadata={"jti": jti, "workspace_key": str(grant.workspace_key)},
+        )
 
-    spec = _get_workspace_or_raise(grant.workspace_key)
-    return {
-        "reporting_access_token": str(reporting_token),
-        "expires_at": reporting_exp.isoformat(),
-        "workspace": _workspace_to_dict(
-            spec,
-            compose_allowed=(
+        spec = _get_workspace_or_raise(grant.workspace_key)
+        return {
+            "reporting_access_token": str(reporting_token),
+            "expires_at": reporting_exp.isoformat(),
+            "workspace": _workspace_to_dict(
+                spec,
+                compose_allowed=(
                 "report.dashboard.compose" in set(grant.perm_codes_json or [])
                 or "*" in set(grant.perm_codes_json or [])
+                ),
             ),
-        ),
-    }
+        }

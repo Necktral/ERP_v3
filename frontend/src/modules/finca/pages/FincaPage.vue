@@ -55,15 +55,15 @@
         <div class="text-caption text-muted q-mb-sm">
           Cada finca es una sucursal de la empresa con su perfil agrícola (zona, manzanas, GPS).
         </div>
-        <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
         <q-table
           class="app-table"
           :rows="fincas"
           :columns="columnasFinca"
           row-key="finca_id"
           flat
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="cargando || cargandoLotes"
+          v-model:pagination="lotesPagination"
+          @request="lotesRequest"
           no-data-label="No hay fincas (creá sucursales en Organización)."
         >
           <template #body-cell-acciones="props">
@@ -275,6 +275,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatQty } from 'src/core/format';
 import {
   createLabor,
@@ -283,7 +284,7 @@ import {
   LABOR_UNIT_LABELS,
   listFincas,
   listLabors,
-  listPlots,
+  listPlotsPage,
   updateFincaProfile,
   updatePlot,
   type FincaRow,
@@ -302,7 +303,8 @@ const cargando = ref(false);
 const guardando = ref(false);
 
 const fincas = ref<FincaRow[]>([]);
-const lotes = ref<Plot[]>([]);
+const lotesListado = useListadoServer<Plot>(listPlotsPage, { rowsPerPage: 25, errorMessage: 'No se pudieron cargar los lotes.' });
+const { rows: lotes, loading: cargandoLotes, pagination: lotesPagination, onRequest: lotesRequest, reload: reloadLotes } = lotesListado;
 const labores = ref<Labor[]>([]);
 
 function puede(code: string): boolean {
@@ -357,11 +359,7 @@ async function recargar() {
       }),
     ];
     if (puede('finca.plot.read')) {
-      tareas.push(
-        listPlots().then((r) => {
-          lotes.value = r;
-        }),
-      );
+      tareas.push(reloadLotes());
     }
     if (puede('finca.labor.read')) {
       tareas.push(

@@ -76,8 +76,9 @@
           row-key="error_id"
           flat
           dense
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="erroresListado.loading.value"
+          v-model:pagination="erroresListado.pagination.value"
+          @request="erroresListado.onRequest"
           no-data-label="Sin errores con esos filtros. Excelente."
         >
           <template #body-cell-riesgo="props">
@@ -127,8 +128,9 @@
           row-key="finding_id"
           flat
           dense
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="hallazgosListado.loading.value"
+          v-model:pagination="hallazgosListado.pagination.value"
+          @request="hallazgosListado.onRequest"
           no-data-label="Sin hallazgos de seguridad."
         >
           <template #body-cell-acciones="props">
@@ -155,8 +157,9 @@
           row-key="run_id"
           flat
           dense
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="diagnosticosListado.loading.value"
+          v-model:pagination="diagnosticosListado.pagination.value"
+          @request="diagnosticosListado.onRequest"
           no-data-label="Sin diagnósticos. Genera uno con «Diagnosticar» en un error."
         >
           <template #body-cell-riesgo="props">
@@ -186,8 +189,9 @@
           row-key="path"
           flat
           dense
-          :loading="cargando"
-          :pagination="{ rowsPerPage: 25 }"
+          :loading="coberturaListado.loading.value"
+          v-model:pagination="coberturaListado.pagination.value"
+          @request="coberturaListado.onRequest"
           no-data-label="Sin evidencia de cobertura registrada."
         >
           <template #body-cell-cobertura="props">
@@ -257,6 +261,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDateTime } from 'src/core/format';
 import {
   aiAnalyzeDiagnosis,
@@ -267,10 +272,10 @@ import {
   getAiControl,
   getDiagnosis,
   getReleaseReadiness,
-  listCodeEvidence,
-  listDiagnoses,
-  listErrors,
-  listSecurityFindings,
+  listCodeEvidencePage,
+  listDiagnosesPage,
+  listErrorsPage,
+  listSecurityFindingsPage,
   RISK_LABELS,
   setAiControl,
   triageError,
@@ -288,15 +293,40 @@ const acl = useAclStore();
 const ctx = useContextStore();
 
 const tab = ref('errores');
-const cargando = ref(false);
 const filtroRiesgo = ref<string | null>(null);
 const filtroEstado = ref<string | null>(null);
-const errores = ref<ErrorEventRow[]>([]);
-const hallazgos = ref<SecurityFindingRow[]>([]);
 const readiness = ref<Record<string, unknown> | null>(null);
 const iaEncendida = ref(false);
-const diagnosticos = ref<DiagnosisRow[]>([]);
-const cobertura = ref<CodeEvidenceRow[]>([]);
+
+const erroresListado = useListadoServer(
+  (page) => listErrorsPage(page, {
+    ...(filtroRiesgo.value ? { risk_class: filtroRiesgo.value } : {}),
+    ...(filtroEstado.value ? { status: filtroEstado.value } : {}),
+  }),
+  { auto: false, errorMessage: 'No se pudieron cargar los errores.' },
+);
+const hallazgosListado = useListadoServer(listSecurityFindingsPage, {
+  auto: false,
+  errorMessage: 'No se pudieron cargar los hallazgos de seguridad.',
+});
+const diagnosticosListado = useListadoServer(
+  (page) => listDiagnosesPage(page, filtroRiesgo.value ? { risk_class: filtroRiesgo.value } : {}),
+  { auto: false, errorMessage: 'No se pudieron cargar los diagnósticos.' },
+);
+const coberturaListado = useListadoServer(listCodeEvidencePage, {
+  auto: false,
+  errorMessage: 'No se pudo cargar la evidencia de cobertura.',
+});
+const errores = erroresListado.rows;
+const hallazgos = hallazgosListado.rows;
+const diagnosticos = diagnosticosListado.rows;
+const cobertura = coberturaListado.rows;
+const cargandoAuxiliar = ref(false);
+const cargando = computed(() => cargandoAuxiliar.value
+  || erroresListado.loading.value
+  || hallazgosListado.loading.value
+  || diagnosticosListado.loading.value
+  || coberturaListado.loading.value);
 
 function puede(code: string): boolean {
   const companyId = ctx.activeCompanyId;
@@ -377,15 +407,10 @@ function pretty(v: unknown): string {
 }
 
 async function recargar() {
-  cargando.value = true;
+  cargandoAuxiliar.value = true;
   try {
     const tareas: Promise<void>[] = [
-      listErrors({
-        ...(filtroRiesgo.value ? { risk_class: filtroRiesgo.value } : {}),
-        ...(filtroEstado.value ? { status: filtroEstado.value } : {}),
-      }).then((r) => {
-        errores.value = r;
-      }),
+      erroresListado.reload(),
       getReleaseReadiness()
         .then((r) => {
           readiness.value = r;
@@ -396,9 +421,7 @@ async function recargar() {
     ];
     if (puede('diagnostics.finding.read')) {
       tareas.push(
-        listSecurityFindings().then((r) => {
-          hallazgos.value = r;
-        }),
+        hallazgosListado.reload(),
       );
     }
     if (puede('diagnostics.ai_control.read')) {
@@ -412,25 +435,15 @@ async function recargar() {
     }
     if (puede('diagnostics.diagnose.read')) {
       tareas.push(
-        listDiagnoses(filtroRiesgo.value ? { risk_class: filtroRiesgo.value } : {})
-          .then((r) => {
-            diagnosticos.value = r;
-          })
-          .catch(() => undefined),
+        diagnosticosListado.reload(),
       );
     }
-    tareas.push(
-      listCodeEvidence()
-        .then((r) => {
-          cobertura.value = r;
-        })
-        .catch(() => undefined),
-    );
+    tareas.push(coberturaListado.reload());
     await Promise.all(tareas);
   } catch (e) {
     $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar el diagnóstico.') });
   } finally {
-    cargando.value = false;
+    cargandoAuxiliar.value = false;
   }
 }
 
@@ -457,11 +470,7 @@ async function diagnosticar(err: ErrorEventRow) {
     const r = await diagnoseError(err.error_id);
     textoDiag.value = JSON.stringify(r, null, 2);
     if (puede('diagnostics.diagnose.read')) {
-      listDiagnoses(filtroRiesgo.value ? { risk_class: filtroRiesgo.value } : {})
-        .then((rows) => {
-          diagnosticos.value = rows;
-        })
-        .catch(() => undefined);
+      void diagnosticosListado.reload();
     }
   } catch (e) {
     textoDiag.value = apiErrorMessage(e, 'No se pudo diagnosticar.');

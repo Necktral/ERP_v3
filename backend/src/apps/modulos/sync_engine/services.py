@@ -423,7 +423,11 @@ def process_command(
             details={"error": str(e)},
         )
 
+    # Los comandos toy nunca quedan alcanzables por accidente en producción. El
+    # handler sigue registrado para pruebas/dev, pero el dispatch falla cerrado.
     handler = get_handler(command_type)
+    if command_type == "DEMO_PING" and not bool(getattr(settings, "SYNC_DEMO_COMMANDS_ENABLED", False)):
+        handler = None
     if handler is None:
         return _reject_with_db(
             request=request,

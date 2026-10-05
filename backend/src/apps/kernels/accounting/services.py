@@ -30,6 +30,7 @@ from apps.kernels.facturacion.models import BillingDocument
 
 from .audit_helpers import write_accounting_audit_event as _write_accounting_audit_event
 from .models import (
+    CompanyAccountingConfig,
     DraftValidationResult,
     EconomicEvent,
     ExceptionLink,
@@ -2264,7 +2265,7 @@ def post_journal_drafts(
     # Config contable por empresa cacheada durante el run (antes: get_or_create
     # por draft). El período NO se cachea: su check de CLOSED debe leerse fresco
     # por draft (cada draft postea en su propia transacción).
-    cfg_by_company: dict[int, object] = {}
+    cfg_by_company: dict[int, CompanyAccountingConfig] = {}
 
     for row in rows:
         attempted += 1
@@ -3129,7 +3130,9 @@ def reconcile_operational_vs_accounting(
     }
     drafts_by_event = {
         row.economic_event_id: row
-        for row in JournalDraft.objects.select_related("economic_event").filter(economic_event_id__in=[ev.id for ev in economic_by_outbox.values()])
+        for row in JournalDraft.objects.select_related("economic_event", "journal_entry").filter(
+            economic_event_id__in=[ev.id for ev in economic_by_outbox.values()]
+        )
     }
 
     def _operational_amount(ev: OutboxEvent) -> Decimal:

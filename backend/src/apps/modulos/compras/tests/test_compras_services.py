@@ -4,12 +4,15 @@ DRAFT → POSTED → VOIDED, asignación de número por secuencia, idempotencia.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import uuid
 from decimal import Decimal
+from threading import Barrier
 from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import close_old_connections, connections
 
 from apps.modulos.compras.models import (
     PurchaseDocStatus,
@@ -124,6 +127,32 @@ def test_post_assigns_sequential_number():
     # Secuencia avanzó
     seq = PurchaseSequence.objects.get(company=company, branch=branch, doc_type="SUPPLIER_INVOICE", series="P")
     assert seq.next_number == 3
+
+
+@pytest.mark.django_db(transaction=True)
+def test_purchase_document_numbers_are_unique_under_concurrent_posting():
+    """U17: dos documentos posteados juntos consumen numeros distintos."""
+    company, branch = _mk_scope()
+    actor = _actor()
+    drafts = [_mk_draft(company, branch, actor) for _ in range(2)]
+    req = _request(company, branch, actor)
+    barrier = Barrier(2)
+
+    def post(draft):
+        close_old_connections()
+        barrier.wait(timeout=10)
+        result = post_purchase_document(request=req, actor=actor, doc_id=draft.doc_id)
+        close_old_connections()
+        return result
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(post, drafts))
+    finally:
+        connections.close_all()
+
+    assert {result["number"] for result in results} == {1, 2}
+    assert PurchaseDocument.objects.filter(company=company, status=PurchaseDocStatus.POSTED).count() == 2
 
 
 @pytest.mark.django_db

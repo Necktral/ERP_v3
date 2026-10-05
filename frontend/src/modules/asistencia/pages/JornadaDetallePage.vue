@@ -155,11 +155,7 @@
             <q-card flat bordered>
               <q-card-section class="text-subtitle1">Cuadrillas de la jornada</q-card-section>
               <q-card-section v-if="cuadrillas.length === 0" class="text-grey-7">
-                Aún no hay cuadrillas registradas en este dispositivo.
-                <div class="text-caption q-mt-xs">
-                  El backend no lista las cuadrillas del día: se recuerdan las creadas aquí. Si una
-                  cuadrilla se creó en otro equipo, agregala por su número con “Registrar existente”.
-                </div>
+                Aún no hay cuadrillas registradas en esta jornada.
               </q-card-section>
               <q-list v-else separator>
                 <q-item v-for="c in cuadrillas" :key="c.id">
@@ -181,16 +177,6 @@
                   </q-item-section>
                 </q-item>
               </q-list>
-              <q-card-actions>
-                <q-btn
-                  dense
-                  flat
-                  no-caps
-                  icon="playlist_add"
-                  label="Registrar existente"
-                  @click="registrarCuadrillaExistente"
-                />
-              </q-card-actions>
             </q-card>
           </div>
         </div>
@@ -401,6 +387,9 @@ import {
   FIELD_EVENT_LABELS,
   FIELD_EVENTS_CON_DETALLE,
   getFieldWorkDay,
+  getFieldRollcall,
+  listFieldApprovalRequests,
+  listFieldCrews,
   listFieldConsolidations,
   recordFieldEvent,
   requestFieldApproval,
@@ -408,6 +397,7 @@ import {
   transferFieldWorker,
   WORK_DAY_STATUS_LABELS,
   type FieldConsolidationRow,
+  type FieldCrew,
   type FieldEventType,
   type FieldWorkDay,
   type RollcallLineStatus,
@@ -455,7 +445,24 @@ async function cargar() {
   loading.value = true;
   try {
     jornada.value = await getFieldWorkDay(workDayId);
-    await cargarConsolidaciones();
+    const [rollcall, crews, approvals] = await Promise.all([
+      getFieldRollcall(workDayId),
+      listFieldCrews(workDayId),
+      listFieldApprovalRequests({ workDayId }),
+      cargarConsolidaciones(),
+    ]);
+    cuadrillas.value = crews;
+    codigoAprobacion.value = approvals[0]?.request_id ?? '';
+    if (rollcall) {
+      notasLista.value = rollcall.notes;
+      const byEmployee = new Map(rollcall.lines.map((line) => [line.employee_id, line]));
+      lineasLista.value = lineasLista.value.map((line) => {
+        const persisted = byEmployee.get(line.employee_id);
+        return persisted
+          ? { ...line, status: persisted.status ?? 'UNKNOWN', absence_reason: persisted.absence_reason ?? '' }
+          : line;
+      });
+    }
   } catch (e) {
     $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo cargar la jornada.') });
   } finally {
@@ -486,7 +493,7 @@ async function cargarEmpleados() {
     lineasLista.value = opcionesEmpleados.value.map((o) => ({
       employee_id: o.value,
       nombre: o.label,
-      status: 'UNKNOWN' as RollcallLineStatus,
+      status: 'UNKNOWN',
       absence_reason: '',
     }));
   } catch {
@@ -541,30 +548,11 @@ async function enviarPaseDeLista() {
   }
 }
 
-// --- cuadrillas (el backend no las lista: se recuerdan por dispositivo) ---
-interface CuadrillaLocal {
-  id: number;
-  name: string;
-  supervisor_employee_id: number;
-}
-
-const claveCuadrillas = `asistencia.campo.jornada.${workDayId}.cuadrillas`;
-const cuadrillas = ref<CuadrillaLocal[]>(leerCuadrillas());
+// --- cuadrillas persistidas de la jornada ---
+const cuadrillas = ref<FieldCrew[]>([]);
 const nombreCuadrilla = ref('');
 const capatazCuadrilla = ref<number | null>(null);
 const creandoCuadrilla = ref(false);
-
-function leerCuadrillas(): CuadrillaLocal[] {
-  try {
-    return JSON.parse(localStorage.getItem(claveCuadrillas) ?? '[]') as CuadrillaLocal[];
-  } catch {
-    return [];
-  }
-}
-
-function guardarCuadrillas() {
-  localStorage.setItem(claveCuadrillas, JSON.stringify(cuadrillas.value));
-}
 
 const opcionesCuadrilla = computed(() =>
   cuadrillas.value.map((c) => ({ label: `#${c.id} — ${c.name}`, value: c.id })),
@@ -578,41 +566,15 @@ async function crearCuadrilla() {
       name: nombreCuadrilla.value.trim(),
       supervisor_employee_id: capatazCuadrilla.value,
     });
-    cuadrillas.value.push({
-      id: creada.id,
-      name: creada.name,
-      supervisor_employee_id: creada.supervisor_employee_id,
-    });
-    guardarCuadrillas();
+    await cargar();
     nombreCuadrilla.value = '';
     capatazCuadrilla.value = null;
     $q.notify({ type: 'positive', message: `Cuadrilla #${creada.id} creada.` });
-    await cargar(); // el estado del día pasa a "Reportes pendientes"
   } catch (e) {
     $q.notify({ type: 'negative', message: apiErrorMessage(e, 'No se pudo crear la cuadrilla.') });
   } finally {
     creandoCuadrilla.value = false;
   }
-}
-
-function registrarCuadrillaExistente() {
-  $q.dialog({
-    title: 'Registrar cuadrilla existente',
-    message: 'Número de la cuadrilla (creada en otro equipo) y nombre para reconocerla:',
-    prompt: { model: '', type: 'text', placeholder: 'ej: 12, Cuadrilla El Cerro' },
-    ok: { label: 'Registrar', color: 'primary', noCaps: true, unelevated: true },
-    cancel: { label: 'Cancelar', flat: true, noCaps: true },
-  }).onOk((valor: string) => {
-    const [idStr, ...resto] = String(valor).split(',');
-    const id = Number((idStr ?? '').trim());
-    if (!Number.isInteger(id) || id <= 0) {
-      $q.notify({ type: 'warning', message: 'Número de cuadrilla inválido.' });
-      return;
-    }
-    if (cuadrillas.value.some((c) => c.id === id)) return;
-    cuadrillas.value.push({ id, name: resto.join(',').trim() || `Cuadrilla ${id}`, supervisor_employee_id: 0 });
-    guardarCuadrillas();
-  });
 }
 
 // --- eventos individuales ---
@@ -808,7 +770,8 @@ function copiarCodigo() {
 }
 
 onMounted(async () => {
-  await Promise.all([cargar(), cargarEmpleados()]);
+  await cargarEmpleados();
+  await cargar();
 });
 </script>
 

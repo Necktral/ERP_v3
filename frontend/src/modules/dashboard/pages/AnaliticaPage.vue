@@ -441,7 +441,7 @@ onMounted(async () => {
 }
 
 .rep-title {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   font-size: 1.02rem;
   color: var(--app-text);
@@ -473,7 +473,7 @@ onMounted(async () => {
 }
 
 .kpi-value {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   font-size: 1.15rem;
   color: var(--app-text);

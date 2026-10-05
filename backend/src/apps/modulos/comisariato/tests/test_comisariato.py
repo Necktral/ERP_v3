@@ -298,3 +298,39 @@ def test_sale_endpoint_and_account_detail_http():
     assert r2.status_code == 200, r2.data
     assert r2.data["available"] == "900.00"
     assert r2.data["outstanding"] == "100.00"
+
+
+# ---------------------------------------------------------------------------
+# BUG-C1: collecting_company cross-company requiere relación CXC declarada
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_collecting_company_sin_relacion_cxc_rechazada():
+    from apps.modulos.comisariato.services import ComisariatoError, get_or_create_account
+    from apps.modulos.org.models import IntercompanyRelationship
+
+    _h, comis, comis_br = _scope()
+    actor = _user()
+    req = _req(comis, comis_br, actor)
+    party = _party(comis)
+    # Una finca de OTRO holding/empresa, sin relación declarada con el comisariato.
+    finca = OrgUnit.objects.create(unit_type=UT.COMPANY, parent=_h, name="Finca X", code=f"FX-{uuid.uuid4().hex[:5]}")
+
+    with pytest.raises(ComisariatoError, match="SIN_RELACION_CXC"):
+        get_or_create_account(
+            request=req, actor=actor, company=comis, party=party,
+            segment=CustomerSegment.EMPLOYEE, credit_limit=Decimal("1000"),
+            collecting_company=finca,
+        )
+
+    # Declarada la relación CXC → ahora sí se permite.
+    IntercompanyRelationship.objects.create(
+        company_a=finca, company_b=comis,
+        relationship_type=IntercompanyRelationship.RelationshipType.CXC, is_active=True,
+    )
+    account = get_or_create_account(
+        request=req, actor=actor, company=comis, party=party,
+        segment=CustomerSegment.EMPLOYEE, credit_limit=Decimal("1000"),
+        collecting_company=finca,
+    )
+    assert account.collecting_company_id == finca.id

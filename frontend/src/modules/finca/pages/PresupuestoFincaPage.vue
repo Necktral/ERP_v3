@@ -84,11 +84,11 @@
             <tbody>
               <tr v-for="(ln, i) in lineas" :key="i">
                 <td><q-select v-model="ln.labor_id" :options="laborOpts" outlined dense emit-value map-options /></td>
-                <td><q-select v-model="ln.plot_id" :options="plotOpts" outlined dense emit-value map-options /></td>
+                <td><q-select v-model="ln.plot_id" :options="plotOpts" outlined dense emit-value map-options use-input input-debounce="250" @filter="filtrarLotes" /></td>
                 <td><q-input v-model="ln.planned_jornales" outlined dense type="number" /></td>
                 <td><q-input v-model="ln.planned_rate" outlined dense type="number" /></td>
                 <td><q-input v-model="ln.planned_insumos_amount" outlined dense type="number" /></td>
-                <td><q-btn flat dense round icon="close" size="sm" @click="lineas.splice(i, 1)" /></td>
+                <td><q-btn flat dense round icon="close" size="sm" aria-label="Eliminar línea del presupuesto" @click="lineas.splice(i, 1)" /></td>
               </tr>
             </tbody>
           </q-markup-table>
@@ -158,7 +158,7 @@ import {
   listFincaBudgets,
   listFincas,
   listLabors,
-  listPlots,
+  listPlotsPage,
   setFincaBudgetLines,
   type FincaBudgetRow,
   type FincaBudgetVsActual,
@@ -224,6 +224,12 @@ async function cargarCatalogos() {
 }
 
 const sel = ref<FincaBudgetRow | null>(null);
+async function filtrarLotes(input: string, update: (fn: () => void) => void) {
+  const page = await listPlotsPage({ limit: 25, offset: 0 }, sel.value?.finca_id, input.trim());
+  update(() => {
+    plotOpts.value = page.results.map((p) => ({ value: p.id, label: `${p.code}${p.name ? ' — ' + p.name : ''}` }));
+  });
+}
 
 const dlgNuevo = ref(false);
 const formNew = reactive<{ finca_id: number | null; season_label: string; name: string }>({ finca_id: null, season_label: '', name: '' });
@@ -252,7 +258,7 @@ async function abrirLineas(b: FincaBudgetRow) {
   lineas.value = [];
   dlgLineas.value = true;
   try {
-    plotOpts.value = (await listPlots(b.finca_id)).map((p) => ({ value: p.id, label: `${p.code}${p.name ? ' — ' + p.name : ''}` }));
+    await filtrarLotes('', (callback) => callback());
     const full = await getFincaBudget(b.id);
     lineas.value = full.lines.map((ln) => ({
       labor_id: ln.labor_id,

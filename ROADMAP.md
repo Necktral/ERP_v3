@@ -60,6 +60,15 @@ El resto (fleet, beneficio, estación de servicios, financiamiento, etc.) queda 
 
 ---
 
+### Paso 2 — Contabilidad base · DOING (preflight 2026-08-08)
+
+- **B1 aprobado:** `Contador → Contabilidad` está cableado a `/contabilidad`; desde el panel se accede a `/contabilidad/plan-cuentas`, `/contabilidad/monedas` y `/contabilidad/periodos`.
+- **Módulo y permisos:** `accounting` está habilitado como módulo core. El usuario `admin` del demo es superusuario y puede leer/editar CoA, registrar FX y leer períodos.
+- **Entorno:** frontend y health de accounting responden HTTP 200. Estado inicial de la empresa **Comisariato Santa Isabel**: 0 cuentas, 0 tasas y 0 períodos.
+- **B2–B4:** guión manual entregado a Wis; monitor de DB activo durante la prueba. Pendiente registrar observaciones de UX y verificar por API/DB los datos creados.
+
+---
+
 ## Auditoría profunda (escaneo de bugs) — documentada, pendiente de ejecutar
 
 Se **diseñó** una auditoría profunda de todo el repo (30 unidades + 5 lentes transversales, con

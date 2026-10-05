@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -11,7 +12,7 @@ from apps.modulos.common.permissions import rbac_permission
 
 from .models import InboxEvent, OutboxEvent
 from .serializers import InboxAckIn, OutboxMarkSentIn
-from .services import mark_outbox_event_sent
+from .services import OutboxRecoveryConflict, mark_outbox_event_sent, requeue_outbox_event
 
 
 class HealthView(APIView):
@@ -32,7 +33,7 @@ class OutboxListView(APIView):
         if company is not None:
             qs = qs.filter(company=company)
         if branch is not None:
-            qs = qs.filter(branch=branch)
+            qs = qs.filter(Q(branch=branch) | Q(branch__isnull=True))
 
         status_filter = request.query_params.get("status")
         module_filter = request.query_params.get("source_module")
@@ -92,11 +93,47 @@ class OutboxMarkSentView(APIView):
         )
 
 
+class OutboxRetryView(APIView):
+    permission_classes = [rbac_permission("integration.outbox.retry")]
+
+    def post(self, request, event_id):
+        try:
+            ev = requeue_outbox_event(
+                event_id=event_id,
+                company=request.company,
+                branch=getattr(request, "branch", None),
+                actor_user=request.user,
+                request=request,
+            )
+        except OutboxEvent.DoesNotExist:
+            return Response({"detail": "No encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        except OutboxRecoveryConflict as exc:
+            return Response(
+                {"code": "OUTBOX_ALREADY_SENT", "detail": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(
+            {
+                "ok": True,
+                "event_id": str(ev.event_id),
+                "status": ev.status,
+                "attempt_count": ev.attempt_count,
+                "last_error": ev.last_error,
+                "next_attempt_at": ev.next_attempt_at,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class InboxListView(APIView):
     permission_classes = [rbac_permission("integration.inbox.read")]
 
     def get(self, request):
-        qs = InboxEvent.objects.all().order_by("-received_at", "-id")
+        company = request.company
+        branch = getattr(request, "branch", None)
+        qs = InboxEvent.objects.filter(company=company).order_by("-received_at", "-id")
+        if branch is not None:
+            qs = qs.filter(branch=branch)
         consumer = request.query_params.get("consumer")
         st = request.query_params.get("status")
         if consumer:
@@ -130,7 +167,11 @@ class InboxAckView(APIView):
     permission_classes = [rbac_permission("integration.inbox.process")]
 
     def post(self, request, inbox_id: int):
-        ev = get_object_or_404(InboxEvent, id=inbox_id)
+        qs = InboxEvent.objects.filter(company=request.company)
+        branch = getattr(request, "branch", None)
+        if branch is not None:
+            qs = qs.filter(branch=branch)
+        ev = get_object_or_404(qs, id=inbox_id)
         s = InboxAckIn(data=request.data)
         s.is_valid(raise_exception=True)
         v = s.validated_data

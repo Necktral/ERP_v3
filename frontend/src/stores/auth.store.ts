@@ -98,7 +98,7 @@ export const useAuthStore = defineStore('auth', {
       }
 
       // App nativa: el login responde {access, refresh} (modo header) → persistir en el dispositivo.
-      this.persistTokensFromResponse(data);
+      await this.persistTokensFromResponse(data);
       this.status = 'authenticated';
 
       // Fetch user details immediately to check flags
@@ -109,7 +109,7 @@ export const useAuthStore = defineStore('auth', {
       const challenge = this.twoFactor.challenge;
       if (!challenge) throw new Error('2FA challenge missing');
       const { data } = await authApi.post('/auth/2fa/verify/', { challenge, code });
-      this.persistTokensFromResponse(data);
+      await this.persistTokensFromResponse(data);
       this.status = 'authenticated';
       this.twoFactor.required = false;
       this.twoFactor.challenge = null;
@@ -117,11 +117,12 @@ export const useAuthStore = defineStore('auth', {
     },
 
     /** En la app nativa guarda los tokens del body; en web es no-op (auth por cookie, sin tokens). */
-    persistTokensFromResponse(data: unknown) {
+    async persistTokensFromResponse(data: unknown) {
       if (!isNativeApp()) return;
       if (data && typeof data === 'object' && 'access' in data) {
         const d = data as { access?: string; refresh?: string };
-        writeTokens(d.access ?? null, d.refresh ?? null);
+        const current = readTokens();
+        await writeTokens(d.access ?? current.access, d.refresh ?? current.refresh);
       }
     },
 
@@ -173,7 +174,7 @@ export const useAuthStore = defineStore('auth', {
             const { refresh } = readTokens();
             if (!refresh) throw new Error('Sin refresh token local');
             const { data } = await authApi.post('/auth/refresh/', { refresh });
-            this.persistTokensFromResponse(data);
+            await this.persistTokensFromResponse(data);
           } else {
             await authApi.post('/auth/refresh/', {});
           }
@@ -208,7 +209,9 @@ export const useAuthStore = defineStore('auth', {
       this.user = null;
       this.twoFactor.required = false;
       this.twoFactor.challenge = null;
-      clearTokens();
+      void clearTokens().catch((error) =>
+        console.error('[auth] No se pudo limpiar el almacenamiento seguro.', error),
+      );
 
       acl.clearAcl();
       ctx.clear();

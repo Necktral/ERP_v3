@@ -15,6 +15,7 @@ export interface AuditEventRow {
   ip_server_seen: string;
   offline_mode: boolean;
   path: string;
+  subject_id?: string | number | null;
   [k: string]: unknown;
 }
 

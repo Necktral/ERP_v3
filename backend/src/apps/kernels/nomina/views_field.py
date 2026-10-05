@@ -183,9 +183,35 @@ class FieldWorkDayDetailView(APIView):
 # ---------------------------------------------------------------------------
 
 class FieldRollCallView(APIView):
-    """POST → pase de lista inicial del día"""
+    """GET → pase persistido; POST → pase de lista inicial del día."""
 
-    permission_classes = [rbac_permission("nomina.field.capture")]
+    def get_permissions(self):
+        permission = "nomina.field.capture" if self.request.method == "POST" else "nomina.field.read"
+        return [rbac_permission(permission)()]
+
+    def get(self, request, work_day_id):
+        work_day = _work_day(request.company, work_day_id)
+        rollcall = getattr(work_day, "rollcall", None)
+        if rollcall is None:
+            return Response(None, status=status.HTTP_200_OK)
+        lines = rollcall.lines.select_related("employee").order_by("employee_id", "id")
+        return Response({
+            "id": rollcall.id,
+            "work_day_id": work_day.id,
+            "submitted_by_id": rollcall.submitted_by_id,
+            "submitted_at": rollcall.submitted_at,
+            "notes": rollcall.notes,
+            "lines": [
+                {
+                    "id": line.id,
+                    "employee_id": line.employee_id,
+                    "status": line.status,
+                    "absence_reason": line.absence_reason,
+                    "note": line.note,
+                }
+                for line in lines
+            ],
+        })
 
     def post(self, request, work_day_id):
         company: OrgUnit = request.company
@@ -214,9 +240,27 @@ class FieldRollCallView(APIView):
 
 
 class FieldCrewView(APIView):
-    """POST → crear cuadrilla del día"""
+    """GET → cuadrillas persistidas; POST → crear cuadrilla del día."""
 
-    permission_classes = [rbac_permission("nomina.field.capture")]
+    def get_permissions(self):
+        permission = "nomina.field.capture" if self.request.method == "POST" else "nomina.field.read"
+        return [rbac_permission(permission)()]
+
+    def get(self, request, work_day_id):
+        work_day = _work_day(request.company, work_day_id)
+        crews = work_day.crews.select_related("supervisor_employee").order_by("id")
+        return Response({
+            "results": [
+                {
+                    "id": crew.id,
+                    "name": crew.name,
+                    "work_day_id": work_day.id,
+                    "supervisor_employee_id": crew.supervisor_employee_id,
+                    "is_active": crew.is_active,
+                }
+                for crew in crews
+            ]
+        })
 
     def post(self, request, work_day_id):
         company: OrgUnit = request.company
@@ -366,9 +410,39 @@ class FieldConsolidateView(APIView):
 
 
 class FieldApprovalRequestView(APIView):
-    """POST → maker: solicita la aprobación de la consolidación del día (SoD)."""
+    """GET → solicitudes persistidas; POST → solicita aprobación SoD."""
 
-    permission_classes = [rbac_permission("nomina.field.approve.request")]
+    def get_permissions(self):
+        permission = "nomina.field.approve.request" if self.request.method == "POST" else "nomina.field.read"
+        return [rbac_permission(permission)()]
+
+    def get(self, request, work_day_id=None):
+        qs = ApprovalRequest.objects.filter(
+            company=request.company,
+            action_type=FIELD_ATTENDANCE_APPROVE_ACTION,
+        ).select_related("requested_by", "decided_by")
+        if work_day_id is not None:
+            work_day = _work_day(request.company, work_day_id)
+            qs = qs.filter(subject_id=str(work_day.id))
+        request_status = request.query_params.get("status")
+        if request_status:
+            qs = qs.filter(status=request_status)
+        qs = qs.order_by("-created_at", "-id")
+        return Response({
+            "results": [
+                {
+                    "request_id": str(approval.request_id),
+                    "work_day_id": int(approval.subject_id),
+                    "status": approval.status,
+                    "requested_by_id": approval.requested_by_id,
+                    "reason": approval.reason,
+                    "requested_at": approval.created_at,
+                    "decided_by_id": approval.decided_by_id,
+                    "decided_at": approval.decided_at,
+                }
+                for approval in qs
+            ]
+        })
 
     def post(self, request, work_day_id):
         company: OrgUnit = request.company

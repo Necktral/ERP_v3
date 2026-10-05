@@ -83,8 +83,8 @@ def test_create_run_is_deterministic_without_ai():
 
 @pytest.mark.django_db
 def test_diagnose_api_creates_run():
-    e = _err()
     company, branch = mk_scope()
+    e = _err(company=company, branch=branch)
     client = mk_client(company=company, branch=branch, perm_codes=["diagnostics.diagnose.run"])
     r = client.post(f"/api/diagnostics/errors/{e.error_id}/diagnose/")
     assert r.status_code == 201, r.data
@@ -103,8 +103,8 @@ def test_diagnose_api_requires_permission():
 
 @pytest.mark.django_db
 def test_diagnoses_list_with_permission():
-    create_diagnostic_run(error=_err())
     company, branch = mk_scope()
+    create_diagnostic_run(error=_err(company=company, branch=branch))
     client = mk_client(company=company, branch=branch, perm_codes=["diagnostics.diagnose.read"])
     r = client.get("/api/diagnostics/diagnoses/")
     assert r.status_code == 200, r.data

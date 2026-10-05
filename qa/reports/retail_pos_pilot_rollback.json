@@ -1,13 +1,19 @@
 {
   "status": "passed",
   "failure_stage": null,
-  "timestamp": "2026-03-26T23:30:04Z",
+  "timestamp": "2026-08-18T19:47:52Z",
   "checks": [
     {
       "name": "login",
       "status": "passed",
       "http_status": 200,
       "detail": "JWT issued"
+    },
+    {
+      "name": "kill_switch_revoked_device",
+      "status": "passed",
+      "http_status": 403,
+      "detail": "Revoked terminal blocked before POS handling"
     },
     {
       "name": "open_shift",

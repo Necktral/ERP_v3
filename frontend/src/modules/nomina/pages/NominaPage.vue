@@ -92,7 +92,7 @@
             <q-input v-model="b.max_income_str" outlined dense type="number" label="Hasta (vacío = sin tope)" />
             <q-input v-model="b.base_tax" outlined dense type="number" label="Impuesto base" />
             <q-input v-model="b.rate" outlined dense type="number" step="0.0001" label="Tasa (0–1)" />
-            <q-btn flat dense round size="sm" icon="close" @click="irEdit.splice(i, 1)" />
+            <q-btn flat dense round size="sm" icon="close" aria-label="Eliminar regla de ingreso" @click="irEdit.splice(i, 1)" />
           </div>
           <q-btn flat dense no-caps size="sm" icon="add" label="Agregar tramo" @click="agregarTramo" />
         </q-card-section>
@@ -169,6 +169,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from 'src/core/api';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar, type QTableColumn } from 'quasar';
@@ -405,10 +406,9 @@ async function doCreatePeriod() {
     $q.notify({ type: 'positive', message: 'Período creado.' });
     await router.push(`/nomina/periodos/${created.id}`);
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } };
     $q.notify({
       type: 'negative',
-      message: err.response?.data?.detail || 'No se pudo crear el período (¿ya existe ese mes/tipo?).',
+      message: apiErrorMessage(e, 'No se pudo crear el período (¿ya existe ese mes/tipo?).'),
     });
   } finally {
     saving.value = false;

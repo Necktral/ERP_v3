@@ -119,12 +119,17 @@ export interface CreditAccountSummary {
 }
 
 /** Cuenta de crédito del cliente (404 = no tiene → solo contado). */
+export function isCreditAccountNotFound(error: unknown): boolean {
+  return (error as { response?: { status?: number } }).response?.status === 404;
+}
+
 export async function getCreditAccount(partyId: number): Promise<CreditAccountSummary | null> {
   try {
     const { data } = await api.get<CreditAccountSummary>(`/sales/credit-account/${partyId}/`);
     return data;
-  } catch {
-    return null;
+  } catch (error) {
+    if (isCreditAccountNotFound(error)) return null;
+    throw error;
   }
 }
 

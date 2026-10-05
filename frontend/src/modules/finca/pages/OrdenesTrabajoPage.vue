@@ -35,7 +35,6 @@
       />
     </div>
 
-    <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
     <q-table
       class="app-table"
       :rows="rows"
@@ -43,7 +42,8 @@
       row-key="id"
       flat
       :loading="loading"
-      :pagination="{ rowsPerPage: 25 }"
+      v-model:pagination="pagination"
+      @request="onRequest"
       no-data-label="Sin órdenes de trabajo."
     >
       <template #body-cell-lote="props">
@@ -107,6 +107,9 @@
             dense
             emit-value
             map-options
+            use-input
+            input-debounce="250"
+            @filter="filtrarLotes"
           />
           <q-select
             v-model="form.labor_id"
@@ -204,15 +207,15 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import { apiErrorMessage } from 'src/core/api';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatQty } from 'src/core/format';
 import {
   addInsumoManual,
   createWorkOrder,
   issueInsumoFromStock,
   listLabors,
-  listPlots,
-  listWorkOrders,
+  listPlotsPage,
+  listWorkOrdersPage,
   updateWorkOrder,
   WORK_ORDER_STATUS_LABELS,
   type Labor,
@@ -220,7 +223,7 @@ import {
   type WorkOrder,
 } from 'src/modules/finca/api';
 import {
-  listItems,
+  listItemsPage,
   listWarehouses,
   type InventoryItem,
   type Warehouse,
@@ -234,8 +237,8 @@ const ctx = useContextStore();
 
 const filtroEstado = ref<string | null>(null);
 
-const { rows, loading, reload } = useListado<WorkOrder>(
-  () => listWorkOrders({ ...(filtroEstado.value ? { status: filtroEstado.value } : {}) }),
+const { rows, loading, pagination, onRequest, reload } = useListadoServer<WorkOrder>(
+  (page) => listWorkOrdersPage(page, { ...(filtroEstado.value ? { status: filtroEstado.value } : {}) }),
   { errorMessage: 'No se pudieron cargar las órdenes.' },
 );
 
@@ -263,19 +266,21 @@ const opcionesEstado = Object.entries(WORK_ORDER_STATUS_LABELS).map(([value, lab
 const opcionesLote = computed(() =>
   lotes.value.filter((l) => l.is_active).map((l) => ({ value: l.id, label: `${l.code} — ${l.name || l.crop}` })),
 );
+async function filtrarLotes(input: string, update: (fn: () => void) => void) {
+  const page = await listPlotsPage({ limit: 25, offset: 0 }, undefined, input.trim());
+  update(() => { lotes.value = page.results; });
+}
 const opcionesLabor = computed(() =>
   labores.value.filter((l) => l.is_active).map((l) => ({ value: l.id, label: l.name })),
 );
 const opcionesBodega = computed(() => bodegas.value.map((w) => ({ value: w.id, label: w.name })));
-const opcionesItem = computed(() => items.value.map((i) => ({ value: i.id, label: `${i.sku} — ${i.name}` })));
 const opcionesItemFiltradas = ref<{ value: number; label: string }[]>([]);
 
-function filtrarItems(input: string, update: (fn: () => void) => void) {
+async function filtrarItems(input: string, update: (fn: () => void) => void) {
+  const page = await listItemsPage({ search: input.trim(), is_active: true }, { limit: 25, offset: 0 });
   update(() => {
-    const q = input.trim().toLowerCase();
-    opcionesItemFiltradas.value = q
-      ? opcionesItem.value.filter((o) => o.label.toLowerCase().includes(q))
-      : opcionesItem.value;
+    items.value = page.results;
+    opcionesItemFiltradas.value = page.results.map((i) => ({ value: i.id, label: `${i.sku} — ${i.name}` }));
   });
 }
 
@@ -401,8 +406,12 @@ async function abrirInsumo(wo: WorkOrder) {
   });
   if (bodegas.value.length === 0) {
     try {
-      [bodegas.value, items.value] = await Promise.all([listWarehouses(), listItems({ is_active: true })]);
-      opcionesItemFiltradas.value = opcionesItem.value;
+      const [warehouseRows, itemPage] = await Promise.all([
+        listWarehouses(), listItemsPage({ is_active: true }, { limit: 25, offset: 0 }),
+      ]);
+      bodegas.value = warehouseRows;
+      items.value = itemPage.results;
+      opcionesItemFiltradas.value = itemPage.results.map((i) => ({ value: i.id, label: `${i.sku} — ${i.name}` }));
     } catch {
       /* modo manual sigue disponible */
     }
@@ -441,7 +450,11 @@ async function aplicarInsumo() {
 
 onMounted(async () => {
   try {
-    [lotes.value, labores.value] = await Promise.all([listPlots(), listLabors()]);
+    const [plotPage, laborRows] = await Promise.all([
+      listPlotsPage({ limit: 25, offset: 0 }), listLabors(),
+    ]);
+    lotes.value = plotPage.results;
+    labores.value = laborRows;
   } catch {
     /* nombres opcionales */
   }

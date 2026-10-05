@@ -20,12 +20,7 @@
       </template>
     </PageHeader>
 
-    <q-banner v-if="!bitacoraDisponible" dense rounded class="bg-warning text-dark q-mb-md">
-      No se pudieron detectar las solicitudes pendientes (falta permiso de bitácora): pedile el
-      código de solicitud al que consolidó y usá “Aprobar con código”.
-    </q-banner>
-
-    <!-- Solicitudes SoD pendientes detectadas en la bitácora -->
+    <!-- Solicitudes SoD pendientes persistidas -->
     <q-list
       v-if="solicitudesPendientes.length"
       bordered
@@ -172,9 +167,9 @@ import EstadoChip from 'src/components/EstadoChip.vue';
 import { apiErrorMessage } from 'src/core/api';
 import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { formatDate, formatDateTime } from 'src/core/format';
-import { listBitacora } from 'src/modules/audit/api';
 import {
   approveFieldWorkDay,
+  listFieldApprovalRequests,
   listFieldWorkDays,
   type FieldWorkDay,
 } from 'src/modules/asistencia/api';
@@ -206,53 +201,20 @@ const columns: QTableColumn<FieldWorkDay>[] = [
   { name: 'acciones', label: '', field: 'id', align: 'right' },
 ];
 
-// --- solicitudes pendientes vía bitácora -------------------------------------
-// El backend NO expone GET de solicitudes SoD: se detectan por los eventos
-// IAM_APPROVAL_* de la bitácora (subject_id = UUID de la solicitud,
-// metadata.action_type = FIELD_ATTENDANCE_APPROVE). Sin audit.read la página
-// degrada a ingreso manual del código.
+// --- solicitudes pendientes persistidas -------------------------------------
 interface SolicitudPendiente {
   request_id: string;
   requested_at: string;
 }
 
 const solicitudesPendientes = ref<SolicitudPendiente[]>([]);
-const bitacoraDisponible = ref(true);
-
 async function cargarSolicitudes() {
-  const pedidas: SolicitudPendiente[] = [];
-  const decididas = new Set<string>();
   try {
-    let cursor: string | undefined;
-    // Los eventos vienen del más reciente al más viejo; tope de páginas fijo.
-    for (let pagina = 0; pagina < 5; pagina++) {
-      const res = await listBitacora({ module: 'IAM', subject_type: 'APPROVAL_REQUEST' }, cursor);
-      for (const ev of res.results) {
-        const meta = ev.metadata as Record<string, unknown> | null | undefined;
-        if (meta?.action_type !== 'FIELD_ATTENDANCE_APPROVE') continue;
-        const uuid = String(ev.subject_id ?? '');
-        if (!uuid) continue;
-        if (ev.event_type === 'IAM_APPROVAL_REQUESTED') {
-          pedidas.push({ request_id: uuid, requested_at: ev.timestamp_server });
-        } else {
-          decididas.add(uuid); // aprobada / rechazada / cancelada / ejecutada
-        }
-      }
-      const next = res.next;
-      if (!next) break;
-      cursor = new URL(next, window.location.origin).searchParams.get('cursor') ?? undefined;
-      if (!cursor) break;
-    }
-    bitacoraDisponible.value = true;
+    solicitudesPendientes.value = await listFieldApprovalRequests({ status: 'PENDING' });
   } catch {
-    bitacoraDisponible.value = false;
+    solicitudesPendientes.value = [];
+    $q.notify({ type: 'negative', message: 'No se pudieron cargar las solicitudes pendientes.' });
   }
-  const vistas = new Set<string>();
-  solicitudesPendientes.value = pedidas.filter((s) => {
-    if (decididas.has(s.request_id) || vistas.has(s.request_id)) return false;
-    vistas.add(s.request_id);
-    return true;
-  });
 }
 
 void cargarSolicitudes();

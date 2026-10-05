@@ -47,6 +47,7 @@ async function probeServer(): Promise<boolean> {
 
 function setOnline(value: boolean) {
   if (value === online.value) return;
+  const wasOnline = online.value;
   online.value = value;
   Notify.create(
     value
@@ -59,6 +60,9 @@ function setOnline(value: boolean) {
           timeout: 4000,
         },
   );
+  if (!wasOnline && value && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('necktral:server-online'));
+  }
 }
 
 async function refresh() {

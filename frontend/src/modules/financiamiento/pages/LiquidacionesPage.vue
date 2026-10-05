@@ -20,8 +20,7 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva fijación" @click="abrirFix" />
       </div>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
-      <q-table :rows="fixations" :columns="fixCols" row-key="id" flat bordered :loading="loadingFix" :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }" no-data-label="Sin fijaciones.">
+      <q-table :rows="fixations" :columns="fixCols" row-key="id" flat bordered :loading="loadingFix" v-model:pagination="fixPagination" @request="fixRequest" no-data-label="Sin fijaciones.">
         <template #body-cell-status="props">
           <q-td :props="props">
             <q-chip dense square :color="props.row.status === 'OPEN' ? 'info' : 'positive'" text-color="white" :label="FIXATION_STATUS_LABELS[props.row.status]" />
@@ -35,8 +34,7 @@
       <div class="q-mb-md">
         <q-btn unelevated no-caps color="primary" icon="add" label="Nueva liquidación" @click="abrirLiq" />
       </div>
-      <!-- módulo dormido: carga completa client-side a propósito; revisar si el módulo se activa -->
-      <q-table :rows="liquidations" :columns="liqCols" row-key="id" flat bordered :loading="loadingLiq" :pagination="{ rowsPerPage: 15, sortBy: 'id', descending: true }" no-data-label="Sin liquidaciones." />
+      <q-table :rows="liquidations" :columns="liqCols" row-key="id" flat bordered :loading="loadingLiq" v-model:pagination="liqPagination" @request="liqRequest" no-data-label="Sin liquidaciones." />
     </div>
 
     <!-- Nueva fijación -->
@@ -44,7 +42,7 @@
       <q-card class="app-dialog" style="min-width: 380px">
         <q-card-section class="text-h6">Nueva fijación de precio</q-card-section>
         <q-card-section class="q-gutter-md">
-          <q-select v-model="fFix.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense />
+          <q-select v-model="fFix.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense use-input input-debounce="250" @filter="buscarProductores" />
           <div class="row q-col-gutter-md">
             <q-input class="col" v-model.number="fFix.pounds" type="number" label="Libras *" outlined dense />
             <q-input class="col" v-model.number="fFix.price_per_lb" type="number" step="0.0001" label="Precio/lb *" outlined dense />
@@ -64,7 +62,7 @@
       <q-card class="app-dialog" style="min-width: 460px">
         <q-card-section class="text-h6">Nueva liquidación</q-card-section>
         <q-card-section class="q-gutter-md">
-          <q-select v-model="fLiq.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense @update:model-value="onProducerLiq" />
+          <q-select v-model="fLiq.producer_id" :options="prodOpts" label="Productor *" outlined dense emit-value map-options options-dense use-input input-debounce="250" @filter="buscarProductores" @update:model-value="onProducerLiq" />
 
           <div v-if="fLiq.producer_id">
             <div class="text-caption text-muted q-mb-xs">Fijaciones abiertas a liquidar *</div>
@@ -72,7 +70,7 @@
             <q-option-group v-else v-model="fLiq.fixation_ids" type="checkbox" :options="fixOpts" />
           </div>
 
-          <q-select v-model="fLiq.loan_id" :options="loanOpts" label="Aplicar a préstamo (opcional)" outlined dense emit-value map-options options-dense clearable />
+          <q-select v-model="fLiq.loan_id" :options="loanOpts" label="Aplicar a préstamo (opcional)" outlined dense emit-value map-options options-dense clearable use-input input-debounce="250" @filter="buscarPrestamos" />
           <q-input v-model.number="fLiq.exchange_rate" type="number" step="0.0001" label="Tasa de cambio (si cruza moneda)" outlined dense />
 
           <div>
@@ -80,7 +78,7 @@
             <div v-for="(d, i) in fLiq.deductions" :key="i" class="row q-col-gutter-sm q-mb-xs items-center">
               <q-input class="col" v-model="d.concept" dense outlined label="Concepto" />
               <q-input class="col-4" v-model.number="d.amount" type="number" dense outlined label="Monto" />
-              <q-btn flat dense round size="sm" icon="close" @click="fLiq.deductions.splice(i, 1)" />
+              <q-btn flat dense round size="sm" icon="close" aria-label="Eliminar deducción" @click="fLiq.deductions.splice(i, 1)" />
             </div>
             <q-btn flat dense no-caps size="sm" icon="add" label="Agregar deducción" @click="fLiq.deductions.push({ concept: '', amount: 0 })" />
           </div>
@@ -101,17 +99,17 @@ import { computed, onMounted, ref } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import PageHeader from 'src/components/PageHeader.vue';
 import BackButton from 'src/components/BackButton.vue';
-import { useListado } from 'src/core/composables/useListado';
+import { useListadoServer } from 'src/core/composables/useListadoServer';
 import { apiErrorMessage } from 'src/core/api';
 import {
   CURRENCY_LABELS,
   FIXATION_STATUS_LABELS,
   createFixation,
   createLiquidation,
-  listFixations,
-  listLoans,
-  listLiquidations,
-  listProducers,
+  listFixationsPage,
+  listLoansPage,
+  listLiquidationsPage,
+  listProducersPage,
   type Currency,
   type FixationRow,
   type LiquidationRow,
@@ -119,8 +117,10 @@ import {
 
 const $q = useQuasar();
 const tab = ref<'fijaciones' | 'liquidaciones'>('fijaciones');
-const { rows: fixations, loading: loadingFix, reload: reloadFix } = useListado<FixationRow>(listFixations);
-const { rows: liquidations, loading: loadingLiq, reload: reloadLiq } = useListado<LiquidationRow>(listLiquidations);
+const fixListado = useListadoServer<FixationRow>(listFixationsPage, { rowsPerPage: 15 });
+const liqListado = useListadoServer<LiquidationRow>(listLiquidationsPage, { rowsPerPage: 15 });
+const { rows: fixations, loading: loadingFix, pagination: fixPagination, onRequest: fixRequest, reload: reloadFix } = fixListado;
+const { rows: liquidations, loading: loadingLiq, pagination: liqPagination, onRequest: liqRequest, reload: reloadLiq } = liqListado;
 
 function reloadAll() {
   void reloadFix();
@@ -133,6 +133,19 @@ interface Opt<T = number> {
 }
 const prodOpts = ref<Opt[]>([]);
 const loanOpts = ref<Opt[]>([]);
+async function buscarProductores(value: string, update: (callback: () => void) => void) {
+  const page = await listProducersPage({ limit: 25, offset: 0 }, value.trim());
+  update(() => {
+    prodOpts.value = page.results.map((p) => ({ label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id }));
+    for (const p of page.results) prodNameById.set(p.id, p.party_name);
+  });
+}
+async function buscarPrestamos(value: string, update: (callback: () => void) => void) {
+  const page = await listLoansPage({ limit: 25, offset: 0 }, 'ACTIVE', value.trim());
+  update(() => {
+    loanOpts.value = page.results.map((l) => ({ label: `${l.reference} · ${l.producer_name}`, value: l.id }));
+  });
+}
 const monedaOpts = (Object.keys(CURRENCY_LABELS) as Currency[]).map((k) => ({ label: CURRENCY_LABELS[k], value: k }));
 const guardando = ref(false);
 
@@ -236,14 +249,8 @@ async function guardarLiq() {
   }
 }
 
-onMounted(async () => {
-  try {
-    const [prods, loans] = await Promise.all([listProducers(), listLoans('ACTIVE')]);
-    prodOpts.value = prods.map((p) => ({ label: `${p.acopio_code ? p.acopio_code + ' · ' : ''}${p.party_name}`, value: p.id }));
-    for (const p of prods) prodNameById.set(p.id, p.party_name);
-    loanOpts.value = loans.map((l) => ({ label: `${l.reference} · ${l.producer_name}`, value: l.id }));
-  } catch {
-    /* noop */
-  }
+onMounted(() => {
+  void buscarProductores('', (callback) => callback());
+  void buscarPrestamos('', (callback) => callback());
 });
 </script>

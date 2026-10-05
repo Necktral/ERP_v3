@@ -105,7 +105,7 @@
             <div class="text-muted">Tasa aplicada</div>
             <div>{{ detalle.interest_rate_applied }} % anual</div>
             <div class="text-muted">Método de cálculo</div>
-            <div>{{ METODO_LABELS[detalle.calculation_method] ?? detalle.calculation_method || '—' }}</div>
+            <div>{{ METODO_LABELS[detalle.calculation_method] ?? (detalle.calculation_method || '—') }}</div>
             <div class="text-muted">Interés devengado</div>
             <div class="text-weight-bold">{{ formatMoney(detalle.accrued_interest) }}</div>
             <div class="text-muted">Capitalización</div>

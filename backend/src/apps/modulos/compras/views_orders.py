@@ -183,7 +183,7 @@ class _OrderActionView(APIView):
     """Acción simple sobre la OC (sin cuerpo)."""
 
     permission_code = ""
-    action: Callable[..., dict] | None = None
+    service_action: Callable[..., dict] | None = None
 
     def get_permissions(self):
         return [rbac_permission(self.permission_code)()]
@@ -192,7 +192,7 @@ class _OrderActionView(APIView):
         bad = _require_branch(request)
         if bad:
             return bad
-        action = type(self).action
+        action = type(self).service_action
         if action is None:
             return Response({"detail": "PROCUREMENT_ACTION_NOT_CONFIGURED"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         try:
@@ -204,22 +204,22 @@ class _OrderActionView(APIView):
 
 class PurchaseOrderSubmitView(_OrderActionView):
     permission_code = "procurement.order.submit"
-    action = staticmethod(submit_purchase_order)
+    service_action = staticmethod(submit_purchase_order)
 
 
 class PurchaseOrderApproveView(_OrderActionView):
     permission_code = "procurement.order.approve"
-    action = staticmethod(approve_purchase_order)
+    service_action = staticmethod(approve_purchase_order)
 
 
 class PurchaseOrderSendView(_OrderActionView):
     permission_code = "procurement.order.send"
-    action = staticmethod(mark_purchase_order_sent)
+    service_action = staticmethod(mark_purchase_order_sent)
 
 
 class PurchaseOrderCloseView(_OrderActionView):
     permission_code = "procurement.order.close"
-    action = staticmethod(close_purchase_order)
+    service_action = staticmethod(close_purchase_order)
 
 
 class PurchaseOrderCancelView(APIView):

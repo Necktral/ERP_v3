@@ -201,6 +201,9 @@
             dense
             emit-value
             map-options
+            use-input
+            input-debounce="250"
+            @filter="buscarActivos"
           />
         </q-card-section>
         <q-card-actions align="right">
@@ -231,7 +234,7 @@ import {
   applyMaintenancePlan,
   createMaintenancePlan,
   createMaintenanceType,
-  listAssets,
+  listAssetsPage,
   listMaintenancePlans,
   listMaintenanceTypes,
   runFleetAlerts,
@@ -261,6 +264,10 @@ const opcionesTipoMant = computed(() => tipos.value.map((t) => ({ value: t.id, l
 const opcionesActivo = computed(() =>
   activos.value.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` })),
 );
+async function buscarActivos(value: string, update: (callback: () => void) => void) {
+  const page = await listAssetsPage({ limit: 25, offset: 0 }, value.trim());
+  update(() => { activos.value = page.results; });
+}
 
 async function recargar() {
   cargando.value = true;
@@ -360,7 +367,7 @@ async function abrirAplicar(p: MaintenancePlanRow) {
   activoAplicar.value = null;
   if (activos.value.length === 0) {
     try {
-      activos.value = await listAssets();
+      await buscarActivos('', (callback) => callback());
     } catch {
       /* sin activos */
     }

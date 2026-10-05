@@ -163,6 +163,7 @@ services:
       bash -lc "
         mkdir -p \"$$HOME\" \"$$NPM_CONFIG_CACHE\" &&
         npm ci &&
+        npm run verify:toolchain &&
         npm run lint &&
         npm run typecheck &&
         npm run test &&

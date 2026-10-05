@@ -5,6 +5,7 @@
  * Montaje backend: `api/financiamiento/` → con baseURL `/api` => `/financiamiento/...`.
  */
 import { api } from 'src/boot/axios';
+import type { PageReq, Paginated } from 'src/core/api';
 
 export type Currency = 'NIO' | 'USD';
 export type DisbursementForm = 'CASH' | 'CHECK' | 'TRANSFER' | 'IN_KIND';
@@ -62,9 +63,8 @@ export interface ProducerDeposit {
   in_custody_lb: string;
 }
 
-export async function listProducers(): Promise<ProducerRow[]> {
-  const { data } = await api.get<{ results: ProducerRow[] }>('/financiamiento/producers/');
-  return data.results;
+export async function listProducersPage(page: PageReq, search = ''): Promise<Paginated<ProducerRow>> {
+  return (await api.get<Paginated<ProducerRow>>('/financiamiento/producers/', { params: { ...page, ...(search ? { search } : {}) } })).data;
 }
 export async function createProducer(body: {
   party_id: number;
@@ -156,9 +156,8 @@ export interface ApplicationCreate {
   guarantee_other?: string;
   guarantee_coffee_qq?: number;
 }
-export async function listApplications(): Promise<ApplicationRow[]> {
-  const { data } = await api.get<{ results: ApplicationRow[] }>('/financiamiento/applications/');
-  return data.results;
+export async function listApplicationsPage(page: PageReq): Promise<Paginated<ApplicationRow>> {
+  return (await api.get<Paginated<ApplicationRow>>('/financiamiento/applications/', { params: page })).data;
 }
 export async function createApplication(body: ApplicationCreate): Promise<ApplicationRow> {
   const { data } = await api.post<ApplicationRow>('/financiamiento/applications/', body);
@@ -224,11 +223,8 @@ export interface LoanStatement {
   consolidated_nio: string | null;
   rate_used: string | null;
 }
-export async function listLoans(status?: LoanStatus): Promise<LoanRow[]> {
-  const { data } = await api.get<{ results: LoanRow[] }>('/financiamiento/loans/', {
-    params: status ? { status } : undefined,
-  });
-  return data.results;
+export async function listLoansPage(page: PageReq, status?: LoanStatus, search = ''): Promise<Paginated<LoanRow>> {
+  return (await api.get<Paginated<LoanRow>>('/financiamiento/loans/', { params: { ...page, ...(status ? { status } : {}), ...(search ? { search } : {}) } })).data;
 }
 export async function loanStatement(loanId: number): Promise<LoanStatement> {
   const { data } = await api.get<LoanStatement>(`/financiamiento/loans/${loanId}/statement/`);
@@ -270,9 +266,8 @@ export interface ReceptionRow {
   stock_movement_id: number | null;
   note: string;
 }
-export async function listReceptions(): Promise<ReceptionRow[]> {
-  const { data } = await api.get<{ results: ReceptionRow[] }>('/financiamiento/receptions/');
-  return data.results;
+export async function listReceptionsPage(page: PageReq): Promise<Paginated<ReceptionRow>> {
+  return (await api.get<Paginated<ReceptionRow>>('/financiamiento/receptions/', { params: page })).data;
 }
 export async function createReception(body: {
   producer_id: number;
@@ -301,9 +296,8 @@ export interface FixationRow {
   liquidation_id: number | null;
   note: string;
 }
-export async function listFixations(): Promise<FixationRow[]> {
-  const { data } = await api.get<{ results: FixationRow[] }>('/financiamiento/fixations/');
-  return data.results;
+export async function listFixationsPage(page: PageReq): Promise<Paginated<FixationRow>> {
+  return (await api.get<Paginated<FixationRow>>('/financiamiento/fixations/', { params: page })).data;
 }
 export async function createFixation(body: {
   producer_id: number;
@@ -336,9 +330,8 @@ export interface LiquidationRow {
   payment_intent_id: number | null;
   note: string;
 }
-export async function listLiquidations(): Promise<LiquidationRow[]> {
-  const { data } = await api.get<{ results: LiquidationRow[] }>('/financiamiento/liquidations/');
-  return data.results;
+export async function listLiquidationsPage(page: PageReq): Promise<Paginated<LiquidationRow>> {
+  return (await api.get<Paginated<LiquidationRow>>('/financiamiento/liquidations/', { params: page })).data;
 }
 export async function createLiquidation(body: {
   producer_id: number;

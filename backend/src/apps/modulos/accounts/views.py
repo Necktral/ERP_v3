@@ -543,26 +543,29 @@ class RefreshView(TokenRefreshView):
             return Response({"detail": "refresh inválido."}, status=status.HTTP_401_UNAUTHORIZED)
 
         jti = _token_jti(token)
-        session = RefreshTokenSession.objects.filter(
-            jti=jti,
-            user=user,
-            revoked_at__isnull=True,
-        ).first()
-        if not session or (session.expires_at and session.expires_at <= timezone.now()):
-            write_event(
-                request=request,
-                event_type="AUTH_TOKEN_REFRESH_FAILURE",
-                reason_code="TOKEN_INVALID",
-                actor_user=None,
-                subject_type="SESSION",
-                subject_id="",
-                metadata={"stage": "refresh", "detail": "session_revoked_or_missing"},
+        # BUG-028: la rotación es una transición single-use. El lock impide que dos
+        # requests que presentan el mismo padre creen dos descendientes válidos.
+        with transaction.atomic():
+            session = (
+                RefreshTokenSession.objects.select_for_update()
+                .filter(jti=jti, user=user, revoked_at__isnull=True)
+                .first()
             )
-            return Response({"detail": "refresh inválido."}, status=status.HTTP_401_UNAUTHORIZED)
+            if not session or (session.expires_at and session.expires_at <= timezone.now()):
+                write_event(
+                    request=request,
+                    event_type="AUTH_TOKEN_REFRESH_FAILURE",
+                    reason_code="TOKEN_INVALID",
+                    actor_user=None,
+                    subject_type="SESSION",
+                    subject_id="",
+                    metadata={"stage": "refresh", "detail": "session_revoked_or_missing"},
+                )
+                return Response({"detail": "refresh inválido."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        new_refresh = RefreshToken.for_user(user)
-        _persist_refresh_token(token=new_refresh, user=user, request=request)
-        _revoke_refresh_session(session, replaced_by_jti=_token_jti(new_refresh))
+            new_refresh = RefreshToken.for_user(user)
+            _persist_refresh_token(token=new_refresh, user=user, request=request)
+            _revoke_refresh_session(session, replaced_by_jti=_token_jti(new_refresh))
         try:
             token.blacklist()
         except TokenError:
@@ -1057,9 +1060,20 @@ class BootstrapOrgView(APIView):
         if OrgUnit.objects.filter(unit_type=OrgUnit.UnitType.HOLDING, is_active=True).exists():
             return Response({"detail": "Bootstrap ya realizado."}, status=status.HTTP_409_CONFLICT)
 
-        from django.db import transaction
-
         with transaction.atomic():
+            # BUG-029: no hay fila singleton que bloquear cuando el árbol aún no existe.
+            # El advisory lock serializa el bootstrap y el re-chequeo decide al ganador.
+            with connection.cursor() as cur:
+                cur.execute(
+                    "SELECT pg_advisory_xact_lock(%s)",
+                    [BootstrapInitView._BOOTSTRAP_ADVISORY_LOCK],
+                )
+            if OrgUnit.objects.filter(unit_type=OrgUnit.UnitType.HOLDING, is_active=True).exists():
+                return Response(
+                    {"detail": "Bootstrap ya realizado."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
             # 1) Seed RBAC (idempotente)
             seed_rbac_v01()
 

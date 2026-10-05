@@ -72,7 +72,7 @@
           />
           <q-input v-model="linea.quantity" outlined dense type="number" min="0" label="Cant. *" class="ven-linea__num" />
           <q-input v-model="linea.unit_price" outlined dense type="number" min="0" label="Precio C$ *" class="ven-linea__num" />
-          <q-btn flat dense round icon="delete" color="grey-7" @click="lineas.splice(idx, 1)" />
+          <q-btn flat dense round icon="delete" color="grey-7" aria-label="Eliminar línea de venta" @click="lineas.splice(idx, 1)" />
         </div>
         <q-btn flat dense no-caps icon="add" label="Agregar artículo" @click="agregarLinea" />
         <div class="ven-total">Total: <strong>{{ formatMoney(total) }}</strong></div>

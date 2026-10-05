@@ -112,6 +112,46 @@ def test_dashboard_embed_token_redeem_and_reporting_access():
 
 
 @pytest.mark.django_db
+def test_reporting_token_honors_permission_revocation_immediately():
+    company, branch = _mk_org()
+    client = _client_with_perms(
+        company=company,
+        branch=branch,
+        perm_codes=[
+            "report.dashboard.read",
+            "report.dataset.read",
+            "fuel.reports.view",
+            "accounting.report.read",
+        ],
+    )
+    issued = client.post(
+        "/api/backend/dashboard/embed-token/",
+        {"workspace_key": "operations"},
+        format="json",
+    )
+    token = unquote(str(issued.data["bootstrap_url"]).split("token=", 1)[1])
+    redeemed = client.post(
+        "/api/backend/dashboard/embed-token/redeem/",
+        {"token": token},
+        format="json",
+    )
+    reporting_token = str(redeemed.data["reporting_access_token"])
+    grant = DashboardEmbedGrant.objects.get()
+
+    RoleAssignment.objects.filter(user=grant.user, org_unit__in=[company, branch]).update(is_active=False)
+
+    api = APIClient()
+    api.credentials(HTTP_AUTHORIZATION=f"Bearer {reporting_token}")
+    denied = api.post(
+        "/api/reporting/datasets/fuel.dispense_vs_sale.daily/run/",
+        {"filters": {}},
+        format="json",
+    )
+    assert denied.status_code == 403
+    assert not ReportRun.objects.exists()
+
+
+@pytest.mark.django_db
 def test_dashboard_embed_token_requires_compose_when_requested():
     company, branch = _mk_org()
     client = _client_with_perms(

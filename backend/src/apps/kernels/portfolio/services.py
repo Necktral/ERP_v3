@@ -14,7 +14,8 @@ from django.db.models import F, Sum
 from django.utils import timezone
 
 from apps.modulos.audit.writer import write_event
-from apps.modulos.integration.services import publish_outbox_event
+from apps.modulos.integration.models import InboxEvent
+from apps.modulos.integration.services import create_or_get_inbox_event, publish_outbox_event
 from apps.modulos.parties.models import Party
 
 from .models import (
@@ -39,6 +40,9 @@ class PortfolioDomainError(Exception):
         self.message = message
         self.details = details or {}
         super().__init__(f"[{code}] {message}")
+
+
+BILLING_RECEIVABLE_CONSUMER = "portfolio.billing_receivable"
 
 
 def _coerce_decimal(value, *, code: str, field: str) -> Decimal:
@@ -280,6 +284,89 @@ def link_billing_document_to_receivable(*, outbox_event, actor_user=None) -> Dic
             },
         )
     return {"status": "CREATED", "receivable_id": str(receivable.obligation_id)}
+
+
+def consume_billing_document_issued_for_receivable(*, outbox_event, actor_user=None) -> Dict[str, Any]:
+    """Consume ``DocumentIssued`` con checkpoint durable independiente por consumidor."""
+    inbox, _ = create_or_get_inbox_event(event=outbox_event, consumer=BILLING_RECEIVABLE_CONSUMER)
+    try:
+        with transaction.atomic():
+            inbox = InboxEvent.objects.select_for_update().get(pk=inbox.pk)
+            if inbox.status == InboxEvent.Status.PROCESSED:
+                data = outbox_event.payload.get("data", {}) if isinstance(outbox_event.payload, dict) else {}
+                doc_id = data.get("doc_id") if isinstance(data, dict) else None
+                if doc_id and Receivable.objects.filter(
+                    company=outbox_event.company,
+                    reference_type="BILLING_DOC",
+                    reference_id=int(doc_id),
+                ).exists():
+                    return {"status": "EXISTS", "inbox_id": inbox.id}
+
+            result = link_billing_document_to_receivable(
+                outbox_event=outbox_event,
+                actor_user=actor_user,
+            )
+            terminal = {"CREATED", "EXISTS", "SKIPPED_NOT_CREDIT"}
+            if result.get("status") not in terminal:
+                raise PortfolioDomainError(
+                    "BILLING_RECEIVABLE_NOT_CREATED",
+                    f"DocumentIssued no produjo una consecuencia válida: {result.get('status')}",
+                )
+            inbox.status = InboxEvent.Status.PROCESSED
+            inbox.last_error = ""
+            inbox.processed_at = timezone.now()
+            inbox.save(update_fields=["status", "last_error", "processed_at"])
+            return {**result, "inbox_id": inbox.id}
+    except Exception as exc:  # la falla queda durable para reconciliación administrativa
+        InboxEvent.objects.filter(pk=inbox.pk).update(
+            status=InboxEvent.Status.FAILED,
+            last_error=str(exc)[:255],
+            processed_at=None,
+        )
+        return {"status": "FAILED", "inbox_id": inbox.id, "error": str(exc)}
+
+
+def reconcile_billing_receivable_events(
+    *, company, branch, events, actor_user=None, request=None, limit: int = 200
+) -> Dict[str, int]:
+    """Materializa eventos ya validados por Billing sin crear un edge reverso de kernels."""
+    if branch is None or branch.parent_id != company.id:
+        raise PortfolioDomainError("INVALID_SCOPE", "Se requiere una sucursal de la compañía activa.")
+    safe_limit = max(1, min(int(limit), 500))
+    summary = {"scanned": 0, "repaired": 0, "existing": 0, "failed": 0, "skipped": 0}
+    for event in list(events)[:safe_limit]:
+        if (
+            event.company_id != company.id
+            or event.branch_id != branch.id
+            or event.source_module != "BILLING"
+            or event.event_type != "DocumentIssued"
+        ):
+            summary["skipped"] += 1
+            continue
+        summary["scanned"] += 1
+        result = consume_billing_document_issued_for_receivable(
+            outbox_event=event,
+            actor_user=actor_user,
+        )
+        result_status = result.get("status")
+        if result_status == "CREATED":
+            summary["repaired"] += 1
+        elif result_status == "EXISTS":
+            summary["existing"] += 1
+        else:
+            summary["failed"] += 1
+
+    _write_portfolio_audit_event(
+        actor_user=actor_user,
+        company=company,
+        branch=branch,
+        event_type="PORTFOLIO_BILLING_RECEIVABLES_RECONCILED",
+        subject_type="BRANCH",
+        subject_id=str(branch.id),
+        after_snapshot=summary,
+        metadata={"limit": safe_limit},
+    )
+    return summary
 
 
 def _credit_days_for_party(*, company, party) -> int:

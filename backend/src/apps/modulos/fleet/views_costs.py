@@ -7,6 +7,8 @@ from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.modulos.common.pagination import get_limit_offset, paginate_queryset
+
 from django.utils.dateparse import parse_date
 
 from apps.modulos.common.permissions import rbac_permission
@@ -89,8 +91,9 @@ class AssetFuelLogView(APIView):
         return [rbac_permission(code)()]
 
     def get(self, request, asset_id: int):
-        rows = FuelLog.objects.filter(asset_id=asset_id, company=_company(request))[:200]
-        return Response({"results": [_fuel_payload(f) for f in rows]}, status=status.HTTP_200_OK)
+        limit, offset = get_limit_offset(request)
+        total, rows = paginate_queryset(FuelLog.objects.filter(asset_id=asset_id, company=_company(request)).order_by("-occurred_at", "-id"), limit=limit, offset=offset)
+        return Response({"count": total, "limit": limit, "offset": offset, "results": [_fuel_payload(f) for f in rows]}, status=status.HTTP_200_OK)
 
     def post(self, request, asset_id: int):
         s = FuelLogIn(data=request.data)
@@ -108,8 +111,9 @@ class AssetMaintenanceOrderView(APIView):
         return [rbac_permission(code)()]
 
     def get(self, request, asset_id: int):
-        rows = MaintenanceWorkOrder.objects.filter(asset_id=asset_id, company=_company(request))[:200]
-        return Response({"results": [_wo_payload(w) for w in rows]}, status=status.HTTP_200_OK)
+        limit, offset = get_limit_offset(request)
+        total, rows = paginate_queryset(MaintenanceWorkOrder.objects.filter(asset_id=asset_id, company=_company(request)).order_by("-opened_at", "-id"), limit=limit, offset=offset)
+        return Response({"count": total, "limit": limit, "offset": offset, "results": [_wo_payload(w) for w in rows]}, status=status.HTTP_200_OK)
 
     def post(self, request, asset_id: int):
         s = WorkOrderIn(data=request.data)
@@ -127,8 +131,9 @@ class AssetExpenseView(APIView):
         return [rbac_permission(code)()]
 
     def get(self, request, asset_id: int):
-        rows = FleetExpense.objects.filter(asset_id=asset_id, company=_company(request))[:200]
-        return Response({"results": [_exp_payload(e) for e in rows]}, status=status.HTTP_200_OK)
+        limit, offset = get_limit_offset(request)
+        total, rows = paginate_queryset(FleetExpense.objects.filter(asset_id=asset_id, company=_company(request)).order_by("-occurred_on", "-id"), limit=limit, offset=offset)
+        return Response({"count": total, "limit": limit, "offset": offset, "results": [_exp_payload(e) for e in rows]}, status=status.HTTP_200_OK)
 
     def post(self, request, asset_id: int):
         s = ExpenseIn(data=request.data)

@@ -188,7 +188,7 @@ const sections = computed<Section[]>(() => {
   letter-spacing: 0.03em;
 }
 .dr-kpi__value {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   font-size: 1.1rem;
   color: var(--app-text);

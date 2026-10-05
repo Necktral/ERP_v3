@@ -15,7 +15,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from apps.kernels.facturacion.models import BillingDocument, DocStatus, DocType, PaymentStatus
+from apps.kernels.facturacion.models import BillingDocument, BillingPayment, DocStatus, DocType, PaymentStatus
 from apps.kernels.inventarios.models import InventoryItem, StockBalance, UoM
 from apps.kernels.inventarios.services import create_warehouse, post_receive
 from apps.modulos.iam.models import OrgUnit, UserMembership
@@ -97,7 +97,7 @@ def test_partial_payments_lifecycle():
 
     # Abono parcial → PARTIAL
     r = c.post(f"/api/billing/docs/{doc_id}/payments/", {
-        "payment_method": "CASH", "amount": "50.00",
+        "payment_method": "CASH", "amount": "50.00", "idempotency_key": "pay-partial-1",
     }, format="json")
     assert r.status_code == 201, r.data
     assert r.data["payment_status"] == PaymentStatus.PARTIAL
@@ -106,6 +106,7 @@ def test_partial_payments_lifecycle():
     # Segundo abono completa → PAID
     r = c.post(f"/api/billing/docs/{doc_id}/payments/", {
         "payment_method": "TRANSFER", "amount": "65.00", "reference": "TX-9",
+        "idempotency_key": "pay-final-1",
     }, format="json")
     assert r.status_code == 201
     assert r.data["payment_status"] == PaymentStatus.PAID
@@ -131,9 +132,150 @@ def test_payments_require_permission():
     doc_id = _issued_invoice(reader)
 
     r = reader.post(f"/api/billing/docs/{doc_id}/payments/", {
-        "payment_method": "CASH", "amount": "10.00",
+        "payment_method": "CASH", "amount": "10.00", "idempotency_key": "pay-denied-1",
     }, format="json")
     assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_payment_api_requires_idempotency_key_and_replay_is_explicit():
+    company, branch = _scope()
+    c, _ = _client(company, branch)
+    doc_id = _issued_invoice(c)
+    url = f"/api/billing/docs/{doc_id}/payments/"
+
+    missing = c.post(url, {"payment_method": "CASH", "amount": "10.00"}, format="json")
+    assert missing.status_code == 400
+    assert "idempotency_key" in missing.data["error"]["details"]
+
+    too_long = c.post(
+        url,
+        {"payment_method": "CASH", "amount": "10.00", "idempotency_key": "x" * 97},
+        format="json",
+    )
+    assert too_long.status_code == 400
+    assert "idempotency_key" in too_long.data["error"]["details"]
+
+    payload = {
+        "payment_method": "CASH",
+        "amount": "10.00",
+        "currency": "NIO",
+        "idempotency_key": "pay-api-replay-1",
+    }
+    first = c.post(url, payload, format="json")
+    replay = c.post(url, payload, format="json")
+
+    assert first.status_code == 201, first.data
+    assert first.data["idempotent"] is False
+    assert replay.status_code == 200, replay.data
+    assert replay.data["idempotent"] is True
+    assert replay.data["payment_id"] == first.data["payment_id"]
+    assert BillingPayment.objects.filter(doc_id=doc_id).count() == 1
+
+
+@pytest.mark.django_db
+def test_payment_api_rejects_same_key_with_different_canonical_payload():
+    company, branch = _scope()
+    c, _ = _client(company, branch)
+    doc_id = _issued_invoice(c)
+    other_doc_id = _issued_invoice(c)
+    key = "pay-api-canonical-1"
+    base = {
+        "payment_method": "CASH",
+        "amount": "10.00",
+        "currency": "NIO",
+        "reference": "REF-1",
+        "notes": "original",
+        "payment_date": "2026-08-08",
+        "idempotency_key": key,
+    }
+    created = c.post(f"/api/billing/docs/{doc_id}/payments/", base, format="json")
+    assert created.status_code == 201, created.data
+
+    variants = [
+        (doc_id, {**base, "amount": "11.00"}),
+        (doc_id, {**base, "currency": "USD"}),
+        (doc_id, {**base, "payment_method": "TRANSFER"}),
+        (doc_id, {**base, "reference": "REF-2"}),
+        (doc_id, {**base, "notes": "changed"}),
+        (doc_id, {**base, "payment_date": "2026-08-09"}),
+        (other_doc_id, base),
+    ]
+    for target_doc_id, payload in variants:
+        response = c.post(
+            f"/api/billing/docs/{target_doc_id}/payments/",
+            payload,
+            format="json",
+        )
+        assert response.status_code == 409, (target_doc_id, payload, response.data)
+
+    assert BillingPayment.objects.filter(company=company, idempotency_key=key).count() == 1
+
+
+@pytest.mark.django_db
+def test_payment_rejects_currency_different_from_invoice():
+    company, branch = _scope()
+    c, _ = _client(company, branch)
+    doc_id = _issued_invoice(c)
+
+    response = c.post(
+        f"/api/billing/docs/{doc_id}/payments/",
+        {
+            "payment_method": "CASH",
+            "amount": "1.00",
+            "currency": "USD",
+            "idempotency_key": "pay-wrong-currency-1",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 422
+    assert BillingPayment.objects.filter(doc_id=doc_id).count() == 0
+
+
+@pytest.mark.django_db
+def test_payments_are_scoped_to_company_branch_and_reverse_doc_id():
+    company, branch_a = _scope()
+    branch_b = OrgUnit.objects.create(
+        unit_type=OrgUnit.UnitType.BRANCH,
+        parent=company,
+        name=f"B{uuid.uuid4().hex[:6]}",
+        code=f"B-{uuid.uuid4().hex[:6]}",
+    )
+    client_a, _ = _client(company, branch_a)
+    client_b, _ = _client(company, branch_b)
+    doc_a = _issued_invoice(client_a)
+    created = client_a.post(
+        f"/api/billing/docs/{doc_a}/payments/",
+        {"payment_method": "CASH", "amount": "10.00", "idempotency_key": "pay-branch-a-1"},
+        format="json",
+    )
+    assert created.status_code == 201, created.data
+    payment_id = created.data["payment_id"]
+
+    assert client_b.get(f"/api/billing/docs/{doc_a}/payments/").status_code == 404
+    denied_create = client_b.post(
+        f"/api/billing/docs/{doc_a}/payments/",
+        {"payment_method": "CASH", "amount": "5.00", "idempotency_key": "pay-branch-b-1"},
+        format="json",
+    )
+    assert denied_create.status_code == 404
+    denied_reverse = client_b.post(
+        f"/api/billing/docs/{doc_a}/payments/{payment_id}/reverse/",
+        {"reason": "cross branch"},
+        format="json",
+    )
+    assert denied_reverse.status_code == 404
+
+    # Incluso dentro de la sucursal correcta, el payment debe pertenecer al doc_id de la URL.
+    other_doc = _issued_invoice(client_a)
+    wrong_doc = client_a.post(
+        f"/api/billing/docs/{other_doc}/payments/{payment_id}/reverse/",
+        {"reason": "wrong document"},
+        format="json",
+    )
+    assert wrong_doc.status_code == 404
+    assert BillingPayment.objects.get(id=payment_id).status == BillingPayment.Status.CONFIRMED
 
 
 # ---------------------------------------------------------------------------

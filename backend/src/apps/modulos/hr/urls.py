@@ -9,6 +9,7 @@ from .views import (
     ContractRenewView,
     ContractRosterView,
     ContractSignView,
+    BootstrapAdminDemotionView,
     EmployeeAssignmentListCreateView,
     EmployeeAssignmentEndView,
     EmployeeContractListCreateView,
@@ -57,6 +58,7 @@ urlpatterns = [
     path("employees/<int:employee_id>/assignments/", EmployeeAssignmentListCreateView.as_view()),
     path("employees/<int:employee_id>/assignments/<int:assignment_id>/end/", EmployeeAssignmentEndView.as_view()),
     path("employees/<int:employee_id>/provision-user/", EmployeeProvisionUserView.as_view()),
+    path("employees/<int:employee_id>/claim-bootstrap-admin/", BootstrapAdminDemotionView.as_view()),
     path("employees/<int:employee_id>/reset-temp-password/", EmployeeResetTempPasswordView.as_view()),
     path("employees/<int:employee_id>/revoke-access/", EmployeeRevokeAccessView.as_view()),
     # Ciclo de vida laboral

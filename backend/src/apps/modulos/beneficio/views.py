@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from apps.kernels.inventarios.models import InventoryItem, Warehouse
 from apps.modulos.common.permissions import rbac_permission
+from apps.modulos.common.pagination import get_limit_offset, paginate_queryset
 
 from . import services
 from .models import ProcessingOrder, TransformationRecipe
@@ -28,6 +29,12 @@ def _company_or_400(request):
             {"detail": "X-Company-Id requerido"}, status=status.HTTP_400_BAD_REQUEST
         )
     return company, None
+
+
+def _paginated(request, qs, serializer):
+    limit, offset = get_limit_offset(request)
+    total, rows = paginate_queryset(qs, limit=limit, offset=offset)
+    return Response({"count": total, "limit": limit, "offset": offset, "results": serializer(rows, many=True).data})
 
 
 def _business_error(exc: BeneficioError) -> Response:
@@ -55,8 +62,8 @@ class RecipeListCreateView(APIView):
         company, err = _company_or_400(request)
         if err:
             return err
-        qs = TransformationRecipe.objects.filter(company=company, is_active=True)
-        return Response({"results": RecipeSerializer(qs.order_by("code")[:200], many=True).data})
+        qs = TransformationRecipe.objects.filter(company=company, is_active=True).select_related("input_item", "output_item")
+        return _paginated(request, qs.order_by("code", "id"), RecipeSerializer)
 
     def post(self, request):
         company, err = _company_or_400(request)
@@ -89,11 +96,11 @@ class OrderListCreateView(APIView):
         company, err = _company_or_400(request)
         if err:
             return err
-        qs = ProcessingOrder.objects.filter(company=company).select_related("recipe")
+        qs = ProcessingOrder.objects.filter(company=company).select_related("recipe", "input_warehouse", "output_warehouse")
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
-        return Response({"results": OrderSerializer(qs.order_by("-id")[:300], many=True).data})
+        return _paginated(request, qs.order_by("-id"), OrderSerializer)
 
     def post(self, request):
         company, err = _company_or_400(request)

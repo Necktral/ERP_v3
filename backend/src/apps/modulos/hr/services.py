@@ -17,10 +17,11 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from apps.modulos.audit.writer import write_event
-from apps.modulos.iam.models import OrgUnit, UserMembership
+from apps.modulos.iam.models import AdminGrant, OrgUnit, UserMembership
 from apps.modulos.parties.models import Party, PartyRole
 from apps.modulos.parties.services import assign_party_role
 from apps.modulos.rbac.models import Role, RoleAssignment
+from apps.modulos.rbac.selectors import get_effective_permissions_for_scope
 
 from .contract_templates import render_contract_body
 from .models import (
@@ -47,6 +48,160 @@ class ReconcileResult:
     created: int
     reactivated: int
     deactivated: int
+
+
+class BootstrapAdminDemotionError(ValueError):
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        super().__init__(message)
+
+
+@transaction.atomic
+def link_and_demote_bootstrap_admin(*, employee: Employee, actor, company: OrgUnit, request=None) -> dict:
+    """Vincula el admin bootstrap a su Employee y retira privilegios globales de forma fail-closed."""
+    user = User.objects.select_for_update().get(pk=actor.pk)
+    # Sin select_related sobre linked_user (nullable): PostgreSQL no permite FOR UPDATE
+    # sobre el lado nullable de un OUTER JOIN. Solo bloqueamos la fila Employee.
+    employee = Employee.objects.select_for_update().get(pk=employee.pk)
+
+    if employee.company_id != company.id:
+        raise BootstrapAdminDemotionError("CROSS_TENANT", "El empleado no pertenece a la empresa activa.")
+    if not employee.is_active or employee.employment_status != Employee.EmploymentStatus.ACTIVO:
+        raise BootstrapAdminDemotionError("EMPLOYEE_INACTIVE", "El empleado debe estar activo.")
+    if employee.linked_user_id not in (None, user.id):
+        raise BootstrapAdminDemotionError("EMPLOYEE_ALREADY_LINKED", "El empleado ya está ligado a otro usuario.")
+    replayed = employee.linked_user_id == user.id and not user.is_superuser
+    if not user.is_superuser and not replayed:
+        raise BootstrapAdminDemotionError("NOT_SUPERUSER", "El usuario actual ya no es superusuario.")
+
+    assignments = list(
+        EmploymentAssignment.objects.select_for_update()
+        .filter(employee=employee, is_active=True)
+        .only("id", "branch_id")
+    )
+    company_branch_ids = set(
+        OrgUnit.objects.filter(
+            parent=company,
+            unit_type=OrgUnit.UnitType.BRANCH,
+            is_active=True,
+        ).values_list("id", flat=True)
+    )
+    assignment_ok = any(
+        assignment.branch_id is None or assignment.branch_id in company_branch_ids
+        for assignment in assignments
+    )
+    if not assignment_ok:
+        raise BootstrapAdminDemotionError(
+            "NO_ACTIVE_ASSIGNMENT", "El empleado necesita una asignación activa dentro de la empresa."
+        )
+
+    membership_ok = UserMembership.objects.select_for_update().filter(
+        user=user, org_unit=company, is_active=True
+    ).exists()
+    if not membership_ok:
+        raise BootstrapAdminDemotionError(
+            "MISSING_MEMBERSHIP", "Falta la membresía activa del administrador en la empresa."
+        )
+
+    role_assignment = (
+        RoleAssignment.objects.select_for_update()
+        .select_related("role")
+        .filter(
+            user=user,
+            org_unit=company,
+            role__name="company_admin",
+            role__is_active=True,
+            is_active=True,
+        )
+        .first()
+    )
+    if role_assignment is None:
+        raise BootstrapAdminDemotionError(
+            "MISSING_COMPANY_ADMIN", "Falta el RoleAssignment activo company_admin para esta empresa."
+        )
+
+    locked_grants = list(
+        AdminGrant.objects.select_for_update().filter(user=user, org_unit=company, is_active=True)
+    )
+    required_caps = set(AdminGrant.Capability.values)
+    active_caps = {grant.capability for grant in locked_grants}
+    if not required_caps.issubset(active_caps):
+        raise BootstrapAdminDemotionError(
+            "MISSING_ADMIN_GRANTS", "Faltan capacidades administrativas activas para esta empresa."
+        )
+
+    effective_permissions = get_effective_permissions_for_scope(user, company=company, branch=None)
+    required_permissions = {
+        "hr.employee.read",
+        "hr.employee.update",
+        "iam.users.create",
+        "rbac.assignments.read",
+        "rbac.assignments.update",
+    }
+    missing_permissions = sorted(required_permissions - effective_permissions)
+    if missing_permissions:
+        raise BootstrapAdminDemotionError(
+            "INSUFFICIENT_RBAC",
+            "company_admin no conservaría permisos administrativos requeridos: " + ", ".join(missing_permissions),
+        )
+
+    if replayed:
+        # Reintento de la misma operación (p.ej. respuesta HTTP perdida): no muta ni
+        # duplica auditoría, pero vuelve a comprobar que el acceso RBAC siga íntegro.
+        return {
+            "user_id": user.id,
+            "employee_id": employee.id,
+            "is_superuser": False,
+            "is_staff": user.is_staff,
+            "linked_existing_user": True,
+            "preserved_permissions": sorted(effective_permissions),
+            "replayed": True,
+        }
+
+    was_linked = employee.linked_user_id == user.id
+    if not was_linked:
+        employee.linked_user = user
+        employee.save(update_fields=["linked_user", "updated_at"])
+
+    before_is_staff = user.is_staff
+    # El bootstrap otorgó is_staff solo como consecuencia de create_superuser.
+    # RRHH usa RBAC propio; conservar Django staff dejaría una puerta lateral al admin.
+    user.is_superuser = False
+    user.is_staff = False
+    user.save(update_fields=["is_superuser", "is_staff"])
+
+    write_event(
+        request=request,
+        module="HR",
+        event_type="HR_BOOTSTRAP_ADMIN_DEMOTED",
+        reason_code="HR_OK",
+        actor_user=user,
+        subject_type="EMPLOYEE",
+        subject_id=str(employee.id),
+        before_snapshot={"user_id": user.id, "is_superuser": True, "is_staff": before_is_staff},
+        after_snapshot={
+            "user_id": user.id,
+            "employee_id": employee.id,
+            "is_superuser": False,
+            "is_staff": False,
+        },
+        metadata={
+            "company_id": str(company.id),
+            "role_assignment_id": role_assignment.id,
+            "employee_was_already_linked_to_current_user": was_linked,
+            "preserved_permissions_count": len(effective_permissions),
+        },
+    )
+
+    return {
+        "user_id": user.id,
+        "employee_id": employee.id,
+        "is_superuser": False,
+        "is_staff": False,
+        "linked_existing_user": True,
+        "preserved_permissions": sorted(effective_permissions),
+        "replayed": False,
+    }
 
 
 def _company_branches(company: OrgUnit) -> list[int]:

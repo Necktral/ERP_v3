@@ -247,3 +247,44 @@ def test_bootstrap_init_concurrent_creates_single_admin():
 
     assert User.objects.count() == 1, f"esperaba 1 admin, hay {User.objects.count()}"
     assert sorted(results) == [201, 400], f"esperaba un 201 y un 400, obtuve {results}"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_bootstrap_org_concurrent_creates_single_tree():
+    """BUG-029: dos bootstrap org simultáneos producen un solo árbol."""
+    import threading
+    from django.db import connection as db_conn
+
+    user = User.objects.create_superuser(username="org_admin", password=_demo_pwd("org"))
+    barrier = threading.Barrier(2, timeout=10)
+    results: list[int] = []
+    results_lock = threading.Lock()
+    payload = {
+        "holding_name": "H",
+        "company_name": "C",
+        "company_tax_id": "J-1",
+        "branch_name": "B",
+        "branch_address": "x",
+    }
+
+    def attempt() -> None:
+        try:
+            client = APIClient()
+            client.force_authenticate(user=user)
+            barrier.wait()
+            response = client.post("/api/auth/bootstrap/org/", payload, format="json")
+            with results_lock:
+                results.append(response.status_code)
+        finally:
+            db_conn.close()
+
+    threads = [threading.Thread(target=attempt) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=20)
+
+    assert sorted(results) == [200, 409]
+    assert OrgUnit.objects.filter(unit_type=OrgUnit.UnitType.HOLDING).count() == 1
+    assert OrgUnit.objects.filter(unit_type=OrgUnit.UnitType.COMPANY).count() == 1
+    assert OrgUnit.objects.filter(unit_type=OrgUnit.UnitType.BRANCH).count() == 1

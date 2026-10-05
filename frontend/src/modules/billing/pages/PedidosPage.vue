@@ -158,7 +158,7 @@
                   <q-item><q-item-section class="text-muted">Escribí para buscar.</q-item-section></q-item>
                 </template>
               </q-select>
-              <q-btn flat dense round icon="delete" color="grey-7" @click="form.lines.splice(idx, 1)" />
+              <q-btn flat dense round icon="delete" color="grey-7" aria-label="Eliminar línea del pedido" @click="form.lines.splice(idx, 1)" />
             </div>
             <div class="ped-linea">
               <q-input v-model="linea.description" outlined dense label="Descripción *" class="ped-linea__desc" />

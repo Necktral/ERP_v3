@@ -79,6 +79,21 @@ class InboxEvent(models.Model):
     schema_version = models.PositiveSmallIntegerField(default=1)
     payload = models.JSONField(default=dict)
 
+    company = models.ForeignKey(
+        OrgUnit,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="inbox_events_company",
+    )
+    branch = models.ForeignKey(
+        OrgUnit,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="inbox_events_branch",
+    )
+
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.RECEIVED)
     last_error = models.CharField(max_length=255, blank=True, default="")
 
@@ -89,7 +104,15 @@ class InboxEvent(models.Model):
         app_label = "integration"
         constraints = [
             models.UniqueConstraint(fields=["event_id", "consumer"], name="uq_inbox_event_consumer"),
+            models.CheckConstraint(
+                condition=models.Q(branch__isnull=True) | models.Q(company__isnull=False),
+                name="ck_inbox_branch_requires_company",
+            ),
         ]
         indexes = [
             models.Index(fields=["consumer", "status", "received_at"]),
+            models.Index(
+                fields=["company", "branch", "status", "received_at"],
+                name="integration_inbox_scope_idx",
+            ),
         ]

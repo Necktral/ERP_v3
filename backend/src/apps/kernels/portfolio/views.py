@@ -62,9 +62,15 @@ def _rbac_perms(view, *, read: str, write: str, extra=None):
     return [rbac_permission(perm)()]
 
 
-class ReceivableViewSet(_CompanyScopedCreateMixin, viewsets.ModelViewSet):
+class ReceivableViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for Receivables (CxC)
+    ViewSet for Receivables (CxC) — SOLO LECTURA + acciones de servicio.
+
+    BUG-I1: el create/update por defecto aceptaba FKs (party, collector_user) de
+    CUALQUIER empresa (queryset sin scope), permitiendo a la empresa A crear una
+    CxC que referencia el tercero de B. Las CxC se crean EXCLUSIVAMENTE por
+    servicios (ventas/facturación/intercompany), que sí scopean por empresa;
+    aquí solo se listan y se operan por las @action (adjust/writeoff vía servicio).
     """
     serializer_class = ReceivableSerializer
 
@@ -123,9 +129,11 @@ class ReceivableViewSet(_CompanyScopedCreateMixin, viewsets.ModelViewSet):
             )
 
 
-class PayableViewSet(_CompanyScopedCreateMixin, viewsets.ModelViewSet):
+class PayableViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for Payables (CxP)
+    ViewSet for Payables (CxP) — SOLO LECTURA (BUG-I1, mismo criterio que CxC).
+
+    Las CxP se crean por servicios (compras/intercompany), scopeados por empresa.
     """
     serializer_class = PayableSerializer
 
@@ -141,9 +149,13 @@ class PayableViewSet(_CompanyScopedCreateMixin, viewsets.ModelViewSet):
         return Payable.objects.filter(company=self.request.company).select_related("party", "company", "branch")
 
 
-class CreditViewSet(_CompanyScopedCreateMixin, viewsets.ModelViewSet):
+class CreditViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for Credits
+    ViewSet for Credits — SOLO LECTURA + @action disburse (BUG-I1).
+
+    El create/update aceptaba lender/borrower/guarantor_party y `restructured_from`
+    (self-FK) de otra empresa. Los créditos se crean por financiamiento (scoped);
+    aquí solo se listan y se desembolsan por la @action (vía servicio).
     """
     serializer_class = CreditSerializer
 
@@ -185,9 +197,13 @@ class CreditViewSet(_CompanyScopedCreateMixin, viewsets.ModelViewSet):
             )
 
 
-class PaymentAllocationViewSet(_CompanyScopedCreateMixin, viewsets.ModelViewSet):
+class PaymentAllocationViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for Payment Allocations
+    ViewSet for Payment Allocations — SOLO LECTURA (BUG-011 / BUG-I1).
+
+    El create permitía aplicar el pago de una empresa a la obligación de otra
+    (FKs sin scope). Las aplicaciones se crean por `allocate_payment_to_obligation`
+    (ventas/compras/financiamiento), que valida company del intent y la obligación.
     """
     serializer_class = PaymentAllocationSerializer
 

@@ -242,3 +242,78 @@ def test_charge_endpoint_and_group_cartera_http():
     assert r.status_code == 200, r.data
     by = {row["company_id"]: row for row in r.data["by_company"]}
     assert by[a.id]["cxc_intercompany"] == "900.00"
+
+
+# ---------------------------------------------------------------------------
+# Bug-hunt de integridad: IC-1 (idempotencia concurrente), IC-2 (período
+# cerrado), IC-3 (FX no soportado).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db(transaction=True)
+def test_ic1_cargo_concurrente_mismo_reference_no_duplica():
+    """IC-1: dos cargos simultáneos con el mismo reference_code → UNA sola tx
+    (advisory lock serializa; el UniqueConstraint es el backstop)."""
+    import threading
+    from django.db import connection as db_conn
+
+    holding, a, a_br, b, b_br, user = _setup()
+    kwargs = dict(
+        source_company_id=a.id, target_company_id=b.id, amount="500.00",
+        reference_code="IC-CONC", effective_date=date(2026, 3, 20), actor=user,
+    )
+
+    barrier = threading.Barrier(2, timeout=10)
+    errores: list[str] = []
+    lock = threading.Lock()
+
+    def cargar():
+        try:
+            barrier.wait()
+            record_intercompany_charge(**kwargs)
+        except Exception as exc:  # noqa: BLE001 — se clasifica abajo
+            with lock:
+                errores.append(repr(exc))
+        finally:
+            db_conn.close()
+
+    threads = [threading.Thread(target=cargar) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    n = IntercompanyTransaction.objects.filter(
+        source_company=a, target_company=b, reference_code="IC-CONC"
+    ).count()
+    assert n == 1, f"doble contabilización intercompany: {n} tx (errores: {errores})"
+    # Y exactamente una CxC / una CxP.
+    assert Receivable.objects.filter(company=a, reference_type="INTERCOMPANY").count() == 1
+    assert Payable.objects.filter(company=b, reference_type="INTERCOMPANY").count() == 1
+
+
+@pytest.mark.django_db
+def test_ic2_periodo_cerrado_rechaza_el_posteo():
+    """IC-2: no se puede postear un cargo intercompany en un período CERRADO."""
+    from apps.kernels.accounting.models import FiscalPeriod
+
+    holding, a, a_br, b, b_br, user = _setup()
+    # Cierra el período de A donde caería el asiento.
+    FiscalPeriod.objects.create(company=a, year=2026, month=4, status=FiscalPeriod.Status.CLOSED)
+
+    with pytest.raises(ValueError, match="[Pp]eriodo cerrado"):
+        record_intercompany_charge(
+            source_company_id=a.id, target_company_id=b.id, amount="300.00",
+            reference_code="IC-CLOSED", effective_date=date(2026, 4, 15), actor=user,
+        )
+    assert not IntercompanyTransaction.objects.filter(reference_code="IC-CLOSED").exists()
+
+
+@pytest.mark.django_db
+def test_ic3_moneda_no_funcional_rechazada():
+    """IC-3: hasta soportar FX real, solo se admite la moneda funcional (NIO)."""
+    holding, a, a_br, b, b_br, user = _setup()
+    with pytest.raises(ValueError, match="INTERCOMPANY_FX_UNSUPPORTED"):
+        record_intercompany_charge(
+            source_company_id=a.id, target_company_id=b.id, amount="100.00",
+            reference_code="IC-USD", currency="USD", effective_date=date(2026, 3, 25), actor=user,
+        )

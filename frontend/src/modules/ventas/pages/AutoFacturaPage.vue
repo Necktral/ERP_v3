@@ -173,9 +173,9 @@
               </div>
             </div>
             <div class="af-linea__qty">
-              <q-btn round unelevated icon="remove" size="md" @click="restar(i)" />
+              <q-btn round unelevated icon="remove" size="md" aria-label="Reducir cantidad" @click="restar(i)" />
               <span class="af-linea__num">{{ ln.quantity }}</span>
-              <q-btn round unelevated color="primary" icon="add" size="md" @click="ln.quantity += 1" />
+              <q-btn round unelevated color="primary" icon="add" size="md" aria-label="Aumentar cantidad" @click="ln.quantity += 1" />
             </div>
             <div class="af-linea__total">{{ formatMoney(totalLinea(ln)) }}</div>
           </div>
@@ -871,7 +871,7 @@ onBeforeUnmount(() => {
 }
 
 .af-kiosk-name {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-weight: 800;
   font-size: 1.3rem;
 }
@@ -898,7 +898,7 @@ onBeforeUnmount(() => {
 }
 
 .af-bienvenida__titulo {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 2.6rem;
   font-weight: 800;
   color: var(--app-primary);

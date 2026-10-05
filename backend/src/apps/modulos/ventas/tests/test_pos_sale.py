@@ -8,12 +8,14 @@ idempotencia de la venta completa.
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import close_old_connections
 from rest_framework.test import APIClient
 
 from apps.kernels.facturacion.models import BillingDocument, DocStatus, PaymentStatus
@@ -303,6 +305,39 @@ def test_pos_sale_is_idempotent_by_key():
     # No re-despacha ni re-cobra.
     assert _stock(company, branch, wh, item) == Decimal("8.0000")
     assert CashMovement.objects.filter(reference=f"pos-sale:{r1['doc_id']}").count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_pos_sale_concurrente_misma_clave_produce_una_sola_consecuencia():
+    _h, company, branch = _scope()
+    actor = _user()
+    req = _req(company, branch, actor)
+    wh, item = _seed_item(req, company, branch, actor)
+    _open_session(company, branch, actor)
+
+    def vender():
+        close_old_connections()
+        try:
+            return pos_sale(
+                request=_req(company, branch, actor),
+                actor=actor,
+                warehouse_id=wh.id,
+                lines=[{"inventory_item_id": item.id, "quantity": "2"}],
+                payments=[{"method": "CASH", "amount": "230.00"}],
+                idempotency_key="POS-IDEM-CONCURRENT",
+            )
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = [future.result(timeout=20) for future in [pool.submit(vender), pool.submit(vender)]]
+
+    assert {row["duplicate"] for row in results} == {False, True}
+    assert len({row["doc_id"] for row in results}) == 1
+    doc_id = results[0]["doc_id"]
+    assert BillingDocument.objects.filter(id=doc_id, status=DocStatus.ISSUED).count() == 1
+    assert _stock(company, branch, wh, item) == Decimal("8.0000")
+    assert CashMovement.objects.filter(reference=f"pos-sale:{doc_id}").count() == 1
 
 
 # ---------------------------------------------------------------------------

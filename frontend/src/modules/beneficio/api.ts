@@ -8,6 +8,7 @@
  * que el interceptor de axios envía desde el contexto).
  */
 import { api } from 'src/boot/axios';
+import { collectPaginated, type PageReq, type Paginated } from 'src/core/api';
 
 export type OrderStatus = 'DRAFT' | 'IN_PROCESS' | 'DONE' | 'CANCELLED';
 
@@ -32,8 +33,10 @@ export interface RecipeRow {
   is_active: boolean;
 }
 export async function listRecipes(): Promise<RecipeRow[]> {
-  const { data } = await api.get<{ results: RecipeRow[] }>('/beneficio/recipes/');
-  return data.results;
+  return collectPaginated(listRecipesPage);
+}
+export async function listRecipesPage(page: PageReq): Promise<Paginated<RecipeRow>> {
+  return (await api.get<Paginated<RecipeRow>>('/beneficio/recipes/', { params: page })).data;
 }
 export async function createRecipe(body: {
   code: string;
@@ -70,10 +73,10 @@ export interface OrderRow {
   created_at: string;
 }
 export async function listOrders(status?: OrderStatus): Promise<OrderRow[]> {
-  const { data } = await api.get<{ results: OrderRow[] }>('/beneficio/orders/', {
-    params: status ? { status } : undefined,
-  });
-  return data.results;
+  return collectPaginated((page) => listOrdersPage(page, status));
+}
+export async function listOrdersPage(page: PageReq, status?: OrderStatus): Promise<Paginated<OrderRow>> {
+  return (await api.get<Paginated<OrderRow>>('/beneficio/orders/', { params: { ...page, ...(status ? { status } : {}) } })).data;
 }
 export async function createOrder(body: {
   recipe_id: number;

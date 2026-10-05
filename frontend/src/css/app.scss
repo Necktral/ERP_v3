@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap');
-
 :root {
   --app-bg: #f3f6fb;
   --app-bg-gradient:
@@ -127,7 +125,7 @@ body {
   color: var(--app-text);
   background: var(--app-bg-gradient);
   background-color: var(--app-bg);
-  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
 }
 
 .app-page-container {
@@ -179,7 +177,7 @@ body {
 }
 
 .app-brand__title {
-  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 1rem;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -385,4 +383,11 @@ body {
   .app-container {
     padding: var(--app-space-3);
   }
+}
+/* Tooltips opacos: sobre el header translúcido el fondo por defecto se mezclaba
+   hasta 1.82:1 en móvil (BUG-061). */
+.q-tooltip {
+  background: #1b1b1b !important;
+  color: #fff !important;
+  opacity: 1 !important;
 }

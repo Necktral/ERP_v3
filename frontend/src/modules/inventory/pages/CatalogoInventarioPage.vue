@@ -62,6 +62,15 @@
           no-data-label="Aún no hay artículos."
           @request="onRequestItems"
         >
+          <template #header-selection="scope">
+            <q-checkbox v-model="scope.selected" aria-label="Seleccionar todos los artículos" />
+          </template>
+          <template #body-selection="scope">
+            <q-checkbox
+              v-model="scope.selected"
+              :aria-label="`Seleccionar artículo ${scope.row.sku || scope.row.name || scope.row.id}`"
+            />
+          </template>
           <template #body-cell-uom="props">
             <q-td :props="props">{{ UOM_LABELS[props.row.uom] ?? props.row.uom }}</q-td>
           </template>

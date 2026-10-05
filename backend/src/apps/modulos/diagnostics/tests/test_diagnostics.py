@@ -82,6 +82,29 @@ def test_dedupe_by_stack_hash_increments_occurrence():
 
 
 @pytest.mark.django_db
+def test_dedupe_and_api_are_tenant_scoped():
+    company_a, branch_a = _mk_scope()
+    company_b, branch_b = _mk_scope()
+    req_a = SimpleNamespace(request_id="a", path="/x", method="GET", company=company_a, branch=branch_a)
+    req_b = SimpleNamespace(request_id="b", path="/x", method="GET", company=company_b, branch=branch_b)
+
+    events = [_capture("same", request=req) for req in (req_a, req_a, req_b)]
+    assert events[0].pk == events[1].pk
+    assert events[0].pk != events[2].pk
+    assert ErrorEvent.objects.get(pk=events[0].pk).occurrence_count == 2
+    assert ErrorEvent.objects.get(pk=events[2].pk).occurrence_count == 1
+
+    client = _mk_client(
+        company=company_a, branch=branch_a, perm_codes=["diagnostics.error.read"]
+    )
+    listed = client.get("/api/diagnostics/errors/")
+    assert listed.status_code == 200, listed.data
+    assert {row["error_id"] for row in listed.data["results"]} == {str(events[0].error_id)}
+    hidden = client.get(f"/api/diagnostics/errors/{events[2].error_id}/")
+    assert hidden.status_code == 404
+
+
+@pytest.mark.django_db
 def test_correlation_and_context_from_request():
     req = SimpleNamespace(
         request_id="corr-abc-123", path="/api/x/", method="POST", company=None, branch=None
