@@ -234,3 +234,6 @@ _(ninguno)_
   - BUGS.md, el LOG y el PLAN quedan con una línea neutra.
   - Los commits del programa, que nunca se habían publicado, se rehicieron.
   - El detalle completo y la historia original quedan en `.evidencia/_reservado/` (`BUG-075.md` y `cartografia_f0_original.bundle`).
+- **2026-10-05 · D-07 · PR abierto:** https://github.com/Necktral/ERP_v3/pull/9 (`audit/cartografia-2026-10` → `main`, 94 commits, sin el detalle de BUG-075).
+  - **Ojo con el nombre:** el **PR #9 de GitHub** es este del programa.
+  - "**PR-9**" en este LOG y en `BUGS.md` es el **nombre interno** de la rama `fix/aislamiento-copa-nomina` de julio, que nunca fue un PR de GitHub. Su port vive en `fix/pr9-copa-nomina-port`.
